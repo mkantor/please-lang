@@ -16,7 +16,7 @@ import {
   containsAnyUnelaboratedNodes,
   type SemanticGraph,
 } from '../semantic-graph.js'
-import { literalTypeFromSemanticGraph } from '../type-system/literal-type.js'
+import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import {
   makeFunctionType,
   makeIntrinsicApplicationType,
@@ -246,7 +246,7 @@ const intrinsicApplicationTypeReducerArity1 =
       : either.flatMap(
           f(argument, emptyContextForStdlibApplications),
           resultValue =>
-            literalTypeFromSemanticGraph(resultValue, {
+            typeFromSemanticGraph(resultValue, {
               objectsAreExact: true,
             }),
         )
@@ -272,7 +272,7 @@ const intrinsicApplicationTypeReducerArity2 =
             f1(argument2, emptyContextForStdlibApplications),
           ),
           resultValue =>
-            literalTypeFromSemanticGraph(resultValue, {
+            typeFromSemanticGraph(resultValue, {
               objectsAreExact: true,
             }),
         )
@@ -309,7 +309,7 @@ const intrinsicApplicationTypeReducerArity3 =
             ),
           ),
           resultValue =>
-            literalTypeFromSemanticGraph(resultValue, {
+            typeFromSemanticGraph(resultValue, {
               objectsAreExact: true,
             }),
         )
@@ -393,7 +393,7 @@ const refineReturnedFunctionType = (
   argument: SemanticGraph,
 ): Either<FunctionNodeCallError, FunctionType> =>
   either.flatMap(
-    literalTypeFromSemanticGraph(argument, { objectsAreExact: true }),
+    typeFromSemanticGraph(argument, { objectsAreExact: true }),
     argumentType => {
       const refinedReturnType = supplyTypeArguments(
         returnedType,

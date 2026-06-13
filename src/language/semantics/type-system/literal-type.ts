@@ -18,12 +18,12 @@ import { makeObjectType, makeUnionType, type Type } from './type-formats.js'
  * - `@hole`-shaped `ObjectNode`s become `TypeParameter`s.
  * - Everything else becomes an `ObjectType`.
  *
- * Note that other than `@union` and `@hole`, there is no specific expression
+ * Warning: other than `@union` and `@hole`, there is no specific expression
  * handling here (e.g. `@function`-shaped `ObjectNode`s don't become
  * `FunctionType`s, `@index`-shaped `ObjectNode`s don't `IndexedAccessType`s,
  * etc). Use `inferType` instead when more sophisticated translation is desired.
  */
-export const literalTypeFromSemanticGraph = (
+export const typeFromSemanticGraph = (
   node: SemanticGraph,
   options: { readonly objectsAreExact: boolean },
 ): Either<Bug, Type> => {
@@ -53,7 +53,7 @@ export const literalTypeFromSemanticGraph = (
         either.map(
           either.sequence(
             Object.values(unionExpression[1]).map(member =>
-              literalTypeFromSemanticGraph(member, options),
+              typeFromSemanticGraph(member, options),
             ),
           ),
           memberTypes =>
@@ -75,7 +75,7 @@ export const literalTypeFromSemanticGraph = (
               either.sequence(
                 Object.entries(node).map(([key, value]) =>
                   either.map(
-                    literalTypeFromSemanticGraph(value, options),
+                    typeFromSemanticGraph(value, options),
                     childType => [key, childType],
                   ),
                 ),
