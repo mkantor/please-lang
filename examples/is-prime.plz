@@ -12,7 +12,7 @@
       else: @if {
         :n % :divisor integer.equals 0
         then: false
-        else: :try_divisor(:n)((:divisor + 1) assume :natural_number.type)
+        else: :try_divisor(:n)(:divisor + 1)
       }
     }
 
