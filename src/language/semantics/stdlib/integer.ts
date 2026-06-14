@@ -2,7 +2,11 @@ import either from '@matt.kantor/either'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
 import { types } from '../type-system.js'
 import { makeFunctionType, makeUnionType } from '../type-system/type-formats.js'
-import { closedOver } from './return-type-refiners.js'
+import {
+  closedOver,
+  computeFromReturnType,
+  computeIsReturnType,
+} from './return-type-refiners.js'
 import {
   preludeFunctionArity1,
   preludeFunctionArity2,
@@ -115,6 +119,7 @@ export const integer = {
           'true'
         : 'false',
       ),
+    computeIsReturnType(types.integer),
   ),
 
   from: preludeFunctionArity1(
@@ -141,6 +146,7 @@ export const integer = {
             ['value', objectNodeFromOrderedEntries([])],
           ]),
       ),
+    computeFromReturnType(types.integer),
   ),
 
   is_greater_than: preludeFunctionArity2(

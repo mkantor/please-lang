@@ -1886,6 +1886,46 @@ testCases(
   ],
 
   [
+    `{ f: (x: :integer.type) => :integer.is(:x) ~ true }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ f: (x: :natural_number.type) => :integer.is(:x) ~ true }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ f: (x: :atom.type) => :integer.is(:x) ~ true }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{ f: (x: :something.type) => :something.is(:x) ~ true }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      needs_some: (o: { tag: some, value: :integer.type }) => :o
+      use: (x: :integer.type) => :needs_some(:integer.from(:x))
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `"-1-1" ~ :integer.type`,
     result => {
       assert(either.isLeft(result))

@@ -6,6 +6,7 @@ import {
 } from '../object-node.js'
 import { types } from '../type-system.js'
 import { makeFunctionType } from '../type-system/type-formats.js'
+import { computeFromReturnType } from './return-type-refiners.js'
 import {
   preludeFunctionArity1,
   preludeFunctionArity2,
@@ -74,6 +75,7 @@ export const object = {
             ['value', objectNodeFromOrderedEntries([])],
           ]),
       ),
+    computeFromReturnType(types.object),
   ),
 
   from_property: preludeFunctionArity2(

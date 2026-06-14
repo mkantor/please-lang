@@ -5,6 +5,10 @@ import { type SemanticGraph } from '../semantic-graph.js'
 import { types } from '../type-system.js'
 import { makeFunctionType } from '../type-system/type-formats.js'
 import {
+  computeFromReturnType,
+  computeIsReturnType,
+} from './return-type-refiners.js'
+import {
   preludeFunctionArity1,
   preludeFunctionArity2,
 } from './stdlib-utilities.js'
@@ -24,6 +28,7 @@ export const boolean = {
       return: types.boolean,
     },
     argument => either.makeRight(nodeIsBoolean(argument) ? 'true' : 'false'),
+    computeIsReturnType(types.boolean),
   ),
 
   from: preludeFunctionArity1(
@@ -44,6 +49,7 @@ export const boolean = {
             ['value', objectNodeFromOrderedEntries([])],
           ]),
       ),
+    computeFromReturnType(types.boolean),
   ),
 
   not: preludeFunctionArity1(
