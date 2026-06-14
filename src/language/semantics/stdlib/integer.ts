@@ -1,11 +1,8 @@
 import either from '@matt.kantor/either'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
-import { isAssignable, types } from '../type-system.js'
-import {
-  makeFunctionType,
-  makeUnionType,
-  type Type,
-} from '../type-system/type-formats.js'
+import { types } from '../type-system.js'
+import { makeFunctionType, makeUnionType } from '../type-system/type-formats.js'
+import { closedOver } from './return-type-refiners.js'
 import {
   preludeFunctionArity1,
   preludeFunctionArity2,
@@ -14,14 +11,7 @@ import {
 // Addition and multiplication (for example) are closed over the natural
 // numbers: the sum or product of natural numbers is always a natural number.
 // This isn't true for subtraction (for example).
-const closedOverNaturalNumbers = (argumentTypes: readonly Type[]): Type =>
-  (
-    argumentTypes.every(argumentType =>
-      isAssignable({ source: argumentType, target: types.naturalNumber }),
-    )
-  ) ?
-    types.naturalNumber
-  : types.integer
+const closedOverNaturalNumbers = closedOver(types.naturalNumber, types.integer)
 
 export const integer = {
   type: types.integer.symbol,
