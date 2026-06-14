@@ -88,7 +88,13 @@ export type IntrinsicApplicationType = {
     // `argumentValues` is expected to be aligned with `parameterTypes`.
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>
-  readonly upperBound: Type
+  /**
+   * Returns the upper bound of this (stuck) application given its current
+   * parameter types. It's recomputed whenever the parameter types change (e.g.
+   * as type arguments are supplied), letting the bound narrow as arguments
+   * become known.
+   */
+  readonly computeUpperBound: (parameterTypes: readonly Type[]) => Type
 }
 
 export const makeIntrinsicApplicationType = (
@@ -96,12 +102,12 @@ export const makeIntrinsicApplicationType = (
   reduce: (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
-  upperBound: Type,
+  computeUpperBound: (parameterTypes: readonly Type[]) => Type,
 ): IntrinsicApplicationType => ({
   kind: 'intrinsicApplication',
   parameterTypes,
   reduce,
-  upperBound,
+  computeUpperBound,
 })
 
 export type ObjectType = {

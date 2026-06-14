@@ -99,9 +99,14 @@ export const preludeFunctionArity1 = (
   keyPath: NonEmptyKeyPath,
   signature: FunctionType['signature'],
   f: FunctionNodeCallSignature,
+  computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
 ) =>
   makeFunctionNode(
-    liftIntrinsicSignature(signature, intrinsicApplicationTypeReducerArity1(f)),
+    liftIntrinsicSignature(
+      signature,
+      intrinsicApplicationTypeReducerArity1(f),
+      computeRefinedReturnType,
+    ),
     () => either.makeRight(keyPathToLookupExpression(keyPath)),
     option.none,
     handleUnavailableDependencies(f),
@@ -116,9 +121,14 @@ export const preludeFunctionArity2 = (
   f: (
     argument1: SemanticGraph,
   ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>,
+  computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
 ) =>
   makeFunctionNode(
-    liftIntrinsicSignature(signature, intrinsicApplicationTypeReducerArity2(f)),
+    liftIntrinsicSignature(
+      signature,
+      intrinsicApplicationTypeReducerArity2(f),
+      computeRefinedReturnType,
+    ),
     () => either.makeRight(keyPathToLookupExpression(keyPath)),
     option.none,
     handleUnavailableDependencies(argument1 =>
@@ -160,10 +170,12 @@ export const preludeFunctionArity3 = (
       argument2: SemanticGraph,
     ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>
   >,
+  computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
 ) => {
   const liftedSignature = liftIntrinsicSignature(
     signature,
     intrinsicApplicationTypeReducerArity3(f),
+    computeRefinedReturnType,
   )
   return makeFunctionNode(
     liftedSignature,
@@ -359,6 +371,9 @@ const liftIntrinsicSignature = (
   reduce: (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
+  // An optional argument-type-sensitive upper bound for the stuck application.
+  // Defaults to the function's (concrete) declared return type.
+  computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
 ): FunctionType['signature'] => {
   if (containedTypeParameters(makeFunctionType(signature)).size > 0) {
     return signature
@@ -373,7 +388,11 @@ const liftIntrinsicSignature = (
     const liftedFunctionType = parameterTypes.reduceRight<Type>(
       (returnSoFar, parameter) =>
         makeFunctionType({ parameter, return: returnSoFar }),
-      makeIntrinsicApplicationType(parameterTypes, reduce, finalReturn),
+      makeIntrinsicApplicationType(
+        parameterTypes,
+        reduce,
+        computeRefinedReturnType ?? (() => finalReturn),
+      ),
     )
     return liftedFunctionType.kind === 'function' ?
         liftedFunctionType.signature
