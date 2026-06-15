@@ -41,9 +41,8 @@ import {
   makeFunctionType,
   makeIndexedAccessType,
   makeObjectType,
-  makeUnionType,
+  unionOfTypes,
   type Type,
-  type UnionType,
 } from './type-formats.js'
 import {
   functionParameterKey,
@@ -311,10 +310,10 @@ const inferTypeImplementation = (
             signatures.length === 1 && signatures[0] !== undefined ?
               signatures[0]
             : {
-                parameter: flatUnionOf(
+                parameter: unionOfTypes(
                   signatures.map(signature => signature.parameter),
                 ),
-                return: flatUnionOf(
+                return: unionOfTypes(
                   signatures.map(signature => signature.return),
                 ),
               }
@@ -451,11 +450,9 @@ const inferTypeImplementation = (
               ),
             )
           } else {
-            const membersOf = (type: Type) =>
-              type.kind === 'union' ? [...type.members] : [type]
             return either.flatMap(inferThen(), thenType =>
               either.map(inferElse(), elseType =>
-                makeUnionType([...membersOf(thenType), ...membersOf(elseType)]),
+                unionOfTypes([thenType, elseType]),
               ),
             )
           }
@@ -485,14 +482,7 @@ const inferTypeImplementation = (
             ),
           ),
         ),
-        memberTypes =>
-          makeUnionType(
-            memberTypes.flatMap(memberType =>
-              memberType.kind === 'union' ?
-                [...memberType.members]
-              : [memberType],
-            ),
-          ),
+        unionOfTypes,
       ),
     )
   }
@@ -725,11 +715,6 @@ const enclosingExpressionFromPropertyOfExpressionArgument = ({
     )
   }
 }
-
-const flatUnionOf = (types: readonly Type[]): UnionType =>
-  makeUnionType(
-    types.flatMap(type => (type.kind === 'union' ? [...type.members] : [type])),
-  )
 
 type EnclosingFunctionParameter = {
   readonly parameterName: Atom
