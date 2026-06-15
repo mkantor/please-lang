@@ -1854,6 +1854,13 @@ testCases(
   ],
 
   [
+    `{ increment: (x: :natural_number.type) => (:x + 1) ~ :natural_number.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `{ double: (x: :natural_number.type) => (2 * :x) ~ :natural_number.type }`,
     result => {
       assert(either.isRight(result))

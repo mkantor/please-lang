@@ -841,6 +841,14 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [
     `{
+      |>: (f: ?a ~> ?b) => (a: :a) => :f(:a)
+      three: 1 |> :integer.add(2)
+      six: :three |> :integer.add(3)
+    }.six`,
+    success('6'),
+  ],
+  [
+    `{
       <|: a => (f: :a ~> ?b) => :f(:a)
       ab: :atom.append(b) <| a
       abc: :atom.append(c) <| :ab
