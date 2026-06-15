@@ -2,7 +2,7 @@ import type { Either } from '@matt.kantor/either'
 import option, { type None, type Some } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import type { FunctionNodeCallError } from '../function-node.js'
-import type { TypeSymbol } from '../semantic-graph.js'
+import type { SemanticGraph, TypeSymbol } from '../semantic-graph.js'
 
 export type FunctionType = {
   readonly kind: 'function'
@@ -77,17 +77,16 @@ export const makeApplicationType = (
  * becomes one of these, letting the type system compute the result type from
  * argument types even when argument values are unelaborated.
  *
- * It reduces once every argument is a concrete atom type (or union thereof).
- * Until then it stays stuck, behaving like `upperBound` for assignability
- * purposes.
+ * It reduces once every argument type's inhabitants can be exhaustively
+ * enumerated (the type is finitely-sized). Until then it stays stuck, behaving
+ * like `upperBound` for assignability purposes.
  */
 export type IntrinsicApplicationType = {
   readonly kind: 'intrinsicApplication'
   readonly parameterTypes: readonly Type[]
   readonly reduce: (
     // `argumentValues` is expected to be aligned with `parameterTypes`.
-    // TODO: Support non-`Atom` arguments?
-    argumentValues: readonly Atom[],
+    argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>
   readonly upperBound: Type
 }
@@ -95,7 +94,7 @@ export type IntrinsicApplicationType = {
 export const makeIntrinsicApplicationType = (
   parameterTypes: readonly Type[],
   reduce: (
-    argumentValues: readonly Atom[],
+    argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
   upperBound: Type,
 ): IntrinsicApplicationType => ({

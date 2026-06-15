@@ -1,6 +1,5 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
-import type { Atom } from '../../parsing.js'
 import {
   keyPathToLookupExpression,
   makeApplyExpression,
@@ -228,15 +227,17 @@ const synthesizeTypeParameterName = (index: number) => {
 }
 
 // The reducers below apply an intrinsic function (`f`) to concrete argument
-// atoms (unit types), lifting the result back to a type. This lets
+// values, lifting the result back to a type. This lets
 // `IntrinsicApplicationType`s reduce via the same code that evaluates values.
 // Returned object types are exact because they describe actual values produced
 // by `f`.
 
 const intrinsicApplicationTypeReducerArity1 =
   (f: FunctionNodeCallSignature) =>
-  (argumentAtoms: readonly Atom[]): Either<FunctionNodeCallError, Type> => {
-    const [argument] = argumentAtoms
+  (
+    argumentValues: readonly SemanticGraph[],
+  ): Either<FunctionNodeCallError, Type> => {
+    const [argument] = argumentValues
     return argument === undefined ?
         either.makeLeft({
           kind: 'bug',
@@ -257,8 +258,10 @@ const intrinsicApplicationTypeReducerArity2 =
       argument1: SemanticGraph,
     ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>,
   ) =>
-  (argumentAtoms: readonly Atom[]): Either<FunctionNodeCallError, Type> => {
-    const [argument1, argument2] = argumentAtoms
+  (
+    argumentValues: readonly SemanticGraph[],
+  ): Either<FunctionNodeCallError, Type> => {
+    const [argument1, argument2] = argumentValues
     return argument1 === undefined || argument2 === undefined ?
         either.makeLeft({
           kind: 'bug',
@@ -286,8 +289,10 @@ const intrinsicApplicationTypeReducerArity3 =
       ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>
     >,
   ) =>
-  (argumentAtoms: readonly Atom[]): Either<FunctionNodeCallError, Type> => {
-    const [argument1, argument2, argument3] = argumentAtoms
+  (
+    argumentValues: readonly SemanticGraph[],
+  ): Either<FunctionNodeCallError, Type> => {
+    const [argument1, argument2, argument3] = argumentValues
     return (
         argument1 === undefined ||
           argument2 === undefined ||
@@ -352,7 +357,7 @@ const signatureParts = (
 const liftIntrinsicSignature = (
   signature: FunctionType['signature'],
   reduce: (
-    argumentAtoms: readonly Atom[],
+    argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
 ): FunctionType['signature'] => {
   if (containedTypeParameters(makeFunctionType(signature)).size > 0) {

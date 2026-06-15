@@ -1,7 +1,15 @@
+import either, { type Either } from '@matt.kantor/either'
+import optionAdt from '@matt.kantor/option'
 import assert from 'node:assert'
 import { testCases } from '../../../test-utilities.test.js'
+import type { FunctionNodeCallError } from '../function-node.js'
 import { stringifyKeyPathForEndUser, type KeyPath } from '../key-path.js'
-import { stringifyTypeForEndUser } from '../semantic-graph.js'
+import { objectNodeFromOrderedEntries } from '../object-node.js'
+import {
+  stringifySemanticGraphForEndUser,
+  stringifyTypeForEndUser,
+  type SemanticGraph,
+} from '../semantic-graph.js'
 import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
 import {
   atom,
@@ -14,6 +22,7 @@ import {
 } from './prelude-types.js'
 import {
   makeFunctionType,
+  makeIntrinsicApplicationType,
   makeObjectType,
   makeTypeParameter,
   makeUnionType,
@@ -22,7 +31,9 @@ import {
 } from './type-formats.js'
 import {
   applyKeyPathToType,
+  enumerateInhabitants,
   getTypesForTypeParameters,
+  supplyTypeArgument,
 } from './type-substitution.js'
 
 const A = makeTypeParameter('a', { assignableTo: something })
@@ -218,6 +229,154 @@ getTypesForTypeParametersSuite('getTypesForTypeParameters', [
       [A, atom],
       [B, naturalNumber],
     ]),
+  ],
+])
+
+const enumerateInhabitantsSuite = testCases(
+  (type: Type) => enumerateInhabitants(type),
+  type => `enumerating the inhabitants of \`${stringifyTypeForEndUser(type)}\``,
+)
+
+enumerateInhabitantsSuite('enumerateInhabitants', [
+  [makeUnionType(['x']), optionAdt.makeSome(['x'])],
+
+  [makeUnionType(['x', 'y']), optionAdt.makeSome(['x', 'y'])],
+
+  // The bottom type has zero inhabitants (which is different from not being
+  // enumerable).
+  [nothing, optionAdt.makeSome([])],
+
+  [something, optionAdt.none],
+
+  [atom, optionAdt.none],
+
+  [A, optionAdt.none],
+
+  [makeFunctionType({ parameter: atom, return: atom }), optionAdt.none],
+
+  // The `object` type is inexact (any object inhabits it).
+  [object, optionAdt.none],
+
+  [
+    makeObjectType({}, { exact: true }),
+    optionAdt.makeSome([objectNodeFromOrderedEntries([])]),
+  ],
+
+  [
+    makeObjectType({ a: makeUnionType(['1']) }, { exact: true }),
+    optionAdt.makeSome([objectNodeFromOrderedEntries([['a', '1']])]),
+  ],
+
+  // Object types default to being inexact.
+  [makeObjectType({ a: makeUnionType(['1']) }), optionAdt.none],
+
+  [
+    makeObjectType(
+      { a: makeUnionType(['1', '2']), b: makeUnionType(['x']) },
+      { exact: true },
+    ),
+    optionAdt.makeSome([
+      objectNodeFromOrderedEntries([
+        ['a', '1'],
+        ['b', 'x'],
+      ]),
+      objectNodeFromOrderedEntries([
+        ['a', '2'],
+        ['b', 'x'],
+      ]),
+    ]),
+  ],
+
+  [makeObjectType({ a: atom }, { exact: true }), optionAdt.none],
+
+  [
+    makeObjectType(
+      { a: makeObjectType({ b: makeUnionType(['1']) }, { exact: true }) },
+      { exact: true },
+    ),
+    optionAdt.makeSome([
+      objectNodeFromOrderedEntries([
+        ['a', objectNodeFromOrderedEntries([['b', '1']])],
+      ]),
+    ]),
+  ],
+
+  [
+    makeObjectType(
+      { a: makeObjectType({ b: makeUnionType(['1']) }) },
+      { exact: true },
+    ),
+    optionAdt.none,
+  ],
+
+  [
+    makeUnionType([
+      makeObjectType({ a: makeUnionType(['1']) }, { exact: true }),
+      'z',
+    ]),
+    optionAdt.makeSome([objectNodeFromOrderedEntries([['a', '1']]), 'z']),
+  ],
+])
+
+/**
+ * Describes each argument value as a literal atom type so tests can observe
+ * exactly which argument combinations were reduced.
+ */
+const describeReducedArguments = (
+  argumentValues: readonly SemanticGraph[],
+): Either<FunctionNodeCallError, Type> =>
+  either.makeRight(
+    makeUnionType([
+      stringifySemanticGraphForEndUser(
+        objectNodeFromOrderedEntries(
+          argumentValues.map((value, index) => [String(index), value]),
+        ),
+      ),
+    ]),
+  )
+
+const intrinsicReductionSuite = testCases(
+  (typeArgument: Type) =>
+    supplyTypeArgument(
+      makeIntrinsicApplicationType(
+        [A, makeObjectType({ b: makeUnionType(['2']) }, { exact: true })],
+        describeReducedArguments,
+        object,
+      ),
+      A,
+      typeArgument,
+    ),
+  typeArgument =>
+    `supplying \`${stringifyTypeForEndUser(typeArgument)}\` to a stuck intrinsic application`,
+)
+
+intrinsicReductionSuite('intrinsic application reduction over object types', [
+  [
+    makeObjectType({ a: makeUnionType(['1']) }, { exact: true }),
+    makeUnionType(['{ { a: 1 }, { b: 2 } }']),
+  ],
+
+  [makeUnionType(['z']), makeUnionType(['{ z, { b: 2 } }'])],
+
+  [
+    makeUnionType([
+      makeObjectType({ a: makeUnionType(['1']) }, { exact: true }),
+      makeObjectType({ a: makeUnionType(['2']) }, { exact: true }),
+    ]),
+    makeUnionType(['{ { a: 1 }, { b: 2 } }', '{ { a: 2 }, { b: 2 } }']),
+  ],
+
+  // An inexact object type isn't enumerable, so the application stays stuck.
+  [
+    makeObjectType({ a: makeUnionType(['1']) }),
+    makeIntrinsicApplicationType(
+      [
+        makeObjectType({ a: makeUnionType(['1']) }),
+        makeObjectType({ b: makeUnionType(['2']) }, { exact: true }),
+      ],
+      describeReducedArguments,
+      makeObjectType({}),
+    ),
   ],
 ])
 

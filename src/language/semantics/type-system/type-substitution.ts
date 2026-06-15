@@ -1,10 +1,11 @@
 import either, { type Either } from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { Writable } from '../../../utility-types.js'
-import type { Atom } from '../../parsing.js'
 import type { FunctionNodeCallError } from '../function-node.js'
+import { objectNodeFromOrderedEntries } from '../object-node.js'
+import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something } from './prelude-types.js'
-import { asUnionWithLiteralAtomMembers, isAssignable } from './subtyping.js'
+import { isAssignable } from './subtyping.js'
 import {
   makeApplicationType,
   makeFunctionType,
@@ -434,28 +435,72 @@ const cartesianProduct = <Element>(lists: readonly (readonly Element[])[]) =>
   )
 
 /**
+ * Enumerate every value inhabiting the given finitely-sized `type`, or return
+ * `none` if `type` has infinite inhabitants. Literal atom types, exact object
+ * types whose property types are enumerable, and unions of enumerable types are
+ * enumerable.
+ */
+export const enumerateInhabitants = (
+  type: Type,
+): Option<readonly SemanticGraph[]> =>
+  // Avoid infinite recursion when we hit the top type.
+  type === something ?
+    option.none
+  : matchTypeFormat(type, {
+      application: _ => option.none,
+      function: _ => option.none,
+      indexedAccess: _ => option.none,
+      intrinsicApplication: _ => option.none,
+      opaque: _ => option.none,
+      parameter: _ => option.none,
+      object: type =>
+        !type.exact ?
+          option.none
+        : option.map(
+            option.sequence(
+              Object.entries(type.children).map(([key, child]) =>
+                option.map(enumerateInhabitants(child), childInhabitants =>
+                  childInhabitants.map(
+                    childInhabitant => [key, childInhabitant] as const,
+                  ),
+                ),
+              ),
+            ),
+            entryPossibilitiesPerProperty =>
+              cartesianProduct(entryPossibilitiesPerProperty).map(
+                objectNodeFromOrderedEntries,
+              ),
+          ),
+      union: type =>
+        option.map(
+          option.sequence(
+            [...type.members].map(member =>
+              typeof member === 'string' ?
+                option.makeSome([member])
+              : enumerateInhabitants(member),
+            ),
+          ),
+          inhabitantsPerMember => inhabitantsPerMember.flat(),
+        ),
+    })
+
+/**
  * Attempt to reduce a (possibly stuck) intrinsic application.
  */
 const reduceIntrinsicApplication = (
   parameterTypes: readonly Type[],
   reduce: (
-    argumentValues: readonly Atom[],
+    argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
   upperBound: Type,
 ): Type => {
-  const argumentValues = parameterTypes.map(type =>
-    type.kind !== 'union' ? option.none : asUnionWithLiteralAtomMembers(type),
-  )
+  const argumentPossibilities = parameterTypes.map(enumerateInhabitants)
   const stuck = makeIntrinsicApplicationType(parameterTypes, reduce, upperBound)
-  return option.match(option.sequence(argumentValues), {
+  return option.match(option.sequence(argumentPossibilities), {
     none: _ => stuck,
-    some: argumentValues =>
+    some: argumentPossibilities =>
       either.match(
-        either.sequence(
-          cartesianProduct(argumentValues.map(union => [...union.members])).map(
-            reduce,
-          ),
-        ),
+        either.sequence(cartesianProduct(argumentPossibilities).map(reduce)),
         {
           left: _ => stuck,
           right: resultTypes =>

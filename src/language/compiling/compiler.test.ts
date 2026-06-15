@@ -1904,4 +1904,65 @@ testCases(
       assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
+
+  [
+    `({ a: 1 } object.overlay @runtime { _ => { b: 2 } }) ~ { a: 1, b: 2 }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `({ a: 1 } object.overlay @runtime { _ => { a: 2 } }) ~ { a: 2 }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `({ a: 1 } object.overlay @runtime { _ => { a: 2 } }) ~ { a: 1 }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `({ a: 1 } object.overlay @runtime { context =>
+      @if {
+        @runtime { context =>
+          :context.program.start_time atom.equals "arbitrary atom"
+        }
+        { b: 2 }
+        { b: 3 }
+      }
+    }) ~ ({ a: 1, b: 2 } | { a: 1, b: 3 })`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: It'd be great to be able to reason generically about non-literal
+    // standard library function arguments so cases like this typecheck.
+    `({ a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }) ~ { a: 1, b: :atom.type }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `({ a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }) ~ :something.type`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:object.from_property(@runtime { _ => some_key })("some value") ~ { some_key: "some value" }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
 ])
