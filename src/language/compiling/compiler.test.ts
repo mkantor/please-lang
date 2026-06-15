@@ -1945,6 +1945,91 @@ testCases(
   ],
 
   [
+    `{
+      test: a =>
+        (:integer.from(:a) match {
+          some: b => :b
+          none: _ => 0
+        }) ~ :integer.type
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      test: a =>
+        (:integer.from(:a) match {
+          some: b => :b
+          none: _ => 0
+        }) ~ :natural_number.type
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      test: a =>
+        (:integer.from(:a) match {
+          some: _ => true
+          none: _ => false
+        }) ~ :boolean.type
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: This should be rejected by static analysis (the `match` object is
+    // not exhaustive).
+    `{
+      test: a =>
+        :integer.from(:a) match {
+          some: _ => 1
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: This should be rejected by static analysis (a case has an incorrect
+    // parameter type).
+    `{
+      test: a =>
+        :integer.from(:a) match {
+          some: (b: :boolean.type) => 1
+          none: _ => 2
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: This should be rejected by static analysis (`:a` may have arbitrary
+    // tags).
+    `{
+      test: (a: { tag: :atom.type, value: :something.type }) =>
+        :a match {
+          some: _ => 1
+          none: _ => 2
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `"-1-1" ~ :integer.type`,
     result => {
       assert(either.isLeft(result))
