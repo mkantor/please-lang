@@ -9,7 +9,7 @@ import {
   type ObjectNode,
 } from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { literalTypeFromSemanticGraph } from '../type-system.js'
+import { typeFromSemanticGraph } from '../type-system.js'
 import type { TypeParameter } from '../type-system/type-formats.js'
 import {
   isTypeParameter,
@@ -81,7 +81,7 @@ export const readHoleExpression = (
                 node[typeParameterKey]
               : undefined
             return either.map(
-              literalTypeFromSemanticGraph(assignableToNode, {
+              typeFromSemanticGraph(assignableToNode, {
                 // Constraints are merely upper bounds.
                 objectsAreExact: false,
               }),

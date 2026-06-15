@@ -14,7 +14,7 @@ import {
   type SemanticGraph,
 } from '../semantic-graph.js'
 import { isAssignable, types } from '../type-system.js'
-import { literalTypeFromSemanticGraph } from '../type-system/literal-type.js'
+import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import {
   makeFunctionType,
   makeObjectType,
@@ -86,10 +86,10 @@ export const globalFunctions = {
     type =>
       either.makeRight(value =>
         either.flatMap(
-          literalTypeFromSemanticGraph(value, { objectsAreExact: true }),
+          typeFromSemanticGraph(value, { objectsAreExact: true }),
           valueAsType =>
             either.flatMap(
-              literalTypeFromSemanticGraph(type, { objectsAreExact: false }),
+              typeFromSemanticGraph(type, { objectsAreExact: false }),
               typeAsType => {
                 if (
                   isAssignable({

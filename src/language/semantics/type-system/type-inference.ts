@@ -34,7 +34,7 @@ import {
   readHoleExpression,
 } from '../expressions/hole-expression.js'
 import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
-import { literalTypeFromSemanticGraph } from './literal-type.js'
+import { typeFromSemanticGraph } from './literal-type.js'
 import * as types from './prelude-types.js'
 import {
   makeApplicationType,
@@ -147,7 +147,7 @@ const inferTypeImplementation = (
     typeof node === 'function'
   ) {
     return cacheOnSuccess(
-      literalTypeFromSemanticGraph(node, { objectsAreExact: false }),
+      typeFromSemanticGraph(node, { objectsAreExact: false }),
     )
   }
 
