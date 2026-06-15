@@ -464,7 +464,7 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
     '{ callback: (?"x.callback.#parameter": :atom.type) ~> (?"x.callback.#return": :integer.type) }',
   ],
 
-  [['empty', makeObjectType({})], '{}'],
+  [['empty', makeObjectType({})], '(?empty: {})'],
 
   [['identity', makeFunctionType({ parameter: A, return: A })], '?a ~> :a'],
 

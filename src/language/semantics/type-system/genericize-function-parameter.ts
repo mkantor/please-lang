@@ -72,27 +72,39 @@ const genericizeFunctionParameterAnnotationAtKeyPath = (
       }
     },
     object: type => {
-      const children = Object.entries(type.children).map(
-        ([key, child]) =>
-          [
-            key,
-            genericizeFunctionParameterAnnotationAtKeyPath(
-              parameterName,
-              child,
-              [...keyPath, key],
-              isWithinNestedFunctionType,
+      if (Object.keys(type.children).length === 0) {
+        // Treat empty object types as leaves to make sure that functions like
+        // `(a: :object.type) => :a` are genericized.
+        return genericizeLeaf(
+          parameterName,
+          keyPath,
+          isWithinNestedFunctionType,
+        )(type)
+      } else {
+        const children = Object.entries(type.children).map(
+          ([key, child]) =>
+            [
+              key,
+              genericizeFunctionParameterAnnotationAtKeyPath(
+                parameterName,
+                child,
+                [...keyPath, key],
+                isWithinNestedFunctionType,
+              ),
+            ] as const,
+        )
+        return {
+          type: makeObjectType(
+            Object.fromEntries(
+              children.map(([key, child]) => [key, child.type]),
             ),
-          ] as const,
-      )
-      return {
-        type: makeObjectType(
-          Object.fromEntries(children.map(([key, child]) => [key, child.type])),
-        ),
-        typeParametersBoundByFunction: new Set(
-          children.flatMap(([_key, child]) => [
-            ...child.typeParametersBoundByFunction,
-          ]),
-        ),
+          ),
+          typeParametersBoundByFunction: new Set(
+            children.flatMap(([_key, child]) => [
+              ...child.typeParametersBoundByFunction,
+            ]),
+          ),
+        }
       }
     },
     opaque: genericizeLeaf(parameterName, keyPath, isWithinNestedFunctionType),
