@@ -263,7 +263,7 @@ Please has a
 with support for [subtyping](https://en.wikipedia.org/wiki/Subtyping),
 [union types](https://en.wikipedia.org/wiki/Union_type),
 [generic function types](https://en.wikipedia.org/wiki/Generic_function), and
-[literal (unit) types](https://en.wikipedia.org/wiki/Unit_type) for atoms.
+[literal (singleton) types](https://en.wikipedia.org/wiki/Unit_type) for atoms.
 
 Types can be inferred in most situations, but function parameters can be
 annotated:

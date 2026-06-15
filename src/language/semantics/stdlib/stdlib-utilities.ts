@@ -348,8 +348,8 @@ const signatureParts = (
 /**
  * Lift a standard library function's signature to be generic over its
  * parameters and return an `IntrinsicApplicationType`. This lets the type
- * system compute precise return types from unit argument types via `reduce`
- * (which should apply the function itself).
+ * system compute precise return types from singleton argument types via
+ * `reduce` (which should apply the function itself).
  *
  * Functions whose return already contains a type parameter (e.g. `identity`)
  * don't need extra precision, so their signature is left unchanged.
