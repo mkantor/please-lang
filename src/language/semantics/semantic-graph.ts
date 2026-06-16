@@ -345,7 +345,9 @@ export const typeToSemanticGraph = (
     // A stuck intrinsic application is displayed as its (concrete) upper bound,
     // which is also how it behaves for assignability.
     intrinsicApplication: type =>
-      recurseWithSameTypeParameters(type.upperBound),
+      recurseWithSameTypeParameters(
+        type.computeUpperBound(type.parameterTypes),
+      ),
     opaque: type => typeSymbolToSemanticGraph(type.symbol),
     parameter: type => {
       if (alreadyIntroducedTypeParameterIdentities.has(type.identity)) {

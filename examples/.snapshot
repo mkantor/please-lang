@@ -169,7 +169,7 @@ exports[`examples > fizzbuzz.plz > roundtripped syntax tree 1`] = `
             }
           }
         } object.from_property :state.current)
-        current: :state.current + 1 assume :natural_number.type
+        current: :state.current + 1
       })
     }
     internal_return: :fizzbuzz_internal({
@@ -364,7 +364,7 @@ exports[`examples > is-prime.plz > roundtripped syntax tree 1`] = `
     else: @if {
       (:n % :divisor integer.equals 0)
       then: false
-      else: :divisor + 1 assume :natural_number.type try_divisor :n
+      else: :divisor + 1 try_divisor :n
     }
   }
   is_prime: (n: :natural_number.type) => @if {

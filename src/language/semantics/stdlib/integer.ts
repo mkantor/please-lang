@@ -3,9 +3,19 @@ import { objectNodeFromOrderedEntries } from '../object-node.js'
 import { types } from '../type-system.js'
 import { makeFunctionType, makeUnionType } from '../type-system/type-formats.js'
 import {
+  closedOver,
+  computeFromReturnType,
+  computeIsReturnType,
+} from './return-type-refiners.js'
+import {
   preludeFunctionArity1,
   preludeFunctionArity2,
 } from './stdlib-utilities.js'
+
+// Addition and multiplication (for example) are closed over the natural
+// numbers: the sum or product of natural numbers is always a natural number.
+// This isn't true for subtraction (for example).
+const closedOverNaturalNumbers = closedOver(types.naturalNumber, types.integer)
 
 export const integer = {
   type: types.integer.symbol,
@@ -51,6 +61,7 @@ export const integer = {
         })
       }
     },
+    closedOverNaturalNumbers,
   ),
 
   equals: preludeFunctionArity2(
@@ -108,6 +119,7 @@ export const integer = {
           'true'
         : 'false',
       ),
+    computeIsReturnType(types.integer),
   ),
 
   from: preludeFunctionArity1(
@@ -134,6 +146,7 @@ export const integer = {
             ['value', objectNodeFromOrderedEntries([])],
           ]),
       ),
+    computeFromReturnType(types.integer),
   ),
 
   is_greater_than: preludeFunctionArity2(
@@ -245,6 +258,7 @@ export const integer = {
         })
       }
     },
+    closedOverNaturalNumbers,
   ),
 
   subtract: preludeFunctionArity2(

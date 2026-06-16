@@ -335,13 +335,16 @@ const describeReducedArguments = (
     ]),
   )
 
+// This same function is reused to satisfy `assert.deepEqual`.
+const computeUpperBound = (_parameterTypes: readonly Type[]): Type => something
+
 const intrinsicReductionSuite = testCases(
   (typeArgument: Type) =>
     supplyTypeArgument(
       makeIntrinsicApplicationType(
         [A, makeObjectType({ b: makeUnionType(['2']) }, { exact: true })],
         describeReducedArguments,
-        object,
+        computeUpperBound,
       ),
       A,
       typeArgument,
@@ -375,7 +378,7 @@ intrinsicReductionSuite('intrinsic application reduction over object types', [
         makeObjectType({ b: makeUnionType(['2']) }, { exact: true }),
       ],
       describeReducedArguments,
-      makeObjectType({}),
+      computeUpperBound,
     ),
   ],
 ])

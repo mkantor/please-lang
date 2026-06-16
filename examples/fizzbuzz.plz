@@ -22,7 +22,7 @@
             }
           }
         })
-        current: (:state.current + 1) assume :natural_number.type
+        current: :state.current + 1
       })
     }
     internal_return: :fizzbuzz_internal({ current: 1, output: {} })

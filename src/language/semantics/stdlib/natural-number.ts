@@ -3,6 +3,10 @@ import { objectNodeFromOrderedEntries } from '../object-node.js'
 import { types } from '../type-system.js'
 import { makeFunctionType, makeUnionType } from '../type-system/type-formats.js'
 import {
+  computeFromReturnType,
+  computeIsReturnType,
+} from './return-type-refiners.js'
+import {
   preludeFunctionArity1,
   preludeFunctionArity2,
 } from './stdlib-utilities.js'
@@ -28,6 +32,7 @@ export const natural_number = {
           'true'
         : 'false',
       ),
+    computeIsReturnType(types.naturalNumber),
   ),
 
   from: preludeFunctionArity1(
@@ -54,6 +59,7 @@ export const natural_number = {
             ['value', objectNodeFromOrderedEntries([])],
           ]),
       ),
+    computeFromReturnType(types.naturalNumber),
   ),
 
   modulo: preludeFunctionArity2(

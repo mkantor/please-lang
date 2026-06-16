@@ -213,7 +213,9 @@ export const replaceAllTypeParametersWithTheirConstraints = (
   type: Type,
 ): Type =>
   type.kind === 'intrinsicApplication' ?
-    replaceAllTypeParametersWithTheirConstraints(type.upperBound)
+    replaceAllTypeParametersWithTheirConstraints(
+      type.computeUpperBound(type.parameterTypes),
+    )
     // TODO: Specialize the below to only traverse `type` once.
   : [...containedTypeParameters(type).values()]
       .flatMap(({ typeParameters }) => [...typeParameters.members])
@@ -492,10 +494,14 @@ const reduceIntrinsicApplication = (
   reduce: (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
-  upperBound: Type,
+  computeUpperBound: (parameterTypes: readonly Type[]) => Type,
 ): Type => {
   const argumentPossibilities = parameterTypes.map(enumerateInhabitants)
-  const stuck = makeIntrinsicApplicationType(parameterTypes, reduce, upperBound)
+  const stuck = makeIntrinsicApplicationType(
+    parameterTypes,
+    reduce,
+    computeUpperBound,
+  )
   return option.match(option.sequence(argumentPossibilities), {
     none: _ => stuck,
     some: argumentPossibilities =>
@@ -571,7 +577,7 @@ export const supplyTypeArgument = (
             supplyTypeArgument(parameterType, typeParameter, typeArgument),
           ),
           type.reduce,
-          supplyTypeArgument(type.upperBound, typeParameter, typeArgument),
+          type.computeUpperBound,
         ),
       indexedAccess: type => {
         const substitutedKey = supplyTypeArgument(
@@ -667,7 +673,8 @@ export const recursivelyInexact = (type: Type): Type =>
         makeIntrinsicApplicationType(
           type.parameterTypes.map(recursivelyInexact),
           type.reduce,
-          recursivelyInexact(type.upperBound),
+          parameterTypes =>
+            recursivelyInexact(type.computeUpperBound(parameterTypes)),
         ),
       object: type =>
         makeObjectType(

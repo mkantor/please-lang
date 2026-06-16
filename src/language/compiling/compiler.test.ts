@@ -1847,6 +1847,85 @@ testCases(
   ],
 
   [
+    `{ increment: (x: :natural_number.type) => (1 + :x) ~ :natural_number.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ double: (x: :natural_number.type) => (2 * :x) ~ :natural_number.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ f: (x: :natural_number.type) => ((1 + :x) + :x) ~ :natural_number.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ decrement: (x: :natural_number.type) => (:x - 1) ~ :natural_number.type }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{ increment: (x: :integer.type) => (1 + :x) ~ :natural_number.type }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{ f: (x: :integer.type) => :integer.is(:x) ~ true }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ f: (x: :natural_number.type) => :integer.is(:x) ~ true }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ f: (x: :atom.type) => :integer.is(:x) ~ true }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{ f: (x: :something.type) => :something.is(:x) ~ true }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      needs_some: (o: { tag: some, value: :integer.type }) => :o
+      use: (x: :integer.type) => :needs_some(:integer.from(:x))
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `"-1-1" ~ :integer.type`,
     result => {
       assert(either.isLeft(result))
