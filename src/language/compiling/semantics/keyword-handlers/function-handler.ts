@@ -13,6 +13,7 @@ import {
   makeFunctionNode,
   objectNodeFromOrderedEntries,
   readFunctionExpression,
+  replaceAllTypeParametersWithTheirConstraints,
   serialize,
   updateValueAtKeyPathInSemanticGraph,
   type Expression,
@@ -157,7 +158,16 @@ const apply = (
                 makeHoleExpression(
                   name,
                   hole[1].constraint,
-                  makeTypeParameter(name, { assignableTo: specializedType }),
+                  // `specializedType` may itself be a type parameter; collapse
+                  // it to its concrete upper bound so the constraint is
+                  // concrete. This is merely to simplify the type for error
+                  // messages, etc and does not impact analysis.
+                  makeTypeParameter(name, {
+                    assignableTo:
+                      replaceAllTypeParametersWithTheirConstraints(
+                        specializedType,
+                      ),
+                  }),
                 )
               ),
             ]

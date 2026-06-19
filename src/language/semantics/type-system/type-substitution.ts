@@ -305,7 +305,9 @@ export const getTypesForTypeParameters = ({
         (
           isAssignable({
             source: argumentType,
-            target: parameterType.constraint.assignableTo,
+            target: replaceAllTypeParametersWithTheirConstraints(
+              parameterType.constraint.assignableTo,
+            ),
           })
         ) ?
           new Map([[parameterType, argumentType]])

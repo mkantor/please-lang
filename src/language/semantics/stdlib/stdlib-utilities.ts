@@ -122,20 +122,21 @@ export const preludeFunctionArity2 = (
     argument1: SemanticGraph,
   ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>,
   computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
-) =>
-  makeFunctionNode(
-    liftIntrinsicSignature(
-      signature,
-      intrinsicApplicationTypeReducerArity2(f),
-      computeRefinedReturnType,
-    ),
+) => {
+  const liftedSignature = liftIntrinsicSignature(
+    signature,
+    intrinsicApplicationTypeReducerArity2(f),
+    computeRefinedReturnType,
+  )
+  return makeFunctionNode(
+    liftedSignature,
     () => either.makeRight(keyPathToLookupExpression(keyPath)),
     option.none,
     handleUnavailableDependencies(argument1 =>
       either.flatMap(
         refineReturnedFunctionType(
-          signature.parameter,
-          signature.return,
+          liftedSignature.parameter,
+          liftedSignature.return,
           argument1,
         ),
         refinedReturn =>
@@ -150,6 +151,7 @@ export const preludeFunctionArity2 = (
       ),
     ),
   )
+}
 
 export const preludeFunctionArity3 = (
   keyPath: NonEmptyKeyPath,
@@ -184,8 +186,8 @@ export const preludeFunctionArity3 = (
     handleUnavailableDependencies(argument1 =>
       either.flatMap(
         refineReturnedFunctionType(
-          signature.parameter,
-          signature.return,
+          liftedSignature.parameter,
+          liftedSignature.return,
           argument1,
         ),
         refinedReturn1 =>
@@ -408,7 +410,7 @@ const liftIntrinsicSignature = (
  */
 const refineReturnedFunctionType = (
   parameterType: Type,
-  returnedType: FunctionType,
+  returnedType: Type,
   argument: SemanticGraph,
 ): Either<FunctionNodeCallError, FunctionType> =>
   either.flatMap(

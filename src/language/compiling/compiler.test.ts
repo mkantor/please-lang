@@ -1138,6 +1138,18 @@ testCases(
 
   [
     `{
+      pipe: (f: ?a ~> ?b) => (a: :a) => :f(:a)
+      bad: :pipe(:integer.add(1))(a)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       f: (x: (?b: :atom.type)) => :x
       :f(hello) ~ hello
     }`,
@@ -1848,6 +1860,13 @@ testCases(
 
   [
     `{ increment: (x: :natural_number.type) => (1 + :x) ~ :natural_number.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ increment: (x: :natural_number.type) => (:x + 1) ~ :natural_number.type }`,
     result => {
       assert(either.isRight(result))
     },
