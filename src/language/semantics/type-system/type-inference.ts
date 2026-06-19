@@ -551,7 +551,7 @@ const getFunctionParameterType = (
     functionParameterKey,
   ])
   const cachedParameterTypeInfo =
-    contextOfFunction.locationDoesNotCorrespondWithTruePosition === true ?
+    contextOfFunction.isExternalToProgram === true ?
       undefined
     : contextOfFunction.mutableFunctionParameterCache.get(parameterCacheKey)
   if (cachedParameterTypeInfo !== undefined) {
@@ -639,8 +639,7 @@ const getFunctionParameterType = (
                     contextOfFunction.mutableInferenceCache,
                   mutableFunctionParameterCache:
                     contextOfFunction.mutableFunctionParameterCache,
-                  locationDoesNotCorrespondWithTruePosition:
-                    contextOfFunction.locationDoesNotCorrespondWithTruePosition,
+                  isExternalToProgram: contextOfFunction.isExternalToProgram,
                 }
                 const contextuallyAppliedFunctionType = inferType(
                   applyExpressionResult.value[1].function,
@@ -706,9 +705,7 @@ const getFunctionParameterType = (
         },
       }),
       parameterTypeInfo => {
-        if (
-          contextOfFunction.locationDoesNotCorrespondWithTruePosition !== true
-        ) {
+        if (contextOfFunction.isExternalToProgram !== true) {
           // Side effect: cache the parameter type so its type-parameter
           // identities remain stable.
           contextOfFunction.mutableFunctionParameterCache.set(

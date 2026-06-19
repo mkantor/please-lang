@@ -44,9 +44,8 @@ const handleUnavailableDependencies =
   }
 
 /**
- * Use with calls of user-defined functions from the standard library (which
- * conceptually occur from "outside your program" and therefore do not have a
- * meaningful `ExpressionContext`).
+ * Use with function calls from the standard library (which conceptually occur
+ * "outside your program" and don't have a meaningful `ExpressionContext`).
  */
 export const emptyContextForStdlibApplications: ExpressionContext = {
   keywordHandlers: {
@@ -66,7 +65,7 @@ export const emptyContextForStdlibApplications: ExpressionContext = {
   program: objectNodeFromOrderedEntries([]),
   mutableInferenceCache: new Map(),
   mutableFunctionParameterCache: new Map(),
-  locationDoesNotCorrespondWithTruePosition: true,
+  isExternalToProgram: true,
 }
 
 export const serializeOnceAppliedFunction =

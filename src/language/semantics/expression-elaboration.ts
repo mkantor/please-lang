@@ -64,9 +64,10 @@ export type ExpressionContext = {
    */
   readonly cacheKeyPrefixOverride?: KeyPath | undefined
   /**
-   * Marks contexts that have no position at all, so caching is disabled.
+   * Marks a context originating outside the program (e.g. functions called from
+   * higher-order standard library functions).
    */
-  readonly locationDoesNotCorrespondWithTruePosition?: true | undefined
+  readonly isExternalToProgram?: true | undefined
   readonly skipReelaboration?: true | undefined
   /**
    * When set, `@panic` returns its (un-elaborated) expression instead of
