@@ -303,6 +303,19 @@ export const makeUnionType = <Member extends Atom | Exclude<Type, UnionType>>(
   members: new Set(members),
 })
 
+/**
+ * Combine `types` into a single type: the sole element when there is exactly
+ * one, otherwise a flattened union.
+ */
+export const unionOfTypes = (types: readonly Type[]): Type =>
+  types.length === 1 && types[0] !== undefined ?
+    types[0]
+  : makeUnionType(
+      types.flatMap(type =>
+        type.kind === 'union' ? [...type.members] : [type],
+      ),
+    )
+
 export type Type =
   | ApplicationType
   | FunctionType

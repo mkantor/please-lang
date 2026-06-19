@@ -7,7 +7,7 @@ import {
 import { readUnionExpression } from '../expressions/union-expression.js'
 import type { SemanticGraph } from '../semantic-graph.js'
 import { typesBySymbol } from './prelude-types.js'
-import { makeObjectType, makeUnionType, type Type } from './type-formats.js'
+import { makeObjectType, unionOfTypes, type Type } from './type-formats.js'
 
 /**
  * Attempt to interpret `node` as a `Type` in a very basic way:
@@ -56,14 +56,7 @@ export const typeFromSemanticGraph = (
               typeFromSemanticGraph(member, options),
             ),
           ),
-          memberTypes =>
-            makeUnionType(
-              memberTypes.flatMap(memberType =>
-                memberType.kind === 'union' ?
-                  [...memberType.members]
-                : [memberType],
-              ),
-            ),
+          unionOfTypes,
         ),
       left: _ =>
         // Is it a `@hole`?

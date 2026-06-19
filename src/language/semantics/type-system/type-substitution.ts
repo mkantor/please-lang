@@ -15,6 +15,7 @@ import {
   makeTypeParameter,
   makeUnionType,
   matchTypeFormat,
+  unionOfTypes,
   type FunctionType,
   type ObjectType,
   type Type,
@@ -68,14 +69,7 @@ export const applyKeyPathToType = (type: Type, keyPath: TypeKeyPath): Type => {
         // The runtime key could be any member, so the every possible path must
         // be valid.
         return resultsPerKeyPossibility.some(isNothing) ? nothing : (
-            makeUnionType(
-              // Flatten to avoid nested unions.
-              resultsPerKeyPossibility.flatMap(typeForThisPossibility =>
-                typeForThisPossibility.kind === 'union' ?
-                  [...typeForThisPossibility.members]
-                : [typeForThisPossibility],
-              ),
-            )
+            unionOfTypes(resultsPerKeyPossibility)
           )
       }
     }
@@ -195,14 +189,7 @@ export const applyKeyPathToType = (type: Type, keyPath: TypeKeyPath): Type => {
           ),
         )
         return memberResults.some(isNothing) ? nothing : (
-            makeUnionType(
-              // Flatten to avoid nested unions.
-              memberResults.flatMap(memberResult =>
-                memberResult.kind === 'union' ?
-                  [...memberResult.members]
-                : [memberResult],
-              ),
-            )
+            unionOfTypes(memberResults)
           )
       },
     })
@@ -511,16 +498,7 @@ const reduceIntrinsicApplication = (
         either.sequence(cartesianProduct(argumentPossibilities).map(reduce)),
         {
           left: _ => stuck,
-          right: resultTypes =>
-            resultTypes.length === 1 && resultTypes[0] !== undefined ?
-              resultTypes[0]
-            : makeUnionType(
-                resultTypes.flatMap(resultType =>
-                  resultType.kind === 'union' ?
-                    [...resultType.members]
-                  : [resultType],
-                ),
-              ),
+          right: unionOfTypes,
         },
       ),
   })
