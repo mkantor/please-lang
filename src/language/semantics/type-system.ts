@@ -33,6 +33,7 @@ export {
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForTypeParameters,
+  recursivelyInexact,
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArgument,
   supplyTypeArguments,

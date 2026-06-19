@@ -10,7 +10,10 @@ import {
   type KeywordHandler,
   type SemanticGraph,
 } from '../../../semantics.js'
-import { inferType } from '../../../semantics/type-system.js'
+import {
+  inferType,
+  recursivelyInexact,
+} from '../../../semantics/type-system.js'
 
 const check = ({
   value,
@@ -33,10 +36,12 @@ const check = ({
           location: [...context.location, '1', 'type'],
         }),
         typeAsType => {
+          // `@check` targets are upper bounds; they allow width subtyping.
+          const targetType = recursivelyInexact(typeAsType)
           if (
             isAssignable({
               source: valueAsType,
-              target: typeAsType,
+              target: targetType,
             })
           ) {
             return either.makeRight(value)
@@ -45,7 +50,7 @@ const check = ({
               kind: 'typeMismatch',
               message: `the value \`${stringifySemanticGraphForEndUser(
                 value,
-              )}\` (inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) is not assignable to the type \`${stringifyTypeForEndUser(typeAsType)}\``,
+              )}\` (inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
             })
           }
         },
