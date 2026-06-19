@@ -31,6 +31,7 @@ import {
 } from './type-formats.js'
 import {
   applyKeyPathToType,
+  applyTypeToArgumentType,
   enumerateInhabitants,
   getTypesForTypeParameters,
   supplyTypeArgument,
@@ -475,4 +476,53 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
     ['wrap', makeObjectType({ value: A })],
     `{ value: ${stringifyTypeForEndUser(A)} }`,
   ],
+])
+
+const applyTypeToArgumentTypeSuite = testCases(
+  ([functionLikeType, argumentType]: readonly [
+    functionLikeType: Type,
+    argumentType: Type,
+  ]) =>
+    optionAdt.match(applyTypeToArgumentType(functionLikeType, argumentType), {
+      none: _ => 'none',
+      some: stringifyTypeForEndUser,
+    }),
+  ([functionLikeType, argumentType]) =>
+    `applying \`${stringifyTypeForEndUser(functionLikeType)}\` to \`${stringifyTypeForEndUser(argumentType)}\``,
+)
+
+applyTypeToArgumentTypeSuite('applyTypeToArgumentType', [
+  [
+    [makeFunctionType({ parameter: A, return: A }), integer],
+    stringifyTypeForEndUser(integer),
+  ],
+
+  [
+    [makeFunctionType({ parameter: atom, return: integer }), atom],
+    stringifyTypeForEndUser(integer),
+  ],
+
+  [
+    [
+      makeTypeParameter('f', {
+        assignableTo: makeFunctionType({ parameter: A, return: A }),
+      }),
+      integer,
+    ],
+    stringifyTypeForEndUser(integer),
+  ],
+
+  [
+    [
+      makeUnionType([
+        makeFunctionType({ parameter: atom, return: integer }),
+        makeFunctionType({ parameter: atom, return: atom }),
+      ]),
+      atom,
+    ],
+    stringifyTypeForEndUser(makeUnionType([integer, atom])),
+  ],
+
+  [[object, integer], 'none'],
+  [[integer, atom], 'none'],
 ])

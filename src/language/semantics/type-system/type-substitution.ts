@@ -392,6 +392,29 @@ export const applicableFunctionSignatures = (
   })
 
 /**
+ * Apply a function-like type to an argument type, returning the union of its
+ * signatures' return types (with type parameters bound from the argument), or
+ * `none` when `functionLikeType` isn't applicable as a function.
+ */
+export const applyTypeToArgumentType = (
+  functionLikeType: Type,
+  argumentType: Type,
+): Option<Type> =>
+  option.map(applicableFunctionSignatures(functionLikeType), signatures =>
+    unionOfTypes(
+      signatures.map(signature =>
+        supplyTypeArguments(
+          signature.return,
+          getTypesForTypeParameters({
+            parameterType: signature.parameter,
+            argumentType,
+          }),
+        ),
+      ),
+    ),
+  )
+
+/**
  * Attempt to reduce a (possibly stuck) application of `functionType(argument)`.
  * While the function still contains any of the `parametersStuckOn` (type
  * parameters an enclosing function will instantiate), the application stays

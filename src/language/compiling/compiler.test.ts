@@ -1945,6 +1945,91 @@ testCases(
   ],
 
   [
+    `{
+      test: a =>
+        (:integer.from(:a) match {
+          some: b => :b
+          none: _ => 0
+        }) ~ :integer.type
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      test: a =>
+        (:integer.from(:a) match {
+          some: b => :b
+          none: _ => 0
+        }) ~ :natural_number.type
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      test: a =>
+        (:integer.from(:a) match {
+          some: _ => true
+          none: _ => false
+        }) ~ :boolean.type
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: This should be rejected by static analysis (the `match` object is
+    // not exhaustive).
+    `{
+      test: a =>
+        :integer.from(:a) match {
+          some: _ => 1
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: This should be rejected by static analysis (a case has an incorrect
+    // parameter type).
+    `{
+      test: a =>
+        :integer.from(:a) match {
+          some: (b: :boolean.type) => 1
+          none: _ => 2
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    // TODO: This should be rejected by static analysis (`:a` may have arbitrary
+    // tags).
+    `{
+      test: (a: { tag: :atom.type, value: :something.type }) =>
+        :a match {
+          some: _ => 1
+          none: _ => 2
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `"-1-1" ~ :integer.type`,
     result => {
       assert(either.isLeft(result))
@@ -2041,9 +2126,18 @@ testCases(
   ],
 
   [
-    // TODO: It'd be great to be able to reason generically about non-literal
-    // standard library function arguments so cases like this typecheck.
-    `({ a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }) ~ { a: 1, b: :atom.type }`,
+    `(
+      { a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }
+    ) ~ { a: 1, b: :atom.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `(
+      { a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }
+    ) ~ { a: 1, b: 2 }`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -2061,6 +2155,68 @@ testCases(
     `:object.from_property(@runtime { _ => some_key })("some value") ~ { some_key: "some value" }`,
     result => {
       assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (x: :integer.type) =>
+        :object.from_property(a)(:x) ~ { a: :integer.type }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (x: :integer.type) =>
+        :object.from_property(a)(:x) ~ { a: :integer.type, b: :integer.type }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (x: :integer.type) =>
+        :object.overlay({ b: :x })({ a: :x }) ~ { a: :integer.type, b: :integer.type }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (x: :integer.type) =>
+        :object.lookup(a)({ a: :x }) ~ { tag: some, value: :integer.type }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (x: :integer.type) =>
+        :object.lookup(c)({ a: :x }) ~ { tag: none, value: {} }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (x: :integer.type) =>
+        :object.lookup(a)({ a: :x }) ~ { tag: none, value: {} }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
 ])
