@@ -53,6 +53,19 @@ export type ExpressionContext = {
     StringifiedKeyPath,
     FunctionParameterTypeInfo
   >
+  /**
+   * `location` is typically both the origin for `@lookup`s and the prefix for
+   * cache keys, but a few inference sites run with `location` pointing at a
+   * scope other than the node's true position (e.g. function parameter
+   * annotations are looked up from the function's scope rather than the
+   * annotation's). For those, `cacheKeyPrefixOverride` is used.
+   *
+   * When this is `undefined`, `location` is used for cache keys.
+   */
+  readonly cacheKeyPrefixOverride?: KeyPath | undefined
+  /**
+   * Marks contexts that have no position at all, so caching is disabled.
+   */
   readonly locationDoesNotCorrespondWithTruePosition?: true | undefined
   readonly skipReelaboration?: true | undefined
   /**
