@@ -19,7 +19,7 @@ import {
 } from '../semantics.js'
 import { inlinePlz, unparse, type Notation } from '../unparsing.js'
 import { isExpression } from './expression.js'
-import { makeHoleExpression } from './expressions/hole-expression.js'
+import { makeHoleExpressionWithExtantTypeParameter } from './expressions/hole-expression.js'
 import { serializeFunctionNode, type FunctionNode } from './function-node.js'
 import { isSemanticGraph } from './is-semantic-graph.js'
 import { stringifyKeyPathForEndUser, type KeyPath } from './key-path.js'
@@ -356,7 +356,7 @@ export const typeToSemanticGraph = (
         // Side effect: remember the type parameter. This is a direct mutation
         // because it needs to be visible to usages not in this call stack.
         alreadyIntroducedTypeParameterIdentities.add(type.identity)
-        return makeHoleExpression(
+        return makeHoleExpressionWithExtantTypeParameter(
           type.name,
           makeObjectNode({
             assignableTo: recurseWithSameTypeParameters(

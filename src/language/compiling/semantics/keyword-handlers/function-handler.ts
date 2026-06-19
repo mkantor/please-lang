@@ -27,7 +27,7 @@ import {
 import {
   collectHolesByName,
   findDuplicateHoleNames,
-  makeHoleExpression,
+  makeHoleExpressionWithExtantTypeParameter,
 } from '../../../semantics/expressions/hole-expression.js'
 import { makeTypeParameter } from '../../../semantics/type-system/type-formats.js'
 
@@ -113,14 +113,17 @@ const apply = (
       'return with a different key to avoid collision with a stupidly-named parameter'
     : 'return'
 
+  // Put each `@hole` from the annotation into scope under its name so the body
+  // can refer to it (e.g. `(first: ?a) => (second: :a) => …`). When the
+  // argument can be used to pin down type parameters, re-mint their `@hole`s
+  // with constraints specialized to this call site. Holes can also remain
+  // generic, staying stuck until an enclosing function is applied.
   const holeBindings: readonly (readonly [string, SemanticGraph])[] =
     option.match(getParameterTypeAnnotation(expression), {
       none: _ => [],
       some: annotation => {
-        // Specialize each hole's type parameter using the inferred type of the
-        // argument, so references like `:a` in the body see the concrete type
-        // rather than the original unconstrained type parameter.
-        const specializationsByTypeParameterName = either.match(
+        const typesForTypeParametersByName = either.match(
+          // Use the inferred argument type to pin down type parameters.
           inferType(argument, {
             ...applySiteContext,
             location: [...applySiteContext.location, '1', 'argument'],
@@ -151,26 +154,28 @@ const apply = (
               name !== ignoredKey,
           )
           .map(([name, hole]) => {
-            const specializedType = specializationsByTypeParameterName.get(name)
-            return [
-              name,
-              specializedType === undefined ? hole : (
-                makeHoleExpression(
+            const typeForTypeParameter = typesForTypeParametersByName.get(name)
+            if (typeForTypeParameter === undefined) {
+              return [name, hole]
+            } else {
+              return [
+                name,
+                makeHoleExpressionWithExtantTypeParameter(
                   name,
                   hole[1].constraint,
-                  // `specializedType` may itself be a type parameter; collapse
-                  // it to its concrete upper bound so the constraint is
-                  // concrete. This is merely to simplify the type for error
-                  // messages, etc and does not impact analysis.
                   makeTypeParameter(name, {
                     assignableTo:
+                      // `typeForTypeParameter` may still contain unsolved type
+                      // parameters. If so, eliminate them. This is merely to
+                      // simplify the type in diagnostics and doesn't affect
+                      // semantics.
                       replaceAllTypeParametersWithTheirConstraints(
-                        specializedType,
+                        typeForTypeParameter,
                       ),
                   }),
-                )
-              ),
-            ]
+                ),
+              ]
+            }
           })
       },
     })

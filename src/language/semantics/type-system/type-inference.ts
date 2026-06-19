@@ -30,6 +30,7 @@ import {
 } from '../expressions/function-expression.js'
 import {
   collectHoleTypeParameterIdentities,
+  getHoleConstraintSource,
   getHoleTypeParameter,
   readHoleExpression,
 } from '../expressions/hole-expression.js'
@@ -198,10 +199,20 @@ const inferTypeImplementation = (
     } else if (!lookingUpKeys.has(key)) {
       const lookupResult = lookup({ key, context })
       if (either.isRight(lookupResult) && option.isSome(lookupResult.value)) {
-        const { foundValue, foundLocation, typeParameterOfFoundHole } =
+        const { foundValue, foundLocation, foundHole } =
           lookupResult.value.value
-        const innerResult = option.match(typeParameterOfFoundHole, {
-          some: either.makeRight,
+        const innerResult = option.match(foundHole, {
+          // The hole lives in an enclosing parameter annotation. Infer it here
+          // so its constraint is resolved in the current scope. The result is
+          // the hole's type, which is the same as this `@lookup`'s type, so
+          // caching both under this location is consistent.
+          some: holeExpression =>
+            inferTypeImplementation(
+              holeExpression,
+              parameterTypes,
+              new Set([...lookingUpKeys, key]),
+              context,
+            ),
           none: _ =>
             inferTypeImplementation(
               foundValue,
@@ -493,12 +504,33 @@ const inferTypeImplementation = (
     )
   }
 
-  // @hole: a hole denotes its type parameter.
+  // @hole: a hole denotes its type parameter. Unless its constraint is already
+  // sourced from the carried type parameter, resolve it here.
   const holeExpressionResult = readHoleExpression(node)
   if (either.isRight(holeExpressionResult)) {
-    return cacheOnSuccess(
-      either.makeRight(getHoleTypeParameter(holeExpressionResult.value)),
-    )
+    const holeExpression = holeExpressionResult.value
+    const parameter = getHoleTypeParameter(holeExpression)
+
+    switch (getHoleConstraintSource(holeExpression)) {
+      case 'expression':
+        return cacheOnSuccess(
+          either.map(
+            inferTypeImplementation(
+              holeExpression[1].constraint.assignableTo,
+              parameterTypes,
+              lookingUpKeys,
+              descendantContext(['1', 'constraint', 'assignableTo']),
+            ),
+            resolvedConstraint => ({
+              ...parameter,
+              constraint: { assignableTo: resolvedConstraint },
+            }),
+          ),
+        )
+      case 'typeParameter':
+        // The stashed parameter's constraint was already resolved, so trust it.
+        return cacheOnSuccess(either.makeRight(parameter))
+    }
   }
 
   // Non-specific default case for object nodes: recurse into properties and

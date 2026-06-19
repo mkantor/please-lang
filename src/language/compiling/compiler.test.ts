@@ -1529,6 +1529,43 @@ testCases(
   ],
 
   [
+    `a => (x: (?b: :a)) => (:x ~ :a)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `a => (x: (?b: :a)) => (:b ~ :a)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `a => (x: (?b: { foo: :a })) => (:x ~ { foo: :a })`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `a => (x: (?b: :a)) => (:x ~ :integer.type)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `a => (x: (?b: :a)) => (:b ~ :integer.type)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `{ outer: a => (f: :a ~> ?b) => ((g: :f(:a)) => :g)(:f(:a)) }`,
     result => {
       assert(either.isRight(result))
