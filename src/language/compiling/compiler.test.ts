@@ -2061,6 +2061,28 @@ testCases(
   ],
 
   [
+    `{ a: 1, b: 2 } ~ { a: 1 }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `(x: { a: 1, b: 2 }) => :x ~ { a: 1 }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ a: 1 } ~ { a: 1, b: 2 }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `(_ => x) ~ ((:something.type ~> :atom.type) | (:something.type ~> :atom.type))`,
     result => {
       assert(either.isRight(result))
