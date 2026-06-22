@@ -35,7 +35,7 @@ export type ParsedJsonValue =
 // `interface` (not `type`) is used to avoid a circular reference error.
 interface ParsedJsonRecord extends OrderedRecord<ParsedJsonValue> {}
 
-const whitespace = regularExpression(/^[ \t\n\r]+/)
+const whitespace = regularExpression(/[ \t\n\r]+/)
 const optionalWhitespace = oneOf([whitespace, nothing])
 
 const optionallySurroundedByWhitespace = <Output>(
@@ -50,7 +50,7 @@ const quote = literal('"')
 const backslash = literal('\\')
 
 const unicodeEscape: Parser<string> = map(
-  sequence([backslash, literal('u'), regularExpression(/^[0-9A-Fa-f]{4}/)]),
+  sequence([backslash, literal('u'), regularExpression(/[0-9A-Fa-f]{4}/)]),
   ([_backslash, _u, hex]) => String.fromCharCode(parseInt(hex, 16)),
 )
 const simpleEscape: Parser<string> = map(
@@ -101,7 +101,7 @@ const jsonString: Parser<string> = map(
 )
 
 const jsonNumber: Parser<number> = map(
-  regularExpression(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/),
+  regularExpression(/-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/),
   Number,
 )
 

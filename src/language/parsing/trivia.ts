@@ -34,7 +34,7 @@ const singleLineComment = sequence([
   zeroOrMore(butNot(anySingleCharacter, newline, 'newline')),
 ])
 
-export const whitespace = regularExpression(/^\s+/)
+export const whitespace = regularExpression(/\s+/)
 export const whitespaceExceptNewlines = regularExpression(/[^\S\n]+/)
 
 export const trivia = oneOrMore(
