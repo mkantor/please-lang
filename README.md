@@ -18,9 +18,9 @@ There are more example programs in [`./examples`](./examples).
 
 **This implementation of Please is a proof of concept**. There are bugs and
 missing pieces, and language syntax/semantics may change backwards-incompatibly
-on the way to an official release. TypeScript was chosen because it's pretty
-good for rapid prototyping, but different languages may be used in non-prototype
-implementations.
+on the way to an official release. TypeScript was chosen for this implementation
+because it's pretty good for rapid prototyping, but different languages may be
+used in non-prototype versions.
 
 ### Current State
 
@@ -119,8 +119,8 @@ Index keys may be computed dynamically[^2]:
 
 ```plz
 {
-  a: { 2: "Hello, World!" }
-  :a.(1 + 1) // "Hello, World!"
+  a: { 2: { greeting: "Hello, World!" } }
+  :a.(1 + 1).greeting // "Hello, World!"
 }
 ```
 
