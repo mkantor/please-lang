@@ -88,7 +88,8 @@ const containedTypeParametersImplementation = (
           ]),
         ),
       union: ({ members }) =>
-        [...members]
+        members
+          .values()
           .map(member =>
             typeof member === 'string' ?
               new Map()
@@ -191,7 +192,8 @@ const findKeyPathsToTypeParameterImplementation = (
           ...(type.identity === typeParameterToFind.identity ? [root] : []),
         ]),
       union: ({ members }) =>
-        [...members]
+        members
+          .values()
           .map(
             (member): Set<TypeKeyPath> =>
               typeof member === 'string' ?
@@ -214,9 +216,13 @@ export const typeParameterIdentitiesWithinType = (
   type: Type,
 ): ReadonlySet<symbol> =>
   new Set(
-    [...containedTypeParameters(type).values()].flatMap(({ typeParameters }) =>
-      [...typeParameters.members].map(typeParameter => typeParameter.identity),
-    ),
+    containedTypeParameters(type)
+      .values()
+      .flatMap(({ typeParameters }) =>
+        typeParameters.members
+          .values()
+          .map(typeParameter => typeParameter.identity),
+      ),
   )
 
 const mergeTypeParametersByKeyPath = (
@@ -237,7 +243,7 @@ const mergeTypeParametersByKeyPath = (
             ...typeParameters.members,
             ...valueFromB.typeParameters.members,
           ]),
-        ).members.values(),
+        ).members,
       ]
       if (
         !supposedTypeParametersAsArray.every(

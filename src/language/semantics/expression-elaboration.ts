@@ -247,7 +247,7 @@ const elaborateWithinMolecule = (
       let madeProgress = true
       while (madeProgress && keysNeedingReelaboration.size > 0) {
         madeProgress = false
-        for (const key of [...keysNeedingReelaboration]) {
+        for (const key of keysNeedingReelaboration) {
           const value = possibleExpressionAsObjectNode[key]
           if (value === undefined) {
             keysNeedingReelaboration.delete(key)

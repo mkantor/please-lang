@@ -41,11 +41,13 @@ const computeFromPropertyReturnType = (
       {
         none: _ => types.object,
         some: keys =>
-          unionOfTypes(
-            [...keys.members].map(key =>
-              makeObjectType({ [key]: valueType }, { exact: true }),
-            ),
-          ),
+          unionOfTypes([
+            ...keys.members
+              .values()
+              .map(key =>
+                makeObjectType({ [key]: valueType }, { exact: true }),
+              ),
+          ]),
       },
     )
   }

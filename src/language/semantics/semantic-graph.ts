@@ -102,14 +102,16 @@ export const applyTypeKeyPathToSemanticGraph = (
         ])
       case 'union':
         return option.map(
-          option.sequence(
-            [...firstKey.members].map(firstKeyMember =>
-              applyTypeKeyPathToSemanticGraph(node, [
-                firstKeyMember,
-                ...remainingKeyPath,
-              ]),
-            ),
-          ),
+          option.sequence([
+            ...firstKey.members
+              .values()
+              .map(firstKeyMember =>
+                applyTypeKeyPathToSemanticGraph(node, [
+                  firstKeyMember,
+                  ...remainingKeyPath,
+                ]),
+              ),
+          ]),
           foundNodes =>
             makeUnionExpression(
               objectNodeFromOrderedEntries(

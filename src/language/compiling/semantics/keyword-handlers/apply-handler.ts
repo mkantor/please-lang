@@ -39,9 +39,11 @@ const checkArgumentType = (
     argumentType,
   })
   const flexibleTypeArguments = new Map(
-    [...typeArguments].filter(
-      ([typeParameter]) => !rigidTypeParameters.has(typeParameter.identity),
-    ),
+    typeArguments
+      .entries()
+      .filter(
+        ([typeParameter]) => !rigidTypeParameters.has(typeParameter.identity),
+      ),
   )
   const instantiatedParameterType = supplyTypeArguments(
     parameterType,
@@ -84,18 +86,21 @@ const correlatedScrutinee = (
 ): Option<CorrelatedScrutinee> => {
   const argumentParameterIdentities =
     typeParameterIdentitiesWithinType(argumentType)
-  const [scrutinee] = [...containedTypeParameters(functionType).values()]
+  const [scrutinee] = containedTypeParameters(functionType)
+    .values()
     .filter(
       ({ keyPath }) =>
         !keyPath.includes(typeParameterAssignableToConstraintKey),
     )
-    .flatMap(({ typeParameters }) => [...typeParameters.members])
+    .flatMap(({ typeParameters }) => typeParameters.members)
     .flatMap(typeParameter => {
       const constraint = typeParameter.constraint.assignableTo
       return (
           constraint.kind === 'union' &&
             argumentParameterIdentities.has(typeParameter.identity) &&
-            [...constraint.members].some(member => typeof member !== 'string')
+            constraint.members
+              .values()
+              .some(member => typeof member !== 'string')
         ) ?
           [{ parameter: typeParameter, constraint: constraint }]
         : []

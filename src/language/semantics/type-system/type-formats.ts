@@ -297,7 +297,7 @@ type SpecificUnionType<Member extends Atom | Exclude<Type, UnionType>> = Omit<
 }
 
 export const makeUnionType = <Member extends Atom | Exclude<Type, UnionType>>(
-  members: readonly Member[],
+  members: Iterable<Member>,
 ): SpecificUnionType<Member> => ({
   kind: 'union',
   members: new Set(members),

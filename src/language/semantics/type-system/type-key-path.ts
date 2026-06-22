@@ -260,7 +260,7 @@ export const atomKeyPathComponentFromType = (
       }
     },
     union: type => {
-      const [firstAtom, ...remainingAtoms] = [...type.members]
+      const [firstAtom, ...remainingAtoms] = type.members
       return (
         firstAtom === undefined ?
           either.makeLeft({

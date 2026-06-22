@@ -404,7 +404,7 @@ genericizationConstraintSuite(
         assert(parameterType.kind === 'parameter')
         const constraint = parameterType.constraint.assignableTo
         assert(constraint.kind === 'union')
-        const [member] = [...constraint.members]
+        const [member] = constraint.members
         assert(typeof member === 'object' && member.kind === 'object')
         assert.deepEqual(member.exact, false)
       },

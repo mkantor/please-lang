@@ -204,8 +204,9 @@ export const replaceAllTypeParametersWithTheirConstraints = (
       type.computeUpperBound(type.parameterTypes),
     )
     // TODO: Specialize the below to only traverse `type` once.
-  : [...containedTypeParameters(type).values()]
-      .flatMap(({ typeParameters }) => [...typeParameters.members])
+  : containedTypeParameters(type)
+      .values()
+      .flatMap(({ typeParameters }) => typeParameters.members)
       .reduce<Type>(
         (partiallyAppliedType, typeParameter) =>
           supplyTypeArgument(
@@ -362,7 +363,13 @@ export const applicableFunctionSignatures = (
     union: type =>
       type.members.size === 0 ?
         option.none
-      : [...type.members].reduce<Option<readonly FunctionType['signature'][]>>(
+      : // Prettier goes a little crazy here. This seems to be fixed in the
+        // `next` branch (currently 2be16eca1).
+        // TODO: Try un-ignoring this after the next Prettier release.
+        // prettier-ignore
+        type.members.values().reduce<
+          Option<readonly FunctionType['signature'][]>
+        >(
           (accumulated, member) =>
             option.flatMap(accumulated, signaturesSoFar =>
               typeof member === 'string' ?
@@ -427,9 +434,9 @@ const reduceApplication = (
   argumentType: Type,
   parametersStuckOn: ReadonlySet<symbol>,
 ): Type => {
-  const stillStuckOnParameter = [
-    ...typeParameterIdentitiesWithinType(functionType),
-  ].some(identity => parametersStuckOn.has(identity))
+  const stillStuckOnParameter = typeParameterIdentitiesWithinType(functionType)
+    .values()
+    .some(identity => parametersStuckOn.has(identity))
   return !stillStuckOnParameter && functionType.kind === 'function' ?
       supplyTypeArguments(
         functionType.signature.return,
@@ -487,13 +494,15 @@ export const enumerateInhabitants = (
           ),
       union: type =>
         option.map(
-          option.sequence(
-            [...type.members].map(member =>
-              typeof member === 'string' ?
-                option.makeSome([member])
-              : enumerateInhabitants(member),
-            ),
-          ),
+          option.sequence([
+            ...type.members
+              .values()
+              .map(member =>
+                typeof member === 'string' ?
+                  option.makeSome([member])
+                : enumerateInhabitants(member),
+              ),
+          ]),
           inhabitantsPerMember => inhabitantsPerMember.flat(),
         ),
     })
@@ -637,11 +646,13 @@ export const supplyTypeArguments = (
   type: Type,
   typeArguments: ReadonlyMap<TypeParameter, Type>,
 ): Type =>
-  [...typeArguments].reduce(
-    (partiallyAppliedType, [typeParameter, typeArgument]) =>
-      supplyTypeArgument(partiallyAppliedType, typeParameter, typeArgument),
-    type,
-  )
+  typeArguments
+    .entries()
+    .reduce(
+      (partiallyAppliedType, [typeParameter, typeArgument]) =>
+        supplyTypeArgument(partiallyAppliedType, typeParameter, typeArgument),
+      type,
+    )
 
 /**
  * Recursively clear `exact` from every object type within `type`. Used when a

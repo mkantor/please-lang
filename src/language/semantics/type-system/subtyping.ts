@@ -396,9 +396,11 @@ export const asUnionWithLiteralAtomMembers = (
 > => {
   const simplifiedType = simplifyUnionType(type)
 
-  const atomMembers = [...simplifiedType.members].filter(
-    member => typeof member === 'string',
-  )
+  const atomMembers = [
+    ...simplifiedType.members
+      .values()
+      .filter(member => typeof member === 'string'),
+  ]
 
   const isAtomUnion = atomMembers.length === simplifiedType.members.size
 
@@ -446,9 +448,9 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
     }
   }
 
-  const canonicalizedTargetMembers = new Set<Atom | Exclude<Type, UnionType>>([
-    ...typeToSimplify.members,
-  ])
+  const canonicalizedTargetMembers = new Set<Atom | Exclude<Type, UnionType>>(
+    typeToSimplify.members,
+  )
 
   // Reduce `reducibleSubsets` by merging all candidate, updating
   // `canonicalizedTargetMembers`. Merge algorithm:
@@ -459,10 +461,9 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
   //    - create single object type where each property has the appropriate
   //      union type
   for (const { keys, typesToMerge } of reducibleSubsets.values()) {
-    const typesToMergeAsArray = [...typesToMerge]
     const mergedObjectTypeChildren = Object.fromEntries(
       keys.map(key => {
-        const typesForThisProperty = typesToMergeAsArray.flatMap(type => {
+        const typesForThisProperty = typesToMerge.values().flatMap(type => {
           const propertyType = type.children[key]
           return (
             propertyType === undefined ? []

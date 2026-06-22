@@ -353,14 +353,14 @@ const inferTypeImplementation = (
               typeArguments,
             )
             const boundTypeParameters = new Set(
-              [...typeArguments.keys()].map(
-                typeParameter => typeParameter.identity,
-              ),
+              typeArguments.keys().map(typeParameter => typeParameter.identity),
             )
             const typeParametersWithinEnclosingParameterTypes = new Set(
-              [...parameterTypes.values()].flatMap(enclosingParameterType => [
-                ...typeParameterIdentitiesWithinType(enclosingParameterType),
-              ]),
+              parameterTypes
+                .values()
+                .flatMap(enclosingParameterType =>
+                  typeParameterIdentitiesWithinType(enclosingParameterType),
+                ),
             )
             const typeParametersMentionedInThisSignature =
               typeParameterIdentitiesWithinType(appliedFunctionType)
@@ -368,9 +368,11 @@ const inferTypeImplementation = (
             // applied function's type whose concrete types only arrive when an
             // enclosing function is applied.
             const parametersStuckOn = new Set(
-              [...typeParametersMentionedInThisSignature].filter(identity =>
-                typeParametersWithinEnclosingParameterTypes.has(identity),
-              ),
+              typeParametersMentionedInThisSignature
+                .values()
+                .filter(identity =>
+                  typeParametersWithinEnclosingParameterTypes.has(identity),
+                ),
             )
             const applicationIsStuck =
               // When the applied function is directly typed as a non-concrete
@@ -387,12 +389,14 @@ const inferTypeImplementation = (
               // applied function's own type and mustn't have been instantiated
               // by its argument. Such an application can only be reduced once
               // the enclosing function is applied.
-              [...typeParameterIdentitiesWithinType(eagerReturnType)].some(
-                identity =>
-                  typeParametersMentionedInThisSignature.has(identity) &&
-                  typeParametersWithinEnclosingParameterTypes.has(identity) &&
-                  !boundTypeParameters.has(identity),
-              )
+              typeParameterIdentitiesWithinType(eagerReturnType)
+                .values()
+                .some(
+                  identity =>
+                    typeParametersMentionedInThisSignature.has(identity) &&
+                    typeParametersWithinEnclosingParameterTypes.has(identity) &&
+                    !boundTypeParameters.has(identity),
+                )
             return cacheOnSuccess(
               either.makeRight(
                 applicationIsStuck ?
