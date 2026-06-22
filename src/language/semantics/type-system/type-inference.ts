@@ -113,7 +113,9 @@ const inferTypeImplementation = (
   lookingUpKeys: ReadonlySet<Atom>,
   context: ExpressionContext,
 ): Either<ElaborationError, Type> => {
-  const cacheKey = stringifyTypeKeyPathForEndUser(context.location)
+  const cacheKey = stringifyTypeKeyPathForEndUser(
+    context.cacheKeyPrefixOverride ?? context.location,
+  )
   const cached = context.mutableInferenceCache.get(cacheKey)
   if (cached !== undefined) {
     return either.makeRight(cached)
@@ -138,6 +140,10 @@ const inferTypeImplementation = (
   const descendantContext = (subPath: KeyPath): ExpressionContext => ({
     ...context,
     location: [...context.location, ...subPath],
+    cacheKeyPrefixOverride:
+      context.cacheKeyPrefixOverride === undefined ?
+        undefined
+      : [...context.cacheKeyPrefixOverride, ...subPath],
   })
 
   if (
@@ -204,15 +210,15 @@ const inferTypeImplementation = (
               foundLocation === 'prelude' ?
                 {
                   ...context,
-                  // We don't have a way to key the cache for inferences from
-                  // the prelude. Use a fresh cache so as not to pollute the
-                  // shared one.
-                  mutableInferenceCache: new Map(),
-                  locationDoesNotCorrespondWithTruePosition: true,
+                  // Prelude values exist outside the program, so use an
+                  // artificial key. `@` can't be a real key (it'd be escaped as
+                  // `@@`), so this can't collide with an actual location.
+                  cacheKeyPrefixOverride: ['@', key],
                 }
               : {
                   ...context,
                   location: foundLocation,
+                  cacheKeyPrefixOverride: undefined,
                 },
             ),
         })
@@ -541,11 +547,11 @@ const getFunctionParameterType = (
   // type parameters are identified by an internal `symbol`. To keep identities
   // consistent, cache parameter types here.
   const parameterCacheKey = stringifyTypeKeyPathForEndUser([
-    ...contextOfFunction.location,
+    ...(contextOfFunction.cacheKeyPrefixOverride ?? contextOfFunction.location),
     functionParameterKey,
   ])
   const cachedParameterTypeInfo =
-    contextOfFunction.locationDoesNotCorrespondWithTruePosition === true ?
+    contextOfFunction.isExternalToProgram === true ?
       undefined
     : contextOfFunction.mutableFunctionParameterCache.get(parameterCacheKey)
   if (cachedParameterTypeInfo !== undefined) {
@@ -557,14 +563,17 @@ const getFunctionParameterType = (
           either.map(
             // Type annotation lookups happen from the function's scope rather
             // than their own location (a property within the `@function`), so
-            // location-keyed caching is disabled for this inference.
-            // TODO: Consider separating out the cache key prefix from the
-            // `context.location` somehow so that I can say "lookups start from
-            // X, cache key paths are rooted at Y".
+            // `location` stays anchored at the function while cache keys are
+            // rooted at the annotation's true position.
             inferType(annotation, {
               ...contextOfFunction,
-              mutableInferenceCache: new Map(),
-              locationDoesNotCorrespondWithTruePosition: true,
+              cacheKeyPrefixOverride: [
+                ...(contextOfFunction.cacheKeyPrefixOverride ??
+                  contextOfFunction.location),
+                '1',
+                'parameter',
+                getParameterName(expression),
+              ],
             }),
             annotationType => {
               const parameterName = getParameterName(expression)
@@ -622,12 +631,15 @@ const getFunctionParameterType = (
                   program: contextOfFunction.program,
                   keywordHandlers: contextOfFunction.keywordHandlers,
                   location: contextOfFunction.location.slice(0, -2),
+                  cacheKeyPrefixOverride:
+                    contextOfFunction.cacheKeyPrefixOverride === undefined ?
+                      undefined
+                    : contextOfFunction.cacheKeyPrefixOverride.slice(0, -2),
                   mutableInferenceCache:
                     contextOfFunction.mutableInferenceCache,
                   mutableFunctionParameterCache:
                     contextOfFunction.mutableFunctionParameterCache,
-                  locationDoesNotCorrespondWithTruePosition:
-                    contextOfFunction.locationDoesNotCorrespondWithTruePosition,
+                  isExternalToProgram: contextOfFunction.isExternalToProgram,
                 }
                 const contextuallyAppliedFunctionType = inferType(
                   applyExpressionResult.value[1].function,
@@ -638,6 +650,17 @@ const getFunctionParameterType = (
                       '1',
                       'function',
                     ],
+                    cacheKeyPrefixOverride:
+                      (
+                        contextOfEnclosingExpression.cacheKeyPrefixOverride ===
+                        undefined
+                      ) ?
+                        undefined
+                      : [
+                          ...contextOfEnclosingExpression.cacheKeyPrefixOverride,
+                          '1',
+                          'function',
+                        ],
                   },
                 )
 
@@ -682,9 +705,7 @@ const getFunctionParameterType = (
         },
       }),
       parameterTypeInfo => {
-        if (
-          contextOfFunction.locationDoesNotCorrespondWithTruePosition !== true
-        ) {
+        if (contextOfFunction.isExternalToProgram !== true) {
           // Side effect: cache the parameter type so its type-parameter
           // identities remain stable.
           contextOfFunction.mutableFunctionParameterCache.set(

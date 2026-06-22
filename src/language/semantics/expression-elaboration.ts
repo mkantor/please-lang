@@ -53,7 +53,21 @@ export type ExpressionContext = {
     StringifiedKeyPath,
     FunctionParameterTypeInfo
   >
-  readonly locationDoesNotCorrespondWithTruePosition?: true | undefined
+  /**
+   * `location` is typically both the origin for `@lookup`s and the prefix for
+   * cache keys, but a few inference sites run with `location` pointing at a
+   * scope other than the node's true position (e.g. function parameter
+   * annotations are looked up from the function's scope rather than the
+   * annotation's). For those, `cacheKeyPrefixOverride` is used.
+   *
+   * When this is `undefined`, `location` is used for cache keys.
+   */
+  readonly cacheKeyPrefixOverride?: KeyPath | undefined
+  /**
+   * Marks a context originating outside the program (e.g. functions called from
+   * higher-order standard library functions).
+   */
+  readonly isExternalToProgram?: true | undefined
   readonly skipReelaboration?: true | undefined
   /**
    * When set, `@panic` returns its (un-elaborated) expression instead of
