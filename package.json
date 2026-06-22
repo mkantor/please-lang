@@ -14,7 +14,7 @@
     "build:tests": "tsc --project tsconfig.app.json --outDir dist-test --declarationDir dist && tsc --build tsconfig.test.json",
     "clean": "rm -rf dist* *.tsbuildinfo",
     "lint": "eslint .; prettier --check .",
-    "lint:fix": "eslint . --fix; prettier --write .",
+    "lint:fix": "eslint --fix .; prettier --write .",
     "test": "npm run build:tests && node --test --no-experimental-strip-types",
     "test-update-snapshots": "npm run build:tests && node --test --no-experimental-strip-types --test-update-snapshots"
   },
