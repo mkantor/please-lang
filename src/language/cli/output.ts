@@ -8,11 +8,15 @@ import {
   unparse,
   type Notation,
 } from '../unparsing.js'
+import { formatError, type DiagnosticError } from './error-formatting.js'
 
 export const handleOutput = async (
   process: NodeJS.Process,
-  command: () => Promise<Either<{ readonly message: string }, SyntaxTree>>,
+  command: () =>
+    | Either<DiagnosticError, SyntaxTree>
+    | Promise<Either<DiagnosticError, SyntaxTree>>,
   defaultOutputNotation?: Notation,
+  source?: string,
 ): Promise<undefined> => {
   const args = parseArgs({
     args: process.argv.slice(2), // remove `execPath` and `filename`
@@ -55,7 +59,11 @@ export const handleOutput = async (
   const result = await command()
   either.match(result, {
     left: error => {
-      throw new Error(error.message) // TODO: Improve error reporting.
+      process.stderr.write(
+        `${formatError(error, { filename: '<stdin>', ...(source === undefined ? {} : { source }) })}\n`,
+      )
+      process.exitCode = 1
+      return undefined
     },
     right: output => {
       writeOutput(process.stdout, notation, output)
