@@ -1,6 +1,9 @@
+import type { Span } from './source-location.js'
+
 export type BadSyntax = {
   readonly kind: 'badSyntax'
   readonly message: string
+  readonly span: Span
 }
 
 export type Bug = {
