@@ -47,8 +47,9 @@ import {
 } from './type-formats.js'
 import {
   functionParameterKey,
-  stringifyTypeKeyPathForEndUser,
+  stringifyTypeKeyPathSymbol,
   typeKeyPathFromObjectNode,
+  type TypeKeyPath,
 } from './type-key-path.js'
 import {
   containedTypeParameters,
@@ -114,7 +115,7 @@ const inferTypeImplementation = (
   lookingUpKeys: ReadonlySet<Atom>,
   context: ExpressionContext,
 ): Either<ElaborationError, Type> => {
-  const cacheKey = stringifyTypeKeyPathForEndUser(
+  const cacheKey = stringifyInferenceCacheKey(
     context.cacheKeyPrefixOverride ?? context.location,
   )
   const cached = context.mutableInferenceCache.get(cacheKey)
@@ -582,7 +583,7 @@ const getFunctionParameterType = (
   // `genericizeFunctionParameterAnnotation` mints fresh type parameters, but
   // type parameters are identified by an internal `symbol`. To keep identities
   // consistent, cache parameter types here.
-  const parameterCacheKey = stringifyTypeKeyPathForEndUser([
+  const parameterCacheKey = stringifyInferenceCacheKey([
     ...(contextOfFunction.cacheKeyPrefixOverride ?? contextOfFunction.location),
     functionParameterKey,
   ])
@@ -855,3 +856,14 @@ const resolveEnclosingFunctionParameters = (
   }
   return collectFromLocation(context.location)
 }
+
+const stringifyInferenceCacheKey = (keyPath: TypeKeyPath): string =>
+  // It'd be nice to use `stringifyTypeKeyPathForEndUser` here, but this is an
+  // internal affair and `JSON.stringify` is faster.
+  JSON.stringify(
+    keyPath.map(component =>
+      typeof component === 'symbol' ?
+        stringifyTypeKeyPathSymbol(component)
+      : component,
+    ),
+  )

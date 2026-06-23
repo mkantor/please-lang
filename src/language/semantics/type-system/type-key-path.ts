@@ -316,6 +316,22 @@ export const nestedIndexedAccess = (
   )
 }
 
+export const stringifyTypeKeyPathSymbol = (
+  symbol: Extract<TypeKeyPath[number], symbol>,
+): string => {
+  switch (symbol) {
+    // TODO: Consider surfacing this in plz syntax (allowing programmatic
+    // access of un-elaborated function parameters/returns and type parameter
+    // constraints).
+    case functionParameterKey:
+      return '#parameter'
+    case functionReturnKey:
+      return '#return'
+    case typeParameterAssignableToConstraintKey:
+      return '#constraint'
+  }
+}
+
 const stringifyKeyPathComponentForEndUser = (
   component: TypeKeyPath[number],
 ): string => {
@@ -335,16 +351,6 @@ const stringifyKeyPathComponentForEndUser = (
         )
     }
   } else {
-    switch (component) {
-      // TODO: Consider surfacing this in plz syntax (allowing programmatic
-      // access of un-elaborated function parameters/returns and type parameter
-      // constraints).
-      case functionParameterKey:
-        return '#parameter'
-      case functionReturnKey:
-        return '#return'
-      case typeParameterAssignableToConstraintKey:
-        return '#constraint'
-    }
+    return stringifyTypeKeyPathSymbol(component)
   }
 }
