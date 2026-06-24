@@ -1,5 +1,6 @@
 import either, { type Either } from '@matt.kantor/either'
 import * as orderedRecord from '../../ordered-record.js'
+import { withPhantomData, type WithPhantomData } from '../../phantom-data.js'
 import type { InvalidExpressionError } from '../errors.js'
 import type { Atom, Molecule } from '../parsing.js'
 import { inlinePlz, unparse } from '../unparsing.js'
@@ -9,11 +10,25 @@ import { stringifySemanticGraphForEndUser } from './semantic-graph.js'
 export type KeyPath = readonly Atom[]
 export type NonEmptyKeyPath = readonly [Atom, ...KeyPath]
 
+declare const _isKeyPathStringifiedForInternalUse: unique symbol
+type IsKeyPathStringifiedForInternalUse = {
+  readonly [_isKeyPathStringifiedForInternalUse]: true
+}
+export type KeyPathStringifiedForInternalUse = WithPhantomData<
+  string,
+  IsKeyPathStringifiedForInternalUse
+>
+
 export const stringifyKeyPathForEndUser = (keyPath: KeyPath): string =>
   either.match(unparse(arrayToMolecule(keyPath), inlinePlz), {
     right: stringifiedOutput => stringifiedOutput,
     left: error => `(unserializable key path: ${error.message})`,
   })
+
+export const stringifyKeyPathForInternalUse = (
+  keyPath: KeyPath,
+): KeyPathStringifiedForInternalUse =>
+  withPhantomData<IsKeyPathStringifiedForInternalUse>()(JSON.stringify(keyPath))
 
 export const arrayToMolecule = (
   keyPath: readonly (Molecule | Atom)[],

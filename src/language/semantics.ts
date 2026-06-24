@@ -77,7 +77,9 @@ export {
   arrayToMolecule,
   keyPathFromObjectNode,
   stringifyKeyPathForEndUser,
+  stringifyKeyPathForInternalUse,
   type KeyPath,
+  type KeyPathStringifiedForInternalUse,
 } from './semantics/key-path.js'
 export { isKeyword, type Keyword } from './semantics/keyword.js'
 export {
