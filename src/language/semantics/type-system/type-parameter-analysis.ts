@@ -10,17 +10,17 @@ import {
 import {
   functionParameterKey,
   functionReturnKey,
-  stringifyTypeKeyPathForEndUser,
+  stringifyTypeKeyPathForInternalUse,
   typeParameterAssignableToConstraintKey,
   type TypeKeyPath,
+  type TypeKeyPathStringifiedForInternalUse,
 } from './type-key-path.js'
 
-type StringifiedKeyPath = string // this could be branded if that seems useful
 type UnionOfTypeParameters = Omit<UnionType, 'members'> & {
   readonly members: ReadonlySet<TypeParameter>
 }
 export type TypeParametersByKeyPath = Map<
-  StringifiedKeyPath,
+  TypeKeyPathStringifiedForInternalUse,
   {
     readonly keyPath: TypeKeyPath
     readonly typeParameters: UnionOfTypeParameters
@@ -79,7 +79,7 @@ const containedTypeParametersImplementation = (
           ]),
           new Map([
             [
-              stringifyTypeKeyPathForEndUser(root),
+              stringifyTypeKeyPathForInternalUse(root),
               {
                 keyPath: root,
                 typeParameters: makeUnionType([type]),
