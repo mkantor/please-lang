@@ -9,6 +9,7 @@ export type BadSyntax = {
 export type Bug = {
   readonly kind: 'bug'
   readonly message: string
+  readonly span?: Span
 }
 
 export type DependencyUnavailable = {
@@ -19,31 +20,37 @@ export type DependencyUnavailable = {
 export type InvalidExpressionError = {
   readonly kind: 'invalidExpression'
   readonly message: string
+  readonly span?: Span
 }
 
 export type InvalidSyntaxTreeError = {
   readonly kind: 'invalidSyntaxTree'
   readonly message: string
+  readonly span?: Span
 }
 
 export type Panic = {
   readonly kind: 'panic'
   readonly message: string
+  readonly span?: Span
 }
 
 export type UnserializableValueError = {
   readonly kind: 'unserializableValue'
   readonly message: string
+  readonly span?: Span
 }
 
 export type TypeMismatchError = {
   readonly kind: 'typeMismatch'
   readonly message: string
+  readonly span?: Span
 }
 
 export type UnknownKeywordError = {
   readonly kind: 'unknownKeyword'
   readonly message: string
+  readonly span?: Span
 }
 
 export type ElaborationError =

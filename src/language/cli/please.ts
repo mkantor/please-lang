@@ -16,7 +16,9 @@ const main = async (process: NodeJS.Process): Promise<undefined> => {
     () => {
       // TODO: Cache intermediate representations to the filesystem.
       const syntaxTree = parse(sourceCode)
-      const program = either.flatMap(syntaxTree, compile)
+      const program = either.flatMap(syntaxTree, tree =>
+        compile(tree, new Map()),
+      )
       return either.flatMap(program, evaluate)
     },
     prettyPlz,

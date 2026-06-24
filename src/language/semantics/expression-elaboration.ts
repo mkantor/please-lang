@@ -3,8 +3,18 @@ import option from '@matt.kantor/option'
 import { withPhantomData, type WithPhantomData } from '../../phantom-data.js'
 import type { Writable } from '../../utility-types.js'
 import type { ElaborationError, InvalidSyntaxTreeError } from '../errors.js'
-import type { Atom, Molecule, SyntaxTree } from '../parsing.js'
-import { asSemanticGraph, type Type } from '../semantics.js'
+import type {
+  Atom,
+  ExpressionSpansByLocation,
+  Molecule,
+  SyntaxTree,
+} from '../parsing.js'
+import {
+  asSemanticGraph,
+  stringifyKeyPathForInternalUse,
+  type Type,
+} from '../semantics.js'
+import type { Span } from '../source-location.js'
 import {
   isExpression,
   isKeywordExpressionWithArgument,
@@ -56,6 +66,12 @@ export type ExpressionContext = {
     FunctionParameterTypeInfo
   >
   /**
+   * Source spans for the program being elaborated, keyed by stringified key
+   * path (matching `location`). This is used to attach spans to errors. It's
+   * absent when elaborating from a sourceless origin.
+   */
+  readonly sourceSpans?: ExpressionSpansByLocation | undefined
+  /**
    * `location` is typically both the origin for `@lookup`s and the prefix for
    * cache keys, but a few inference sites run with `location` pointing at a
    * scope other than the node's true position (e.g. function parameter
@@ -90,6 +106,7 @@ export type KeywordHandlers = Readonly<Record<Keyword, KeywordHandler>>
 export const elaborate = (
   program: SyntaxTree,
   keywordHandlers: KeywordHandlers,
+  spans?: ExpressionSpansByLocation,
 ): Either<ElaborationError, ElaboratedSemanticGraph> =>
   elaborateWithContext(program, {
     keywordHandlers,
@@ -98,6 +115,7 @@ export const elaborate = (
     mutableFunctionParameterCache: new Map(),
     program:
       typeof program === 'string' ? program : objectNodeFromMolecule(program),
+    sourceSpans: spans,
   })
 
 export const elaborateWithContext = (
@@ -318,7 +336,7 @@ const handleObjectNodeWhichMayBeAExpression = (
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> => {
   const possibleKeyword = node[0]
-  return (
+  return attachSpanIfAbsent(
     isKeyword(possibleKeyword) ?
       context.keywordHandlers[possibleKeyword](
         withProperty(node, '0', possibleKeyword),
@@ -331,9 +349,47 @@ const handleObjectNodeWhichMayBeAExpression = (
       })
     : either.makeRight(
         withProperty(node, '0', unescapeKeywordSigil(possibleKeyword)),
-      )
+      ),
+    context,
   )
 }
+
+/**
+ * Attach the current location's source span to a freshly-produced error,
+ * leaving any already-attached (deeper, more specific) span untouched so the
+ * innermost one wins.
+ */
+const attachSpanIfAbsent = (
+  result: Either<ElaborationError, SemanticGraph>,
+  context: ExpressionContext,
+): Either<ElaborationError, SemanticGraph> =>
+  either.mapLeft(result, error => {
+    if (error.span !== undefined) {
+      return error
+    } else {
+      const span = spanForLocation(context.sourceSpans, context.location)
+      if (span === undefined) {
+        return error
+      } else {
+        return { ...error, span }
+      }
+    }
+  })
+
+/**
+ * Resolve a location to its source span, walking up to the nearest enclosing
+ * expression when the exact node has no recorded span.
+ */
+const spanForLocation = (
+  spans: ExpressionSpansByLocation | undefined,
+  location: KeyPath,
+): Span | undefined =>
+  spans === undefined ? undefined : (
+    (spans.get(stringifyKeyPathForInternalUse(location)) ??
+    (location.length === 0 ?
+      undefined
+    : spanForLocation(spans, location.slice(0, -1))))
+  )
 
 const handleAtomWhichMayNotBeAKeyword = (
   atom: Atom,

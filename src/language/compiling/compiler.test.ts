@@ -2,13 +2,16 @@ import either, { type Either } from '@matt.kantor/either'
 import assert from 'node:assert'
 import * as orderedRecord from '../../ordered-record.js'
 import { withPhantomData } from '../../phantom-data.js'
-import { testCases, toSyntaxTree } from '../../test-utilities.test.js'
+import {
+  compileWithoutSpans,
+  testCases,
+  toSyntaxTree,
+} from '../../test-utilities.test.js'
 import type { JsonValue } from '../../utility-types.js'
 import type { ElaborationError } from '../errors.js'
 import type { Molecule } from '../parsing.js'
 import { parse } from '../parsing/parser.js'
 import type { Output } from '../semantics.js'
-import { compile } from './compiler.js'
 
 const success = (
   expectedOutput: JsonValue | Molecule,
@@ -22,7 +25,7 @@ const success = (
   )
 
 const canonicalizeAndCompile = (input: JsonValue) =>
-  compile(toSyntaxTree(input))
+  compileWithoutSpans(toSyntaxTree(input))
 
 testCases(
   canonicalizeAndCompile,
@@ -194,7 +197,8 @@ testCases(
   ],
 ])
 
-const parseAndCompile = (input: string) => either.flatMap(parse(input), compile)
+const parseAndCompile = (input: string) =>
+  either.flatMap(parse(input), compileWithoutSpans)
 
 testCases(
   parseAndCompile,

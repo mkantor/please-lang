@@ -1,11 +1,11 @@
 import either from '@matt.kantor/either'
 import option from '@matt.kantor/option'
 import assert from 'node:assert'
-import { compile } from './language/compiling.js'
 import { parse } from './language/parsing/parser.js'
 import { evaluate } from './language/runtime.js'
 import * as orderedRecord from './ordered-record.js'
 import {
+  compileWithoutSpans,
   parseAndCompileAndRun,
   testCases,
   toSyntaxTree,
@@ -23,7 +23,7 @@ const endToEnd = (input: string) => {
     unparseAndRoundtrip,
   )
 
-  const program = either.flatMap(syntaxTree, compile)
+  const program = either.flatMap(syntaxTree, compileWithoutSpans)
   const runtimeOutputFromRoundtrippingProgram = either.flatMap(
     program,
     unparseAndRoundtrip,
