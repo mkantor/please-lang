@@ -49,13 +49,27 @@ suite('please CLI error reporting', () => {
     )
   })
 
-  test('degrades to a plain header when the error has no span', async () => {
+  test('frames a type mismatch error with an underline', async () => {
     const { stdout, stderr, code } = await runPlease('1 ~ :boolean.type', [
       '--no-color',
     ])
     assert.equal(code, 1)
     assert.equal(stdout, '')
-    assert.match(stderr, /^Error: the value `1`/)
+    assert.match(stderr, /^Error: /)
+    assert.ok(stderr.includes('\n<stdin>:1:1\n'))
+    assert.ok(stderr.includes('\n1 │ 1 ~ :boolean.type\n'))
+    assert.ok(stderr.includes('\n  │ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔\n'))
+  })
+
+  test('underlines a sub-expression error on a later line', async () => {
+    const source = '{\n  greeting: :nope\n  other: 2\n}'
+    const { stdout, stderr, code } = await runPlease(source, ['--no-color'])
+    assert.equal(code, 1)
+    assert.equal(stdout, '')
+    assert.match(stderr, /^Error: property `nope` not found\n/)
+    assert.ok(stderr.includes('\n<stdin>:2:13\n'))
+    assert.ok(stderr.includes('\n2 │   greeting: :nope\n'))
+    assert.ok(stderr.includes('\n  │             ▔▔▔▔▔\n'))
   })
 
   test('exits zero and writes output for a valid program', async () => {
