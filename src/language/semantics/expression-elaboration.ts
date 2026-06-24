@@ -26,12 +26,11 @@ import {
   updateValueAtKeyPathInSemanticGraph,
   type SemanticGraph,
 } from './semantic-graph.js'
+import type { TypeKeyPathStringifiedForInternalUse } from './type-system.js'
 
 declare const _elaborated: unique symbol
 type Elaborated = { readonly [_elaborated]: true }
 export type ElaboratedSemanticGraph = WithPhantomData<SemanticGraph, Elaborated>
-
-type StringifiedKeyPath = string
 
 /**
  * The (possibly genericized) type of a function's parameter, plus the
@@ -48,9 +47,12 @@ export type ExpressionContext = {
   readonly keywordHandlers: KeywordHandlers
   readonly location: KeyPath
   readonly program: SemanticGraph
-  readonly mutableInferenceCache: Map<StringifiedKeyPath, Type>
+  readonly mutableInferenceCache: Map<
+    TypeKeyPathStringifiedForInternalUse,
+    Type
+  >
   readonly mutableFunctionParameterCache: Map<
-    StringifiedKeyPath,
+    TypeKeyPathStringifiedForInternalUse,
     FunctionParameterTypeInfo
   >
   /**

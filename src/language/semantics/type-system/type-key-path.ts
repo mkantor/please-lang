@@ -1,5 +1,6 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
+import { withPhantomData, type WithPhantomData } from '../../../phantom-data.js'
 import type { ElaborationError, TypeMismatchError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import { quoteAtomIfNecessary } from '../../unparsing/plz-utilities.js'
@@ -39,6 +40,15 @@ export type TypeKeyPath = readonly (
   | typeof functionReturnKey
   | typeof typeParameterAssignableToConstraintKey
 )[]
+
+declare const _isKeyPathStringifiedForInternalUse: unique symbol
+type IsKeyPathStringifiedForInternalUse = {
+  readonly [_isKeyPathStringifiedForInternalUse]: true
+}
+export type TypeKeyPathStringifiedForInternalUse = WithPhantomData<
+  string,
+  IsKeyPathStringifiedForInternalUse
+>
 
 export const typeKeyPathFromObjectNode = (
   node: ObjectNode,
@@ -194,6 +204,19 @@ export const stringifyTypeKeyPathForEndUser = (keyPath: TypeKeyPath): string =>
         stringifyKeyPathComponentForEndUser(key),
       ),
     '',
+  )
+
+export const stringifyTypeKeyPathForInternalUse = (
+  keyPath: TypeKeyPath,
+): TypeKeyPathStringifiedForInternalUse =>
+  withPhantomData<IsKeyPathStringifiedForInternalUse>()(
+    JSON.stringify(
+      keyPath.map(component =>
+        typeof component === 'symbol' ?
+          stringifyTypeKeyPathSymbol(component)
+        : component,
+      ),
+    ),
   )
 
 export const atomKeyPathComponentFromType = (
