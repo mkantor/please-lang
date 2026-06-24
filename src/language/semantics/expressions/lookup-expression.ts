@@ -20,7 +20,6 @@ import {
   stringifySemanticGraphForEndUser,
   type SemanticGraph,
 } from '../semantic-graph.js'
-import type { TypeParameter } from '../type-system.js'
 import {
   ignoredKey,
   readArgumentsFromExpression,
@@ -31,11 +30,7 @@ import {
   getParameterTypeAnnotation,
   readFunctionExpression,
 } from './function-expression.js'
-import {
-  collectHolesByName,
-  getHoleTypeParameter,
-  type HoleExpression,
-} from './hole-expression.js'
+import { collectHolesByName, type HoleExpression } from './hole-expression.js'
 import { makeIndexExpression } from './index-expression.js'
 
 export type LookupExpression = ObjectNode & {
@@ -99,7 +94,7 @@ export const lookup = ({
   Option<{
     readonly foundLocation: 'prelude' | KeyPath
     readonly foundValue: SemanticGraph
-    readonly typeParameterOfFoundHole: Option<TypeParameter>
+    readonly foundHole: Option<HoleExpression>
   }>
 > => {
   if (key === ignoredKey) {
@@ -119,7 +114,7 @@ export const lookup = ({
           option.makeSome({
             foundLocation: 'prelude',
             foundValue: valueFromPrelude,
-            typeParameterOfFoundHole: option.none,
+            foundHole: option.none,
           }),
         )
   } else {
@@ -156,7 +151,7 @@ export const lookup = ({
           readonly kind: 'found'
           readonly foundValue: SemanticGraph
           readonly foundLocation: KeyPath
-          readonly typeParameterOfFoundHole: Option<TypeParameter>
+          readonly foundHole: Option<HoleExpression>
         }
       | {
           readonly kind: 'notFound'
@@ -196,10 +191,7 @@ export const lookup = ({
               kind: 'found',
               foundValue: makeLookupExpression(key),
               foundLocation: [...pathToCurrentScope, key],
-              typeParameterOfFoundHole: option.map(
-                matchedHole,
-                getHoleTypeParameter,
-              ),
+              foundHole: matchedHole,
             }
           } else {
             return {
@@ -221,7 +213,7 @@ export const lookup = ({
                 kind: 'found',
                 foundValue,
                 foundLocation: [...pathToCurrentScope, key],
-                typeParameterOfFoundHole: option.none,
+                foundHole: option.none,
               }),
               none: _ => ({
                 kind: 'notFound',
@@ -237,7 +229,7 @@ export const lookup = ({
         option.makeSome({
           foundValue: result.foundValue,
           foundLocation: result.foundLocation,
-          typeParameterOfFoundHole: result.typeParameterOfFoundHole,
+          foundHole: result.foundHole,
         }),
       )
     } else {

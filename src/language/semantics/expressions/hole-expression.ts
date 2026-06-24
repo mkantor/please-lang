@@ -9,7 +9,7 @@ import {
   type ObjectNode,
 } from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { typeFromSemanticGraph } from '../type-system.js'
+import { typeFromSemanticGraph, types } from '../type-system.js'
 import type { TypeParameter } from '../type-system/type-formats.js'
 import {
   isTypeParameter,
@@ -19,6 +19,17 @@ import {
   ignoredKey,
   readArgumentsFromExpression,
 } from './expression-utilities.js'
+
+/**
+ * The source of truth for a hole's constraint:
+ * - `'expression'`: resolve it from the expression itself (`[1].constraint`).
+ *   Resolution occurs with a specific `ExpressionContext` (so constraints
+ *   containing `@lookup`s are correctly scoped).
+ * - `'typeParameter'`: the constraint has already been resolved and is stored
+ *   in the hole's type parameter (`typeParameterKey`). It shouldn't be
+ *   re-derived from the expression.
+ */
+export type HoleConstraintSource = 'expression' | 'typeParameter'
 
 export type HoleExpression = ObjectNode & {
   readonly 0: '@hole'
@@ -32,8 +43,12 @@ export type HoleExpression = ObjectNode & {
   // This is stashed on the node so that repeated reads (e.g. successive
   // type-inference passes) return a parameter with stable identity.
   readonly [typeParameterKey]: TypeParameter
+
+  // The source of truth for this hole's constraint. See `HoleConstraintSource`.
+  readonly [constraintSourceKey]: HoleConstraintSource
 }
 const typeParameterKey = Symbol('typeParameter')
+const constraintSourceKey = Symbol('constraintSource')
 
 /**
  * Mints a new type parameter for the node if one doesn't already exist.
@@ -81,30 +96,62 @@ export const readHoleExpression = (
                 node[typeParameterKey]
               : undefined
             return either.map(
+              // TODO: Try to get an `ExpressionContext` in here so `inferType`
+              // can be used instead of `typeFromSemanticGraph`. That'd probably
+              // eliminate the need to resolve constraints anywhere else and
+              // would allow ditching the constraint source stuff.
               typeFromSemanticGraph(assignableToNode, {
                 // Constraints are merely upper bounds.
                 objectsAreExact: false,
               }),
-              assignableTo => {
+              eagerlyResolvedConstraint => {
+                const constraintIsResolvable =
+                  existingTypeParameter === undefined &&
+                  // A constraint referencing a type parameter via `@lookup`
+                  // can't be resolved here as we don't have context. Start from
+                  // a provisional top bound; type inference resolves the real
+                  // constraint (see the `@hole` case in `type-inference.ts`).
+                  !containsLookupExpression(assignableToNode)
+
                 const typeParameter =
                   existingTypeParameter ??
-                  makeTypeParameter(name, { assignableTo })
-                // Side effect: stash the type parameter on the original `node`
-                // as well, so that reads from elsewhere (annotation inference,
-                // `@lookup`s, etc) get the same identity.
-                Object.assign(node, { [typeParameterKey]: typeParameter })
-                const reconstructedNode = makeObjectNode({
-                  0: '@hole',
-                  1: makeObjectNode({
-                    name,
-                    constraint: makeObjectNode({
-                      assignableTo: assignableToNode,
+                  makeTypeParameter(name, {
+                    assignableTo:
+                      constraintIsResolvable ?
+                        eagerlyResolvedConstraint
+                      : types.something,
+                  })
+
+                const constraintSource: HoleConstraintSource =
+                  (
+                    constraintIsResolvable ||
+                    (constraintSourceKey in node &&
+                      node[constraintSourceKey] === 'typeParameter')
+                  ) ?
+                    'typeParameter'
+                  : 'expression'
+
+                // Side effect: set the type parameter and constraint source on
+                // the original node so that reads from elsewhere share the
+                // same identity (and constraint source).
+                Object.assign(node, {
+                  [typeParameterKey]: typeParameter,
+                  [constraintSourceKey]: constraintSource,
+                })
+
+                return {
+                  [typeParameterKey]: typeParameter,
+                  [constraintSourceKey]: constraintSource,
+                  ...makeObjectNode({
+                    0: '@hole',
+                    1: makeObjectNode({
+                      name,
+                      constraint: makeObjectNode({
+                        assignableTo: assignableToNode,
+                      }),
                     }),
                   }),
-                })
-                return Object.assign(reconstructedNode, {
-                  [typeParameterKey]: typeParameter,
-                })
+                }
               },
             )
           }
@@ -116,7 +163,7 @@ export const readHoleExpression = (
       message: 'not a `@hole` expression',
     })
 
-export const makeHoleExpression = (
+export const makeHoleExpressionWithExtantTypeParameter = (
   name: Atom,
   constraint: HoleExpression[1]['constraint'],
   parameter: TypeParameter,
@@ -126,11 +173,18 @@ export const makeHoleExpression = (
       0: '@hole',
       1: makeObjectNode({ name, constraint }),
     }),
-    { [typeParameterKey]: parameter },
+    {
+      [typeParameterKey]: parameter,
+      [constraintSourceKey]: 'typeParameter' as const,
+    },
   )
 
 export const getHoleTypeParameter = (node: HoleExpression): TypeParameter =>
   node[typeParameterKey]
+
+export const getHoleConstraintSource = (
+  node: HoleExpression,
+): HoleConstraintSource => node[constraintSourceKey]
 
 /**
  * Walk an annotation, returning a `Map` from hole names to their expressions.
@@ -242,3 +296,13 @@ export const findDuplicateHoleNames = (
   visit(annotation)
   return duplicates
 }
+
+const containsLookupExpression = (node: SemanticGraph): boolean =>
+  isKeywordExpressionWithArgument('@lookup', node) ||
+  (isFunctionNode(node) ?
+    either.match(node.serialize(), {
+      right: containsLookupExpression,
+      left: _ => false,
+    })
+  : isObjectNode(node) ? Object.values(node).some(containsLookupExpression)
+  : false)
