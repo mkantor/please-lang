@@ -10,11 +10,10 @@ import {
   type Parser,
 } from '@matt.kantor/parsing'
 import type { OrderedRecord } from '../../ordered-record.js'
-import * as orderedRecord from '../../ordered-record.js'
-import { arrayToMolecule, ignoredKey } from '../semantics.js'
+import { ignoredKey } from '../semantics.js'
 import {
-  atom,
   atomWithAdditionalQuotationRequirements,
+  atom as rawAtom,
   unquotedAtomParser,
   type Atom,
 } from './atom.js'
@@ -36,15 +35,22 @@ import {
   optionallySurroundedByParentheses,
   surroundedByParentheses,
 } from './parentheses.js'
-import { recordExpressionSpan } from './spans.js'
+import {
+  recordSpan,
+  spannedAtom,
+  syntheticAtom,
+  syntheticMolecule,
+  type SpannedAtom,
+  type SpannedMolecule,
+  type SpannedTree,
+} from './spans.js'
 import { optionalTrivia, trivia, triviaExceptNewlines } from './trivia.js'
 
 // `interface` (not `type`) is used to avoid a circular reference error.
 export interface Molecule extends OrderedRecord<Atom | Molecule> {}
 
-const molecule = (
-  entries: Iterable<readonly [string, Atom | Molecule]>,
-): Molecule => orderedRecord.make(entries)
+// Leaf atoms carry their own source spans.
+const atom: Parser<SpannedAtom> = spannedAtom(rawAtom)
 
 // Keyless properties are automatically assigned numeric indexes, which uses
 // some mutable state.
@@ -63,40 +69,48 @@ const optional = <Output>(
   parser: Parser<NonNullable<Output>>,
 ): Parser<Output | undefined> => oneOf([parser, nothing])
 
+const spannedArrayToMolecule = (
+  elements: readonly SpannedTree[],
+): SpannedMolecule =>
+  syntheticMolecule(elements.map((element, index) => [String(index), element]))
+
 const trailingIndexesAndArgumentsToExpression = (
-  root: Atom | Molecule,
+  root: SpannedTree,
   trailingIndexesAndArguments: readonly TrailingIndexOrArgument[],
-): Atom | Molecule =>
-  trailingIndexesAndArguments.reduce((expression, indexOrArgument) => {
-    switch (indexOrArgument.kind) {
-      case 'argument':
-        return molecule([
-          ['0', '@apply'],
-          [
-            '1',
-            molecule([
-              ['function', expression],
-              ['argument', indexOrArgument.argument],
-            ]),
-          ],
-        ])
-      case 'index':
-        return molecule([
-          ['0', '@index'],
-          [
-            '1',
-            molecule([
-              ['object', expression],
-              ['query', arrayToMolecule(indexOrArgument.query)],
-            ]),
-          ],
-        ])
-    }
-  }, root)
+): SpannedTree =>
+  trailingIndexesAndArguments.reduce<SpannedTree>(
+    (expression, indexOrArgument) => {
+      switch (indexOrArgument.kind) {
+        case 'argument':
+          return syntheticMolecule([
+            ['0', syntheticAtom('@apply')],
+            [
+              '1',
+              syntheticMolecule([
+                ['function', expression],
+                ['argument', indexOrArgument.argument],
+              ]),
+            ],
+          ])
+        case 'index':
+          return syntheticMolecule([
+            ['0', syntheticAtom('@index')],
+            [
+              '1',
+              syntheticMolecule([
+                ['object', expression],
+                ['query', spannedArrayToMolecule(indexOrArgument.query)],
+              ]),
+            ],
+          ])
+      }
+    },
+    root,
+  )
 
 const signatureTokensToExpression = (
-  tokens: readonly [Atom | Molecule, ...(Atom | Molecule)[], Atom | Molecule],
-): Molecule | Atom => {
+  tokens: readonly [SpannedTree, ...SpannedTree[], SpannedTree],
+): SpannedTree => {
   const [lastReturnType, lastParameterType, ...additionalParameterTypes] =
     tokens.toReversed()
 
@@ -107,24 +121,27 @@ const signatureTokensToExpression = (
     throw new Error('Signature parameter type did not exist. This is a bug!')
   }
 
-  const initialSignature = molecule([
-    ['0', '@function'],
+  const initialSignature = syntheticMolecule([
+    ['0', syntheticAtom('@function')],
     [
       '1',
-      molecule([
-        ['parameter', molecule([[ignoredKey, lastParameterType]])],
+      syntheticMolecule([
+        ['parameter', syntheticMolecule([[ignoredKey, lastParameterType]])],
         ['body', lastReturnType],
       ]),
     ],
   ])
-  return additionalParameterTypes.reduce(
+  return additionalParameterTypes.reduce<SpannedTree>(
     (expression, additionalParameter) =>
-      molecule([
-        ['0', '@function'],
+      syntheticMolecule([
+        ['0', syntheticAtom('@function')],
         [
           '1',
-          molecule([
-            ['parameter', molecule([[ignoredKey, additionalParameter]])],
+          syntheticMolecule([
+            [
+              'parameter',
+              syntheticMolecule([[ignoredKey, additionalParameter]]),
+            ],
             ['body', expression],
           ]),
         ],
@@ -134,17 +151,19 @@ const signatureTokensToExpression = (
 }
 
 const unionTokensToExpression = (
-  tokens: readonly [Atom | Molecule, ...(Atom | Molecule)[], Atom | Molecule],
-): Molecule | Atom => {
-  const members = molecule(tokens.map((token, index) => [String(index), token]))
-  return molecule([
-    ['0', '@union'],
+  tokens: readonly [SpannedTree, ...SpannedTree[], SpannedTree],
+): SpannedTree => {
+  const members = syntheticMolecule(
+    tokens.map((token, index) => [String(index), token]),
+  )
+  return syntheticMolecule([
+    ['0', syntheticAtom('@union')],
     ['1', members],
   ])
 }
 
-type InfixOperator = readonly [Atom, readonly TrailingIndexOrArgument[]]
-type InfixOperand = Atom | Molecule
+type InfixOperator = readonly [SpannedAtom, readonly TrailingIndexOrArgument[]]
+type InfixOperand = SpannedTree
 type InfixToken = InfixOperator | InfixOperand
 
 /**
@@ -161,9 +180,7 @@ const isOperand = (value: InfixToken | undefined): value is InfixOperand =>
 const isOperator = (value: InfixToken | undefined): value is InfixOperator =>
   Array.isArray(value)
 
-const infixTokensToExpression = (
-  operation: InfixOperation,
-): Molecule | Atom => {
+const infixTokensToExpression = (operation: InfixOperation): SpannedTree => {
   const firstToken = operation[0]
   if (operation.length === 1 && isOperand(firstToken)) {
     return firstToken
@@ -190,25 +207,25 @@ const infixTokensToExpression = (
     }
 
     const leftmostFunction = trailingIndexesAndArgumentsToExpression(
-      molecule([
-        ['0', '@lookup'],
-        ['1', molecule([['key', leftmostOperator[0]]])],
+      syntheticMolecule([
+        ['0', syntheticAtom('@lookup')],
+        ['1', syntheticMolecule([['key', leftmostOperator[0]]])],
       ]),
       leftmostOperator[1],
     )
 
-    const reducedLeftmostOperation = molecule([
-      ['0', '@apply'],
+    const reducedLeftmostOperation = syntheticMolecule([
+      ['0', syntheticAtom('@apply')],
       [
         '1',
-        molecule([
+        syntheticMolecule([
           [
             'function',
-            molecule([
-              ['0', '@apply'],
+            syntheticMolecule([
+              ['0', syntheticAtom('@apply')],
               [
                 '1',
-                molecule([
+                syntheticMolecule([
                   ['function', leftmostFunction],
                   ['argument', leftmostOperationRHS],
                 ]),
@@ -227,11 +244,13 @@ const infixTokensToExpression = (
   }
 }
 
-const atomRequiringDotQuotation = atomWithAdditionalQuotationRequirements(dot)
+const atomRequiringDotQuotation: Parser<SpannedAtom> = spannedAtom(
+  atomWithAdditionalQuotationRequirements(dot),
+)
 
 const namedProperty = map(
   sequence([atom, colon, optionalTrivia, lazy(() => expression)]),
-  ([key, _colon, _trivia, value]) => [key, value] as const,
+  ([key, _colon, _trivia, value]) => [key.value, value] as const,
 )
 
 const propertyWithOptionalKey = optionallySurroundedByParentheses(
@@ -251,7 +270,7 @@ const propertyDelimiter = oneOf([
 
 const argument = surroundedByParentheses(lazy(() => expression))
 
-const dottedKeyPathKey = recordExpressionSpan(
+const dottedKeyPathKey = recordSpan(
   oneOf([
     // (a)
     // (1 + 1)
@@ -261,9 +280,9 @@ const dottedKeyPathKey = recordExpressionSpan(
 
     // :a
     map(sequence([colon, atomRequiringDotQuotation]), ([_colon, key]) =>
-      molecule([
-        ['0', '@lookup'],
-        ['1', molecule([['key', key]])],
+      syntheticMolecule([
+        ['0', syntheticAtom('@lookup')],
+        ['1', syntheticMolecule([['key', key]])],
       ]),
     ),
 
@@ -283,7 +302,7 @@ const dottedKeyPathComponent = map(
   ([_trivia1, _dot, _trivia2, key]) => key,
 )
 
-const sugarFreeMolecule: Parser<Molecule> = map(
+const sugarFreeMolecule: Parser<SpannedMolecule> = map(
   sequence([
     openingBrace,
     optionalTrivia,
@@ -314,7 +333,7 @@ const sugarFreeMolecule: Parser<Molecule> = map(
         [optionalInitialProperty, ...remainingProperties]
       )
     const enumerate = makeIncrementingIndexer()
-    return molecule(
+    return syntheticMolecule(
       properties.map(([key, value]) =>
         // Note that `enumerate()` increments its internal counter as a side
         // effect.
@@ -327,11 +346,11 @@ const sugarFreeMolecule: Parser<Molecule> = map(
 type TrailingIndexOrArgument =
   | {
       readonly kind: 'argument'
-      readonly argument: Molecule | Atom
+      readonly argument: SpannedTree
     }
   | {
       readonly kind: 'index'
-      readonly query: readonly (Molecule | Atom)[]
+      readonly query: readonly SpannedTree[]
     }
 
 const dottedKeyPath = oneOrMore(dottedKeyPathComponent)
@@ -362,7 +381,7 @@ const infixOperator = sequence([
   compactTrailingIndexesAndArguments,
 ])
 
-const compactExpression: Parser<Molecule | Atom> = recordExpressionSpan(
+const compactExpression: Parser<SpannedTree> = recordSpan(
   oneOf([
     // (a)
     // (1 + 1)
@@ -464,14 +483,14 @@ const trailingCheckToken = map(
 )
 
 const checkTokenToExpression = (
-  value: Atom | Molecule,
-  type: Atom | Molecule,
-): Molecule =>
-  molecule([
-    ['0', '@check'],
+  value: SpannedTree,
+  type: SpannedTree,
+): SpannedMolecule =>
+  syntheticMolecule([
+    ['0', syntheticAtom('@check')],
     [
       '1',
-      molecule([
+      syntheticMolecule([
         ['value', value],
         ['type', type],
       ]),
@@ -512,7 +531,7 @@ const trailingInfixTokens = oneOrMore(
 )
 
 // (a: :integer.type) => :a + 1
-const typedFunctionParameter: Parser<Molecule> = surroundedByParentheses(
+const typedFunctionParameter: Parser<SpannedMolecule> = surroundedByParentheses(
   map(
     sequence([
       atom,
@@ -521,11 +540,12 @@ const typedFunctionParameter: Parser<Molecule> = surroundedByParentheses(
       optionalTrivia,
       lazy(() => expression),
     ]),
-    ([name, _trivia1, _colon, _trivia2, type]) => molecule([[name, type]]),
+    ([name, _trivia1, _colon, _trivia2, type]) =>
+      syntheticMolecule([[name.value, type]]),
   ),
 )
 
-const functionParameter: Parser<Atom | Molecule> = oneOf([
+const functionParameter: Parser<SpannedTree> = oneOf([
   typedFunctionParameter,
   atom,
 ])
@@ -563,23 +583,23 @@ const precededByAtomThenFunctionArrow = map(
       ...trailingParameters.toReversed(),
       initialParameter,
     ]
-    const initialFunction = molecule([
-      ['0', '@function'],
+    const initialFunction = syntheticMolecule([
+      ['0', syntheticAtom('@function')],
       [
         '1',
-        molecule([
+        syntheticMolecule([
           ['parameter', lastParameter],
           ['body', body],
         ]),
       ],
     ])
-    return additionalParameters.reduce(
+    return additionalParameters.reduce<SpannedTree>(
       (expression, additionalParameter) =>
-        molecule([
-          ['0', '@function'],
+        syntheticMolecule([
+          ['0', syntheticAtom('@function')],
           [
             '1',
-            molecule([
+            syntheticMolecule([
               ['parameter', additionalParameter],
               ['body', expression],
             ]),
@@ -601,9 +621,9 @@ const precededByAtSign = map(
     optional(lazy(() => compactExpression)),
   ]),
   ([_atSign, keyword, _trivia, argument]) =>
-    molecule([
-      ['0', `@${keyword}`],
-      ['1', argument ?? orderedRecord.empty],
+    syntheticMolecule([
+      ['0', syntheticAtom(`@${keyword}`)],
+      ['1', argument ?? syntheticMolecule([])],
     ]),
 )
 
@@ -616,9 +636,9 @@ const precededByColonThenAtom = map(
   sequence([colon, atomRequiringDotQuotation, trailingIndexesAndArguments]),
   ([_colon, key, trailingIndexesAndArguments]) =>
     trailingIndexesAndArgumentsToExpression(
-      molecule([
-        ['0', '@lookup'],
-        ['1', molecule([['key', key]])],
+      syntheticMolecule([
+        ['0', syntheticAtom('@lookup')],
+        ['1', syntheticMolecule([['key', key]])],
       ]),
       trailingIndexesAndArguments,
     ),
@@ -656,29 +676,32 @@ const precededByOpeningBrace = map(
 )
 
 /** `:something.type` in desugared form. */
-const topTypeAsMolecule = molecule([
-  ['0', '@index'],
+const topTypeAsMolecule = syntheticMolecule([
+  ['0', syntheticAtom('@index')],
   [
     '1',
-    molecule([
+    syntheticMolecule([
       [
         'object',
-        molecule([
-          ['0', '@lookup'],
-          ['1', molecule([['key', 'something']])],
+        syntheticMolecule([
+          ['0', syntheticAtom('@lookup')],
+          ['1', syntheticMolecule([['key', syntheticAtom('something')]])],
         ]),
       ],
-      ['query', molecule([['0', 'type']])],
+      ['query', syntheticMolecule([['0', syntheticAtom('type')]])],
     ]),
   ],
 ])
 
-const makeHoleMolecule = (name: Atom, constraint: Molecule): Molecule =>
-  molecule([
-    ['0', '@hole'],
+const makeHoleMolecule = (
+  name: SpannedTree,
+  constraint: SpannedMolecule,
+): SpannedMolecule =>
+  syntheticMolecule([
+    ['0', syntheticAtom('@hole')],
     [
       '1',
-      molecule([
+      syntheticMolecule([
         ['name', name],
         ['constraint', constraint],
       ]),
@@ -691,8 +714,8 @@ const hole = map(
   sequence([questionMark, optional(atomRequiringDotQuotation)]),
   ([_questionMark, name]) =>
     makeHoleMolecule(
-      name ?? ignoredKey,
-      molecule([['assignableTo', topTypeAsMolecule]]),
+      name ?? syntheticAtom(ignoredKey),
+      syntheticMolecule([['assignableTo', topTypeAsMolecule]]),
     ),
 )
 
@@ -710,13 +733,13 @@ const parenthesizedHole = surroundedByParentheses(
     ]),
     ([_questionMark, name, _trivia1, _colon, _trivia2, constraint]) =>
       makeHoleMolecule(
-        name ?? ignoredKey,
-        molecule([['assignableTo', constraint]]),
+        name ?? syntheticAtom(ignoredKey),
+        syntheticMolecule([['assignableTo', constraint]]),
       ),
   ),
 )
 
-const expressionWhichMayHaveTrailingExpressions = recordExpressionSpan(
+const expressionWhichMayHaveTrailingExpressions = recordSpan(
   oneOf([
     parenthesizedHole,
     precededByOpeningParenthesis,
@@ -729,12 +752,12 @@ const expressionWhichMayHaveTrailingExpressions = recordExpressionSpan(
   ]),
 )
 
-const trailingInfixExpression = (initialExpression: string | Molecule) =>
+const trailingInfixExpression = (initialExpression: SpannedTree) =>
   map(trailingInfixTokens, trailingInfixTokens =>
     infixTokensToExpression([initialExpression, ...trailingInfixTokens.flat()]),
   )
 
-const trailingSignatureExpression = (initialExpression: string | Molecule) =>
+const trailingSignatureExpression = (initialExpression: SpannedTree) =>
   map(trailingSignatureTokens, trailingSignatureTokens =>
     signatureTokensToExpression([
       initialExpression,
@@ -742,24 +765,24 @@ const trailingSignatureExpression = (initialExpression: string | Molecule) =>
     ]),
   )
 
-const trailingCheckExpression = (initialExpression: string | Molecule) =>
+const trailingCheckExpression = (initialExpression: SpannedTree) =>
   map(trailingCheckToken, trailingCheckType =>
     checkTokenToExpression(initialExpression, trailingCheckType),
   )
 
-const trailingUnionExpression = (initialExpression: string | Molecule) =>
+const trailingUnionExpression = (initialExpression: SpannedTree) =>
   map(trailingUnionTokens, trailingUnionTokens =>
     unionTokensToExpression([initialExpression, ...trailingUnionTokens]),
   )
 
-const trailingExpressionsExceptUnion = (initialExpression: string | Molecule) =>
+const trailingExpressionsExceptUnion = (initialExpression: SpannedTree) =>
   [
     trailingInfixExpression(initialExpression),
     trailingSignatureExpression(initialExpression),
     trailingCheckExpression(initialExpression),
   ] as const
 
-export const expression: Parser<Atom | Molecule> = recordExpressionSpan(
+export const expression: Parser<SpannedTree> = recordSpan(
   flatMap(expressionWhichMayHaveTrailingExpressions, initialExpression =>
     oneOf([
       ...trailingExpressionsExceptUnion(initialExpression),

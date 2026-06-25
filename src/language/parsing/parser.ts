@@ -1,10 +1,15 @@
 import either, { type Either } from '@matt.kantor/either'
 import parsing from '@matt.kantor/parsing'
 import type { ParseError } from '../errors.js'
-import { spansFromSyntaxTree, type ExpressionSpansByLocation } from './spans.js'
+import {
+  spansFromSpannedTree,
+  toSyntaxTree,
+  type ExpressionSpansByLocation,
+  type SpannedTree,
+} from './spans.js'
 import { syntaxTreeParser, type SyntaxTree } from './syntax-tree.js'
 
-export const parse = (input: string): Either<ParseError, SyntaxTree> =>
+const parseSpanned = (input: string): Either<ParseError, SpannedTree> =>
   either.mapLeft(
     parsing.parse(syntaxTreeParser, input),
     (error): ParseError => {
@@ -20,6 +25,9 @@ export const parse = (input: string): Either<ParseError, SyntaxTree> =>
     },
   )
 
+export const parse = (input: string): Either<ParseError, SyntaxTree> =>
+  either.map(parseSpanned(input), toSyntaxTree)
+
 export type SyntaxTreeWithSpans = {
   readonly tree: SyntaxTree
   readonly spans: ExpressionSpansByLocation
@@ -28,7 +36,7 @@ export type SyntaxTreeWithSpans = {
 export const parseWithSpans = (
   input: string,
 ): Either<ParseError, SyntaxTreeWithSpans> =>
-  either.map(parse(input), tree => ({
-    tree,
-    spans: spansFromSyntaxTree(tree),
+  either.map(parseSpanned(input), spanned => ({
+    tree: toSyntaxTree(spanned),
+    spans: spansFromSpannedTree(spanned),
   }))

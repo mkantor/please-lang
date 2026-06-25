@@ -58,7 +58,7 @@ suite('please CLI error reporting', () => {
     assert.match(stderr, /^Error: /)
     assert.ok(stderr.includes('\n<stdin>:1:1\n'))
     assert.ok(stderr.includes('\n1 │ 1 ~ :boolean.type\n'))
-    assert.ok(stderr.includes('\n  │ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔\n'))
+    assert.ok(stderr.includes('\n  │ ▔\n'))
   })
 
   test('underlines the offending argument of a function call', async () => {
@@ -71,6 +71,18 @@ suite('please CLI error reporting', () => {
     assert.ok(stderr.includes('\n<stdin>:1:14\n'))
     assert.ok(stderr.includes('\n1 │ :boolean.not({})\n'))
     assert.ok(stderr.includes('\n  │              ▔▔\n'))
+  })
+
+  test('underlines the offending atom argument of a function call', async () => {
+    const { stdout, stderr, code } = await runPlease(':boolean.not(5)', [
+      '--no-color',
+    ])
+    assert.equal(code, 1)
+    assert.equal(stdout, '')
+    assert.match(stderr, /^Error: argument with type `5`/)
+    assert.ok(stderr.includes('\n<stdin>:1:14\n'))
+    assert.ok(stderr.includes('\n1 │ :boolean.not(5)\n'))
+    assert.ok(stderr.includes('\n  │              ▔\n'))
   })
 
   test('underlines a sub-expression error on a later line', async () => {

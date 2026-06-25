@@ -42,7 +42,37 @@ suite('parseWithSpans', () => {
     assert.equal(source.slice(5), '{ a: 1 }')
   })
 
-  test('does not record spans for atoms', () => {
-    assert.equal(spansOf('42').size, 0)
+  test('records an atom span', () => {
+    const source = '{ a: 5 }'
+    assert.deepEqual(
+      spansOf(source).get(stringifyKeyPathForInternalUse(['a'])),
+      [5, 6],
+    )
+    assert.equal(source.slice(5, 6), '5')
+  })
+
+  test('records distinct spans for repeated atoms', () => {
+    const source = '{ a: 1, b: 1 }'
+    const spans = spansOf(source)
+    assert.deepEqual(spans.get(stringifyKeyPathForInternalUse(['a'])), [5, 6])
+    assert.deepEqual(spans.get(stringifyKeyPathForInternalUse(['b'])), [11, 12])
+    assert.equal(source.slice(5, 6), '1')
+    assert.equal(source.slice(11, 12), '1')
+  })
+
+  test('records a quoted atom span covering its source form', () => {
+    const source = '{ a: "x y" }'
+    assert.deepEqual(
+      spansOf(source).get(stringifyKeyPathForInternalUse(['a'])),
+      [5, 10],
+    )
+    assert.equal(source.slice(5, 10), '"x y"')
+  })
+
+  test('records the whole-program span for a bare top-level atom', () => {
+    assert.deepEqual(
+      spansOf('42').get(stringifyKeyPathForInternalUse([])),
+      [0, 2],
+    )
   })
 })
