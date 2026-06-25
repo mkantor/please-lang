@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import test, { suite } from 'node:test'
 import { parse } from './language/parsing/parser.js'
+import { lineAndColumnAtOffset } from './language/source-location.js'
 
 const repositoryRootDirectory = path.join(import.meta.dirname, '..')
 const readmePath = path.resolve(repositoryRootDirectory, 'README.md')
@@ -18,9 +19,6 @@ type RelativeLink = {
   readonly lineNumber: number
 }
 
-const lineNumberAtOffset = (source: string, offset: number): number =>
-  source.slice(0, offset).split('\n').length
-
 const fencedCodeBlocks = (
   source: string,
   codeBlockLanguage: string,
@@ -32,14 +30,14 @@ const fencedCodeBlocks = (
   return [...source.matchAll(fencedCodeBlockPattern)].map(match => ({
     content: match[1] ?? '',
     // The line after the opening fence is where code begins:
-    startingLineNumber: lineNumberAtOffset(source, match.index) + 1,
+    startingLineNumber: lineAndColumnAtOffset(source, match.index).line + 1,
   }))
 }
 
 const relativeLinks = (source: string): readonly RelativeLink[] => {
   return [...source.matchAll(relativeLinkPattern)].map(match => ({
     target: match[1] ?? '',
-    lineNumber: lineNumberAtOffset(source, match.index),
+    lineNumber: lineAndColumnAtOffset(source, match.index).line,
   }))
 }
 // This pattern matches links of the form `[text](./path)` or `[text](../path)`:

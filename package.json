@@ -30,7 +30,7 @@
   "dependencies": {
     "@matt.kantor/either": "^1.4.0",
     "@matt.kantor/option": "^1.2.0",
-    "@matt.kantor/parsing": "^2.1.0"
+    "@matt.kantor/parsing": "^3.1.0"
   },
   "engines": {
     "node": ">=22.18"
