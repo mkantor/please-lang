@@ -49,14 +49,23 @@ const checkArgumentType = (
     parameterType,
     flexibleTypeArguments,
   )
-  return (
-      isAssignable({ source: argumentType, target: instantiatedParameterType })
-    ) ?
-      either.makeRight(undefined)
-    : either.makeLeft({
-        kind: 'typeMismatch',
-        message: `argument with type \`${stringifyTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyTypeForEndUser(parameterType)}\``,
-      })
+  if (
+    isAssignable({ source: argumentType, target: instantiatedParameterType })
+  ) {
+    return either.makeRight(undefined)
+  } else {
+    const simplifiedParameterType =
+      (
+        parameterType.kind === 'parameter' &&
+        !rigidTypeParameters.has(parameterType.identity)
+      ) ?
+        parameterType.constraint.assignableTo
+      : parameterType
+    return either.makeLeft({
+      kind: 'typeMismatch',
+      message: `argument with type \`${stringifyTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyTypeForEndUser(simplifiedParameterType)}\``,
+    })
+  }
 }
 
 /**
