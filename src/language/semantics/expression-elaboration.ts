@@ -359,10 +359,10 @@ const handleObjectNodeWhichMayBeAExpression = (
  * leaving any already-attached (deeper, more specific) span untouched so the
  * innermost one wins.
  */
-const attachSpanIfAbsent = (
-  result: Either<ElaborationError, SemanticGraph>,
+export const attachSpanIfAbsent = <Value>(
+  result: Either<ElaborationError, Value>,
   context: ExpressionContext,
-): Either<ElaborationError, SemanticGraph> =>
+): Either<ElaborationError, Value> =>
   either.mapLeft(result, error => {
     if (error.span !== undefined) {
       return error

@@ -1,4 +1,5 @@
 export {
+  attachSpanIfAbsent,
   elaborate,
   elaborateWithContext,
   type ElaboratedSemanticGraph,

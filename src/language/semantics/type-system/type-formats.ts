@@ -316,6 +316,9 @@ export const unionOfTypes = (types: readonly Type[]): Type =>
       ),
     )
 
+export const isNothing = (type: Type) =>
+  type.kind === 'union' && type.members.size === 0
+
 export type Type =
   | ApplicationType
   | FunctionType
