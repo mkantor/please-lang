@@ -18,9 +18,9 @@ There are more example programs in [`./examples`](./examples).
 
 **This implementation of Please is a proof of concept**. There are bugs and
 missing pieces, and language syntax/semantics may change backwards-incompatibly
-on the way to an official release. TypeScript was chosen because it's pretty
-good for rapid prototyping, but different languages may be used in non-prototype
-implementations.
+on the way to an official release. TypeScript was chosen for this implementation
+because it's pretty good for rapid prototyping, but different languages may be
+used in non-prototype versions.
 
 ### Current State
 
@@ -119,8 +119,8 @@ Index keys may be computed dynamically[^2]:
 
 ```plz
 {
-  a: { 2: "Hello, World!" }
-  :a.(1 + 1) // "Hello, World!"
+  a: { 2: { greeting: "Hello, World!" } }
+  :a.(1 + 1).greeting // "Hello, World!"
 }
 ```
 
@@ -324,6 +324,62 @@ identity across multiple expressions) introduce a "hole" with `?`:
 
 A lone `?` is an anonymous hole, and `(?a: type)` introduces a hole with a
 constraint.
+
+#### Value-Level Reasoning
+
+Type inference isn't limited to classifying values into broad buckets. It
+follows specific values through the program and understands how runtime
+operations transform them. For example, Please knows that the natural numbers
+are closed under addition, so the result below is statically known to be a
+natural number (without requiring a runtime check):
+
+```plz
+(a: :natural_number.type) => (:a + 1) ~ :natural_number.type
+```
+
+There is no overloading; this is the same `+` function that's used for integers.
+
+Subtraction can underflow, so it _isn't_ closed over the natural numbers; an
+analogous program using `:a - 1` is rejected at compile time because the
+inferred type is only `:integer.type` (`:a` could be `0`, then `:a - 1` would be
+`-1` which isn't a natural number).
+
+The same precision applies to objects, e.g. indexing an object by a union-typed
+key yields a union of exactly the values that key could select:
+
+```plz
+{
+  scores: { alice: 1, bob: 2, charlie: 3 }
+  get_score: (who: alice | bob) => :scores.:who ~ (1 | 2)
+}
+```
+
+`@if` expressions benefit from similar analysis. When a condition is statically
+decidable the untaken branch is pruned, so a function's return type can depend
+on its argument's _value_:
+
+```plz
+{
+  classify: (a: :integer.type) =>
+    @if {
+      :a < 0
+      then: negative
+      else: non_negative
+    }
+
+  // results are statically known to be `negative`/`non_negative`:
+  :classify(-5) ~ negative
+  :classify(3) ~ non_negative
+}
+```
+
+The result would only be widened to `negative | non_negative` when the
+argument's sign can't be known until runtime.
+
+This value-aware analysis is reminiscent of
+[dependent types](https://en.wikipedia.org/wiki/Dependent_type), but it falls
+out of ordinary inference instead of requiring elaborate type
+annotations/proofs.
 
 ### Layering
 

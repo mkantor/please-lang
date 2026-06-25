@@ -1942,6 +1942,24 @@ testCases(
   ],
 
   [
+    // This program "should" typecheck: `:m` is a natural number and can
+    // therefore never be less than `0`, so `:m + 1 < 1` is always false and
+    // `:classify(:m)` can only be `non_negative`. A true refinement/dependent
+    // type system could prove this.
+    // TODO: Enhance the type system and/or the encoding of numbers to enable
+    // this sort of reasoning and eliminate the type mismatch from this test.
+    `{
+      classify: (n: :integer.type) => @if { :n + 1 < 1, negative, non_negative }
+      narrowed: (m: :natural_number.type) => :classify(:m) ~ non_negative
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `{ f: (x: :integer.type) => :integer.is(:x) ~ true }`,
     result => {
       assert(either.isRight(result))
