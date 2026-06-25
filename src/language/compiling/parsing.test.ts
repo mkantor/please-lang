@@ -9,9 +9,7 @@ type Entries = readonly (readonly [string, Atom | Entries])[]
 
 const syntaxTree = (input: Atom | Entries): SyntaxTree =>
   typeof input === 'string' ? input : (
-    orderedRecord.make(
-      [...input].map(([key, value]) => [key, syntaxTree(value)]),
-    )
+    orderedRecord.make(input.map(([key, value]) => [key, syntaxTree(value)]))
   )
 
 testCases(parse, input => `parsing \`${input}\``)('parsing', [

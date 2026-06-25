@@ -26,12 +26,11 @@ import {
   updateValueAtKeyPathInSemanticGraph,
   type SemanticGraph,
 } from './semantic-graph.js'
+import type { TypeKeyPathStringifiedForInternalUse } from './type-system.js'
 
 declare const _elaborated: unique symbol
 type Elaborated = { readonly [_elaborated]: true }
 export type ElaboratedSemanticGraph = WithPhantomData<SemanticGraph, Elaborated>
-
-type StringifiedKeyPath = string
 
 /**
  * The (possibly genericized) type of a function's parameter, plus the
@@ -48,9 +47,12 @@ export type ExpressionContext = {
   readonly keywordHandlers: KeywordHandlers
   readonly location: KeyPath
   readonly program: SemanticGraph
-  readonly mutableInferenceCache: Map<StringifiedKeyPath, Type>
+  readonly mutableInferenceCache: Map<
+    TypeKeyPathStringifiedForInternalUse,
+    Type
+  >
   readonly mutableFunctionParameterCache: Map<
-    StringifiedKeyPath,
+    TypeKeyPathStringifiedForInternalUse,
     FunctionParameterTypeInfo
   >
   /**
@@ -247,7 +249,7 @@ const elaborateWithinMolecule = (
       let madeProgress = true
       while (madeProgress && keysNeedingReelaboration.size > 0) {
         madeProgress = false
-        for (const key of [...keysNeedingReelaboration]) {
+        for (const key of keysNeedingReelaboration) {
           const value = possibleExpressionAsObjectNode[key]
           if (value === undefined) {
             keysNeedingReelaboration.delete(key)

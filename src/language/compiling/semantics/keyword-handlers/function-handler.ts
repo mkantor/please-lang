@@ -118,8 +118,9 @@ const apply = (
   // argument can be used to pin down type parameters, re-mint their `@hole`s
   // with constraints specialized to this call site. Holes can also remain
   // generic, staying stuck until an enclosing function is applied.
-  const holeBindings: readonly (readonly [string, SemanticGraph])[] =
-    option.match(getParameterTypeAnnotation(expression), {
+  const holeBindings: Iterable<readonly [string, SemanticGraph]> = option.match(
+    getParameterTypeAnnotation(expression),
+    {
       none: _ => [],
       some: annotation => {
         const typesForTypeParametersByName = either.match(
@@ -132,20 +133,21 @@ const apply = (
             left: _ => new Map<Atom, Type>(),
             right: argumentType =>
               new Map(
-                [
-                  ...getTypesForTypeParameters({
-                    parameterType: signature.parameter,
-                    argumentType,
-                  }),
-                ].map(([typeParameter, specialization]) => [
-                  typeParameter.name,
-                  specialization,
-                ]),
+                getTypesForTypeParameters({
+                  parameterType: signature.parameter,
+                  argumentType,
+                })
+                  .entries()
+                  .map(([typeParameter, specialization]) => [
+                    typeParameter.name,
+                    specialization,
+                  ]),
               ),
           },
         )
 
-        return [...collectHolesByName(annotation)]
+        return collectHolesByName(annotation)
+          .entries()
           .filter(
             ([name, _hole]) =>
               name !== parameterName &&
@@ -178,7 +180,8 @@ const apply = (
             }
           })
       },
-    })
+    },
+  )
 
   const result = either.flatMap(serialize(body), serializedBody =>
     either.flatMap(

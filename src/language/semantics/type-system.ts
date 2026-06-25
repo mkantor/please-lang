@@ -21,9 +21,11 @@ export {
   functionParameterKey,
   functionReturnKey,
   stringifyTypeKeyPathForEndUser,
+  stringifyTypeKeyPathForInternalUse,
   typeKeyPathFromObjectNode,
   typeParameterAssignableToConstraintKey,
   type TypeKeyPath,
+  type TypeKeyPathStringifiedForInternalUse,
 } from './type-system/type-key-path.js'
 export {
   containedTypeParameters,

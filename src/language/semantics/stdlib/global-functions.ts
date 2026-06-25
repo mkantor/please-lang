@@ -266,13 +266,15 @@ const enumerateTaggedVariants = (
   matchTypeFormat(type, {
     union: type =>
       option.map(
-        option.sequence(
-          [...type.members].map(member =>
-            typeof member === 'string' ?
-              option.none
-            : enumerateTaggedVariants(member),
-          ),
-        ),
+        option.sequence([
+          ...type.members
+            .values()
+            .map(member =>
+              typeof member === 'string' ?
+                option.none
+              : enumerateTaggedVariants(member),
+            ),
+        ]),
         variantsPerMember => variantsPerMember.flat(),
       ),
     object: type => {
@@ -284,9 +286,9 @@ const enumerateTaggedVariants = (
             tagType.kind !== 'union'
         ) ?
           option.none
-        : option.map(asUnionWithLiteralAtomMembers(tagType), tags =>
-            [...tags.members].map(tag => ({ tag, value: valueType })),
-          )
+        : option.map(asUnionWithLiteralAtomMembers(tagType), tags => [
+            ...tags.members.values().map(tag => ({ tag, value: valueType })),
+          ])
     },
     application: _ => option.none,
     function: _ => option.none,

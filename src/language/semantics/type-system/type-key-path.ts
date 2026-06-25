@@ -1,5 +1,6 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
+import { withPhantomData, type WithPhantomData } from '../../../phantom-data.js'
 import type { ElaborationError, TypeMismatchError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import { quoteAtomIfNecessary } from '../../unparsing/plz-utilities.js'
@@ -39,6 +40,15 @@ export type TypeKeyPath = readonly (
   | typeof functionReturnKey
   | typeof typeParameterAssignableToConstraintKey
 )[]
+
+declare const _isKeyPathStringifiedForInternalUse: unique symbol
+type IsKeyPathStringifiedForInternalUse = {
+  readonly [_isKeyPathStringifiedForInternalUse]: true
+}
+export type TypeKeyPathStringifiedForInternalUse = WithPhantomData<
+  string,
+  IsKeyPathStringifiedForInternalUse
+>
 
 export const typeKeyPathFromObjectNode = (
   node: ObjectNode,
@@ -196,6 +206,19 @@ export const stringifyTypeKeyPathForEndUser = (keyPath: TypeKeyPath): string =>
     '',
   )
 
+export const stringifyTypeKeyPathForInternalUse = (
+  keyPath: TypeKeyPath,
+): TypeKeyPathStringifiedForInternalUse =>
+  withPhantomData<IsKeyPathStringifiedForInternalUse>()(
+    JSON.stringify(
+      keyPath.map(component =>
+        typeof component === 'symbol' ?
+          stringifyTypeKeyPathSymbol(component)
+        : component,
+      ),
+    ),
+  )
+
 export const atomKeyPathComponentFromType = (
   type: Type,
 ): Either<TypeMismatchError, AtomKeyPathComponent> =>
@@ -260,7 +283,7 @@ export const atomKeyPathComponentFromType = (
       }
     },
     union: type => {
-      const [firstAtom, ...remainingAtoms] = [...type.members]
+      const [firstAtom, ...remainingAtoms] = type.members
       return (
         firstAtom === undefined ?
           either.makeLeft({
@@ -316,6 +339,22 @@ export const nestedIndexedAccess = (
   )
 }
 
+export const stringifyTypeKeyPathSymbol = (
+  symbol: Extract<TypeKeyPath[number], symbol>,
+): string => {
+  switch (symbol) {
+    // TODO: Consider surfacing this in plz syntax (allowing programmatic
+    // access of un-elaborated function parameters/returns and type parameter
+    // constraints).
+    case functionParameterKey:
+      return '#parameter'
+    case functionReturnKey:
+      return '#return'
+    case typeParameterAssignableToConstraintKey:
+      return '#constraint'
+  }
+}
+
 const stringifyKeyPathComponentForEndUser = (
   component: TypeKeyPath[number],
 ): string => {
@@ -335,16 +374,6 @@ const stringifyKeyPathComponentForEndUser = (
         )
     }
   } else {
-    switch (component) {
-      // TODO: Consider surfacing this in plz syntax (allowing programmatic
-      // access of un-elaborated function parameters/returns and type parameter
-      // constraints).
-      case functionParameterKey:
-        return '#parameter'
-      case functionReturnKey:
-        return '#return'
-      case typeParameterAssignableToConstraintKey:
-        return '#constraint'
-    }
+    return stringifyTypeKeyPathSymbol(component)
   }
 }
