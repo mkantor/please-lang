@@ -1,7 +1,11 @@
 import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import { stripVTControlCharacters } from 'node:util'
-import { testCases, toSyntaxTree } from '../../test-utilities.test.js'
+import {
+  compileWithoutSpans,
+  testCases,
+  toSyntaxTree,
+} from '../../test-utilities.test.js'
 import type { JsonValue } from '../../utility-types.js'
 import { parseJson } from '../parsing.js'
 import { parse } from '../parsing/parser.js'
@@ -14,7 +18,6 @@ import {
   unparse,
   type Notation,
 } from '../unparsing.js'
-import { compile } from './compiler.js'
 
 const unparsers = (rawValue: JsonValue) => {
   const value = toSyntaxTree(rawValue)
@@ -34,28 +37,40 @@ const unparsers = (rawValue: JsonValue) => {
     inlinePlz: either.flatMap(
       either.flatMap(unparsedInlinePlz, parse),
       roundtrippedValue => {
-        assert.deepEqual(compile(roundtrippedValue).value, compile(value).value)
+        assert.deepEqual(
+          compileWithoutSpans(roundtrippedValue).value,
+          compileWithoutSpans(value).value,
+        )
         return unparsedInlinePlz
       },
     ).value,
     sugarFreeInlinePlz: either.flatMap(
       either.flatMap(unparsedSugarFreeInlinePlz, parse),
       roundtrippedValue => {
-        assert.deepEqual(compile(roundtrippedValue).value, compile(value).value)
+        assert.deepEqual(
+          compileWithoutSpans(roundtrippedValue).value,
+          compileWithoutSpans(value).value,
+        )
         return unparsedSugarFreeInlinePlz
       },
     ).value,
     prettyPlz: either.flatMap(
       either.flatMap(unparsedPrettyPlz, parse),
       roundtrippedValue => {
-        assert.deepEqual(compile(roundtrippedValue).value, compile(value).value)
+        assert.deepEqual(
+          compileWithoutSpans(roundtrippedValue).value,
+          compileWithoutSpans(value).value,
+        )
         return unparsedPrettyPlz
       },
     ).value,
     sugarFreePrettyPlz: either.flatMap(
       either.flatMap(unparsedSugarFreePrettyPlz, parse),
       roundtrippedValue => {
-        assert.deepEqual(compile(roundtrippedValue).value, compile(value).value)
+        assert.deepEqual(
+          compileWithoutSpans(roundtrippedValue).value,
+          compileWithoutSpans(value).value,
+        )
         return unparsedSugarFreePrettyPlz
       },
     ).value,

@@ -73,9 +73,12 @@ export const toSyntaxTree = (input: JsonValue): SyntaxTree =>
       Object.entries(input).map(([key, value]) => [key, toSyntaxTree(value)]),
     )
 
+export const compileWithoutSpans = (syntaxTree: SyntaxTree) =>
+  compile(syntaxTree, new Map())
+
 export const parseAndCompileAndRun = (input: string): ProgramResult => {
   const syntaxTree = parse(input)
-  const program = either.flatMap(syntaxTree, compile)
+  const program = either.flatMap(syntaxTree, compileWithoutSpans)
   const runtimeOutput = either.flatMap(program, evaluate)
   return runtimeOutput
 }

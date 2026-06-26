@@ -25,7 +25,7 @@ used in non-prototype versions.
 ### Current State
 
 Enough pieces exist to write basic runnable programs, but the standard library
-is anemic, documentation is lacking, and error messages are horrible.
+is anemic and documentation is lacking.
 
 The current runtime is an interpreter, but the plan is to eventually add one or
 more backends to allow building native executables.

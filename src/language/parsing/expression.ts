@@ -36,6 +36,7 @@ import {
   optionallySurroundedByParentheses,
   surroundedByParentheses,
 } from './parentheses.js'
+import { recordExpressionSpan } from './spans.js'
 import { optionalTrivia, trivia, triviaExceptNewlines } from './trivia.js'
 
 // `interface` (not `type`) is used to avoid a circular reference error.
@@ -250,25 +251,27 @@ const propertyDelimiter = oneOf([
 
 const argument = surroundedByParentheses(lazy(() => expression))
 
-const dottedKeyPathKey = oneOf([
-  // (a)
-  // (1 + 1)
-  // (:a.b.c)
-  // (:f(x)(y))
-  surroundedByParentheses(lazy(() => expression)),
+const dottedKeyPathKey = recordExpressionSpan(
+  oneOf([
+    // (a)
+    // (1 + 1)
+    // (:a.b.c)
+    // (:f(x)(y))
+    surroundedByParentheses(lazy(() => expression)),
 
-  // :a
-  map(sequence([colon, atomRequiringDotQuotation]), ([_colon, key]) =>
-    molecule([
-      ['0', '@lookup'],
-      ['1', molecule([['key', key]])],
-    ]),
-  ),
+    // :a
+    map(sequence([colon, atomRequiringDotQuotation]), ([_colon, key]) =>
+      molecule([
+        ['0', '@lookup'],
+        ['1', molecule([['key', key]])],
+      ]),
+    ),
 
-  // 1
-  // "a.b"
-  atomRequiringDotQuotation,
-])
+    // 1
+    // "a.b"
+    atomRequiringDotQuotation,
+  ]),
+)
 
 const compactDottedKeyPathComponent = map(
   sequence([dot, dottedKeyPathKey]),
@@ -359,35 +362,37 @@ const infixOperator = sequence([
   compactTrailingIndexesAndArguments,
 ])
 
-const compactExpression: Parser<Molecule | Atom> = oneOf([
-  // (a)
-  // (1 + 1)
-  // (a => :b)(c)
-  // ({ a: 1 } |> :identity).a
-  map(
-    sequence([
-      surroundedByParentheses(lazy(() => expression)),
-      compactTrailingIndexesAndArguments,
-    ]),
-    ([expression, trailingIndexesAndArguments]) =>
-      trailingIndexesAndArgumentsToExpression(
-        expression,
-        trailingIndexesAndArguments,
-      ),
-  ),
-  // :a.b
-  // :a.b(1).c
-  // :f(x)
-  // :a.b(1)(2)
-  lazy(() => precededByColonThenAtom),
-  // @runtime { x => :x }
-  // @panic
-  lazy(() => precededByAtSign),
-  // {}
-  lazy(() => precededByOpeningBrace),
-  // 1
-  atom,
-])
+const compactExpression: Parser<Molecule | Atom> = recordExpressionSpan(
+  oneOf([
+    // (a)
+    // (1 + 1)
+    // (a => :b)(c)
+    // ({ a: 1 } |> :identity).a
+    map(
+      sequence([
+        surroundedByParentheses(lazy(() => expression)),
+        compactTrailingIndexesAndArguments,
+      ]),
+      ([expression, trailingIndexesAndArguments]) =>
+        trailingIndexesAndArgumentsToExpression(
+          expression,
+          trailingIndexesAndArguments,
+        ),
+    ),
+    // :a.b
+    // :a.b(1).c
+    // :f(x)
+    // :a.b(1)(2)
+    lazy(() => precededByColonThenAtom),
+    // @runtime { x => :x }
+    // @panic
+    lazy(() => precededByAtSign),
+    // {}
+    lazy(() => precededByOpeningBrace),
+    // 1
+    atom,
+  ]),
+)
 
 // ~> a
 // ~> {}
@@ -711,16 +716,18 @@ const parenthesizedHole = surroundedByParentheses(
   ),
 )
 
-const expressionWhichMayHaveTrailingExpressions = oneOf([
-  parenthesizedHole,
-  precededByOpeningParenthesis,
-  precededByOpeningBrace,
-  precededByAtSign,
-  precededByColonThenAtom,
-  hole,
-  precededByAtomThenFunctionArrow,
-  atom,
-])
+const expressionWhichMayHaveTrailingExpressions = recordExpressionSpan(
+  oneOf([
+    parenthesizedHole,
+    precededByOpeningParenthesis,
+    precededByOpeningBrace,
+    precededByAtSign,
+    precededByColonThenAtom,
+    hole,
+    precededByAtomThenFunctionArrow,
+    atom,
+  ]),
+)
 
 const trailingInfixExpression = (initialExpression: string | Molecule) =>
   map(trailingInfixTokens, trailingInfixTokens =>
@@ -752,12 +759,12 @@ const trailingExpressionsExceptUnion = (initialExpression: string | Molecule) =>
     trailingCheckExpression(initialExpression),
   ] as const
 
-export const expression: Parser<Atom | Molecule> = flatMap(
-  expressionWhichMayHaveTrailingExpressions,
-  initialExpression =>
+export const expression: Parser<Atom | Molecule> = recordExpressionSpan(
+  flatMap(expressionWhichMayHaveTrailingExpressions, initialExpression =>
     oneOf([
       ...trailingExpressionsExceptUnion(initialExpression),
       trailingUnionExpression(initialExpression),
       map(nothing, _ => initialExpression),
     ]),
+  ),
 )
