@@ -11,10 +11,12 @@ import {
   ignoredKey,
   inferType,
   makeFunctionNode,
+  makeObjectNode,
   objectNodeFromOrderedEntries,
   readFunctionExpression,
   replaceAllTypeParametersWithTheirConstraints,
   serialize,
+  types,
   updateValueAtKeyPathInSemanticGraph,
   type Expression,
   type ExpressionContext,
@@ -29,6 +31,11 @@ import {
   findDuplicateHoleNames,
   makeHoleExpressionWithExtantTypeParameter,
 } from '../../../semantics/expressions/hole-expression.js'
+import {
+  stringifySemanticGraphForEndUser,
+  typeSymbolToSemanticGraph,
+} from '../../../semantics/semantic-graph.js'
+import { somethingTypeSymbol } from '../../../semantics/type-system/prelude-types.js'
 import { makeTypeParameter } from '../../../semantics/type-system/type-formats.js'
 
 export const functionKeywordHandler: KeywordHandler = (
@@ -73,9 +80,20 @@ const checkForDuplicateHoles = (
         return either.makeRight(undefined)
       } else {
         const [first] = duplicates
+
+        // This is just for the error message and therefore doesn't need
+        // constraints or anything (it's just to get syntax highlighting).
+        const holeForDiagnostic = makeHoleExpressionWithExtantTypeParameter(
+          first ?? ignoredKey,
+          makeObjectNode({
+            assignableTo: typeSymbolToSemanticGraph(somethingTypeSymbol),
+          }),
+          makeTypeParameter('a', { assignableTo: types.something }),
+        )
+
         return either.makeLeft({
           kind: 'invalidExpression',
-          message: `hole \`?${first ?? ''}\` is declared more than once in the same scope`,
+          message: `hole \`${stringifySemanticGraphForEndUser(holeForDiagnostic)}\` is declared more than once in the same scope`,
         })
       }
     },

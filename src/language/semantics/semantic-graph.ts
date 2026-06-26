@@ -399,7 +399,7 @@ export const typeToSemanticGraph = (
 export const stringifyTypeForEndUser = (type: Type): string =>
   stringifySemanticGraphForEndUser(typeToSemanticGraph(type, new Set()))
 
-const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): SemanticGraph =>
+export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
   makeIndexExpression({
     query: objectNodeFromOrderedEntries([['0', 'type']]),
     object: (() => {
