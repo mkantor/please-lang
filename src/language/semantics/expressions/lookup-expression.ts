@@ -106,10 +106,7 @@ export const lookup = ({
     // Check the prelude.
     const valueFromPrelude = prelude[key]
     return valueFromPrelude === undefined ?
-        either.makeLeft({
-          kind: 'invalidExpression',
-          message: `property \`${stringifyKeyForEndUser(key)}\` not found`,
-        })
+        either.makeRight(option.none)
       : either.makeRight(
           option.makeSome({
             foundLocation: 'prelude',

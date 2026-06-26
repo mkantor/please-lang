@@ -1,12 +1,17 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
+import { styleText } from 'node:util'
 import { withPhantomData, type WithPhantomData } from '../../../phantom-data.js'
 import type { ElaborationError, TypeMismatchError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import { quoteAtomIfNecessary } from '../../unparsing/plz-utilities.js'
+import { keyColor, punctuation } from '../../unparsing/unparsing-utilities.js'
 import type { ExpressionContext } from '../expression-elaboration.js'
 import type { ObjectNode } from '../object-node.js'
-import type { SemanticGraph } from '../semantic-graph.js'
+import {
+  stringifyTypeForEndUser,
+  type SemanticGraph,
+} from '../semantic-graph.js'
 import { asUnionWithLiteralAtomMembers } from './subtyping.js'
 import {
   makeFunctionType,
@@ -195,16 +200,22 @@ export const updateTypeAtKeyPathIfValid = (
   }
 }
 
-export const stringifyTypeKeyPathForEndUser = (keyPath: TypeKeyPath): string =>
-  // TODO: Would be nice to use unparser machinery here.
-  keyPath.reduce(
-    (stringifiedTypeKeyPath: string, key) =>
-      stringifiedTypeKeyPath.concat(
-        '.',
-        stringifyKeyPathComponentForEndUser(key),
-      ),
-    '',
+export const stringifyTypeKeyPathForEndUser = (
+  keyPath: TypeKeyPath,
+): string => {
+  const { dot } = punctuation(styleText)
+  return styleText(
+    keyColor,
+    keyPath.reduce(
+      (stringifiedTypeKeyPath: string, key) =>
+        stringifiedTypeKeyPath.concat(
+          dot,
+          stringifyKeyPathComponentForEndUser(key),
+        ),
+      '',
+    ),
   )
+}
 
 export const stringifyTypeKeyPathForInternalUse = (
   keyPath: TypeKeyPath,
@@ -361,16 +372,17 @@ const stringifyKeyPathComponentForEndUser = (
   if (typeof component === 'string') {
     return quoteAtomIfNecessary(component)
   } else if (typeof component === 'object') {
+    const { openGroupingParenthesis, closeGroupingParenthesis } =
+      punctuation(styleText)
     switch (component.kind) {
       case 'parameter':
-        return `?${component.name}`
+        return stringifyKeyPathComponentForEndUser(
+          component.constraint.assignableTo,
+        )
       case 'union':
-        return '('.concat(
-          [...component.members]
-            .sort()
-            .map(stringifyKeyPathComponentForEndUser)
-            .join(' | '),
-          ')',
+        return openGroupingParenthesis.concat(
+          stringifyTypeForEndUser(component),
+          closeGroupingParenthesis,
         )
     }
   } else {

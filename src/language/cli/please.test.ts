@@ -66,7 +66,7 @@ suite('please CLI error reporting', () => {
     const { stdout, stderr, code } = await runPlease(source, ['--no-color'])
     assert.equal(code, 1)
     assert.equal(stdout, '')
-    assert.match(stderr, /^Error: property `nope` not found\n/)
+    assert.match(stderr, /^Error: cannot find a value for `:nope`\n/)
     assert.ok(stderr.includes('\n<stdin>:2:13\n'))
     assert.ok(stderr.includes('\n2 │   greeting: :nope\n'))
     assert.ok(stderr.includes('\n  │             ▔▔▔▔▔\n'))
