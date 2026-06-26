@@ -14,6 +14,7 @@ import {
   inferType,
   recursivelyInexact,
 } from '../../../semantics/type-system.js'
+import { isSingletonType } from '../../../semantics/type-system/type-substitution.js'
 
 const check = ({
   value,
@@ -50,7 +51,7 @@ const check = ({
               kind: 'typeMismatch',
               message: `the value \`${stringifySemanticGraphForEndUser(
                 value,
-              )}\` (inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
+              )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
             })
           }
         },

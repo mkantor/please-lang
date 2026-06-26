@@ -507,6 +507,12 @@ export const enumerateInhabitants = (
         ),
     })
 
+export const isSingletonType = (type: Type): boolean =>
+  option.match(enumerateInhabitants(type), {
+    none: _ => false,
+    some: inhabitants => inhabitants.length === 1,
+  })
+
 /**
  * Attempt to reduce a (possibly stuck) intrinsic application.
  */
