@@ -6,7 +6,7 @@ import {
   lookup,
   readHoleExpression,
   readLookupExpression,
-  stringifyKeyForEndUser,
+  stringifySemanticGraphForEndUser,
   type Expression,
   type ExpressionContext,
   type KeywordHandler,
@@ -21,10 +21,10 @@ export const lookupKeywordHandler: KeywordHandler = (
     if (isObjectNode(context.program)) {
       return either.flatMap(lookup({ context, key }), successfulLookup =>
         option.match(successfulLookup, {
-          none: () =>
+          none: _ =>
             either.makeLeft({
               kind: 'invalidExpression',
-              message: `property \`${stringifyKeyForEndUser(key)}\` not found`,
+              message: `cannot find a value for \`${stringifySemanticGraphForEndUser(expression)}\``,
             }),
           some: ({ foundValue }) =>
             either.makeRight(
