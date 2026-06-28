@@ -41,14 +41,8 @@ const checkKeyPathExistsInType = (
       )
       return firstUnresolvableComponentIndex === -1 ?
           either.makeRight(undefined)
-        : attachSpanIfAbsent<undefined>(
-            either.makeLeft({
-              kind: 'typeMismatch',
-              message: `property \`${stringifyTypeKeyPathForEndUser(
-                keyPath.slice(0, firstUnresolvableComponentIndex + 1),
-              )}\` does not exist on type \`${stringifyTypeForEndUser(objectType)}\``,
-            }),
-            {
+        : either.makeLeft(
+            attachSpanIfAbsent({
               ...context,
               location: [
                 ...context.location,
@@ -56,7 +50,12 @@ const checkKeyPathExistsInType = (
                 'query',
                 String(firstUnresolvableComponentIndex),
               ],
-            },
+            })({
+              kind: 'typeMismatch',
+              message: `property \`${stringifyTypeKeyPathForEndUser(
+                keyPath.slice(0, firstUnresolvableComponentIndex + 1),
+              )}\` does not exist on type \`${stringifyTypeForEndUser(objectType)}\``,
+            }),
           )
     },
   )
@@ -89,20 +88,19 @@ export const indexKeywordHandler: KeywordHandler = (
                 applyTypeKeyPathToSemanticGraph(object, typeKeyPath),
                 {
                   none: _ =>
-                    attachSpanIfAbsent<SemanticGraph>(
-                      // This error is less specific than the one from
-                      // `checkKeyPathExistsInType`, but since that's used for
-                      // static analysis this isn't expected to ever surface.
-                      either.makeLeft({
+                    // This error is less specific than the one from
+                    // `checkKeyPathExistsInType`, but since that's used for
+                    // static analysis this isn't expected to ever surface.
+                    either.makeLeft(
+                      attachSpanIfAbsent({
+                        ...context,
+                        location: [...context.location, '1', 'query'],
+                      })({
                         kind: 'typeMismatch',
                         message: `property \`${stringifyTypeKeyPathForEndUser(
                           typeKeyPath,
                         )}\` not found`,
                       }),
-                      {
-                        ...context,
-                        location: [...context.location, '1', 'query'],
-                      },
                     ),
                   some: either.makeRight,
                 },

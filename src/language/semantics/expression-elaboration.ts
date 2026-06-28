@@ -336,7 +336,7 @@ const handleObjectNodeWhichMayBeAExpression = (
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> => {
   const possibleKeyword = node[0]
-  return attachSpanIfAbsent(
+  const result =
     isKeyword(possibleKeyword) ?
       context.keywordHandlers[possibleKeyword](
         withProperty(node, '0', possibleKeyword),
@@ -349,9 +349,9 @@ const handleObjectNodeWhichMayBeAExpression = (
       })
     : either.makeRight(
         withProperty(node, '0', unescapeKeywordSigil(possibleKeyword)),
-      ),
-    context,
-  )
+      )
+
+  return either.mapLeft(result, attachSpanIfAbsent(context))
 }
 
 /**
@@ -359,11 +359,9 @@ const handleObjectNodeWhichMayBeAExpression = (
  * leaving any already-attached (deeper, more specific) span untouched so the
  * innermost one wins.
  */
-export const attachSpanIfAbsent = <Value>(
-  result: Either<ElaborationError, Value>,
-  context: ExpressionContext,
-): Either<ElaborationError, Value> =>
-  either.mapLeft(result, error => {
+export const attachSpanIfAbsent =
+  (context: ExpressionContext) =>
+  (error: ElaborationError): ElaborationError => {
     if (error.span !== undefined) {
       return error
     } else {
@@ -374,7 +372,7 @@ export const attachSpanIfAbsent = <Value>(
         return { ...error, span }
       }
     }
-  })
+  }
 
 /**
  * Resolve a location to its source span, walking up to the nearest enclosing

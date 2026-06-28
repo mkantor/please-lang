@@ -35,15 +35,15 @@ const check = ({
     location: [...context.location, '1', 'type'],
   }
   return either.flatMap(
-    attachSpanIfAbsent(
+    either.mapLeft(
       inferType(value, subContextForValue),
-      subContextForValue,
+      attachSpanIfAbsent(subContextForValue),
     ),
     valueAsType =>
       either.flatMap(
-        attachSpanIfAbsent(
+        either.mapLeft(
           inferType(type, subContextForType),
-          subContextForType,
+          attachSpanIfAbsent(subContextForType),
         ),
         typeAsType => {
           // `@check` targets are upper bounds; they allow width subtyping.
@@ -51,14 +51,13 @@ const check = ({
           return isAssignable({ source: valueAsType, target: targetType }) ?
               either.makeRight(value)
               // The value is what failed the check, so blame it specifically.
-            : attachSpanIfAbsent<SemanticGraph>(
-                either.makeLeft({
+            : either.makeLeft(
+                attachSpanIfAbsent(subContextForValue)({
                   kind: 'typeMismatch',
                   message: `the value \`${stringifySemanticGraphForEndUser(
                     value,
                   )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
                 }),
-                subContextForValue,
               )
         },
       ),

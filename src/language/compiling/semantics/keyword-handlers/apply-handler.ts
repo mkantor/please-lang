@@ -199,18 +199,18 @@ export const applyKeywordHandler: KeywordHandler = (
       }
 
       const argumentTypeCheck = either.flatMap(
-        attachSpanIfAbsent(
+        either.mapLeft(
           inferType(functionToApply, subContextForFunction),
-          subContextForFunction,
+          attachSpanIfAbsent(subContextForFunction),
         ),
         functionType =>
           either.flatMap(
-            attachSpanIfAbsent(
+            either.mapLeft(
               inferType(argument, subContextForArgument),
-              subContextForArgument,
+              attachSpanIfAbsent(subContextForArgument),
             ),
             argumentType =>
-              either.flatMapLeft(
+              either.mapLeft(
                 checkApplication(
                   argument,
                   functionType,
@@ -221,11 +221,8 @@ export const applyKeywordHandler: KeywordHandler = (
                   // A `typeMismatch` here means the argument didn't fit the
                   // parameter, so blame the argument specifically.
                   error.kind === 'typeMismatch' ?
-                    attachSpanIfAbsent(
-                      either.makeLeft(error),
-                      subContextForArgument,
-                    )
-                  : either.makeLeft(error),
+                    attachSpanIfAbsent(subContextForArgument)(error)
+                  : error,
               ),
           ),
       )
