@@ -1,6 +1,7 @@
 import either, { type Either } from '@matt.kantor/either'
 import type { ElaborationError } from '../../../errors.js'
 import {
+  attachSpanIfAbsent,
   isAssignable,
   readCheckExpression,
   stringifySemanticGraphForEndUser,
@@ -24,39 +25,44 @@ const check = ({
   readonly value: SemanticGraph
   readonly type: SemanticGraph
   readonly context: ExpressionContext
-}): Either<ElaborationError, SemanticGraph> =>
-  either.flatMap(
-    inferType(value, {
-      ...context,
-      location: [...context.location, '1', 'value'],
-    }),
+}): Either<ElaborationError, SemanticGraph> => {
+  const subContextForValue = {
+    ...context,
+    location: [...context.location, '1', 'value'],
+  }
+  const subContextForType = {
+    ...context,
+    location: [...context.location, '1', 'type'],
+  }
+  return either.flatMap(
+    either.mapLeft(
+      inferType(value, subContextForValue),
+      attachSpanIfAbsent(subContextForValue),
+    ),
     valueAsType =>
       either.flatMap(
-        inferType(type, {
-          ...context,
-          location: [...context.location, '1', 'type'],
-        }),
+        either.mapLeft(
+          inferType(type, subContextForType),
+          attachSpanIfAbsent(subContextForType),
+        ),
         typeAsType => {
           // `@check` targets are upper bounds; they allow width subtyping.
           const targetType = recursivelyInexact(typeAsType)
-          if (
-            isAssignable({
-              source: valueAsType,
-              target: targetType,
-            })
-          ) {
-            return either.makeRight(value)
-          } else {
-            return either.makeLeft({
-              kind: 'typeMismatch',
-              message: `the value \`${stringifySemanticGraphForEndUser(
-                value,
-              )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
-            })
-          }
+          return isAssignable({ source: valueAsType, target: targetType }) ?
+              either.makeRight(value)
+              // The value is what failed the check, so blame it specifically.
+            : either.makeLeft(
+                attachSpanIfAbsent(subContextForValue)({
+                  kind: 'typeMismatch',
+                  message: `the value \`${stringifySemanticGraphForEndUser(
+                    value,
+                  )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
+                }),
+              )
         },
       ),
   )
+}
 
 export const checkKeywordHandler: KeywordHandler = (
   expression: Expression,

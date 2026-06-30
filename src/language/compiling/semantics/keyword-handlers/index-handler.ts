@@ -3,6 +3,7 @@ import option from '@matt.kantor/option'
 import type { ElaborationError } from '../../../errors.js'
 import {
   applyKeyPathToType,
+  attachSpanIfAbsent,
   containsAnyUnelaboratedNodes,
   inferType,
   readIndexExpression,
@@ -14,6 +15,7 @@ import {
 } from '../../../semantics.js'
 import { applyTypeKeyPathToSemanticGraph } from '../../../semantics/semantic-graph.js'
 import {
+  isNothing,
   stringifyTypeKeyPathForEndUser,
   typeKeyPathFromObjectNode,
   type TypeKeyPath,
@@ -30,17 +32,31 @@ const checkKeyPathExistsInType = (
       location: [...context.location, '1', 'object'],
     }),
     objectType => {
-      const typeAtKeyPath = applyKeyPathToType(objectType, keyPath)
-      return (
-          typeAtKeyPath.kind === 'union' && typeAtKeyPath.members.size === 0
-        ) ?
-          either.makeLeft({
-            kind: 'typeMismatch',
-            message: `property \`${stringifyTypeKeyPathForEndUser(
-              keyPath,
-            )}\` does not exist on type \`${stringifyTypeForEndUser(objectType)}\``,
-          })
-        : either.makeRight(undefined)
+      // `-1` if the entire `keyPath` is resolvable.
+      const firstUnresolvableComponentIndex = keyPath.findIndex(
+        (_component, endIndex) =>
+          isNothing(
+            applyKeyPathToType(objectType, keyPath.slice(0, endIndex + 1)),
+          ),
+      )
+      return firstUnresolvableComponentIndex === -1 ?
+          either.makeRight(undefined)
+        : either.makeLeft(
+            attachSpanIfAbsent({
+              ...context,
+              location: [
+                ...context.location,
+                '1',
+                'query',
+                String(firstUnresolvableComponentIndex),
+              ],
+            })({
+              kind: 'typeMismatch',
+              message: `property \`${stringifyTypeKeyPathForEndUser(
+                keyPath.slice(0, firstUnresolvableComponentIndex + 1),
+              )}\` does not exist on type \`${stringifyTypeForEndUser(objectType)}\``,
+            }),
+          )
     },
   )
 
@@ -71,13 +87,21 @@ export const indexKeywordHandler: KeywordHandler = (
             : option.match(
                 applyTypeKeyPathToSemanticGraph(object, typeKeyPath),
                 {
-                  none: () =>
-                    either.makeLeft({
-                      kind: 'typeMismatch',
-                      message: `property \`${stringifyTypeKeyPathForEndUser(
-                        typeKeyPath,
-                      )}\` not found`,
-                    }),
+                  none: _ =>
+                    // This error is less specific than the one from
+                    // `checkKeyPathExistsInType`, but since that's used for
+                    // static analysis this isn't expected to ever surface.
+                    either.makeLeft(
+                      attachSpanIfAbsent({
+                        ...context,
+                        location: [...context.location, '1', 'query'],
+                      })({
+                        kind: 'typeMismatch',
+                        message: `property \`${stringifyTypeKeyPathForEndUser(
+                          typeKeyPath,
+                        )}\` not found`,
+                      }),
+                    ),
                   some: either.makeRight,
                 },
               ),

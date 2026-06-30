@@ -25,9 +25,18 @@ suite('compile attaches source spans to elaboration errors', () => {
     assert.deepEqual(compileErrorSpan(':nonexistent'), [0, 12])
   })
 
-  test('type mismatch spans the checked expression', () => {
-    const source = '1 ~ :boolean.type'
-    assert.deepEqual(compileErrorSpan(source), [0, source.length])
+  test('type mismatch blames the checked value', () => {
+    const source = '{} ~ :boolean.type'
+    assert.deepEqual(compileErrorSpan(source), [0, 2])
+    assert.equal(source.slice(0, 2), '{}')
+  })
+
+  test('missing property blames the first absent key in a chain', () => {
+    const source1 = '{}.(1 + 1).(1 + 1).(1 + 1)'
+    assert.deepEqual(compileErrorSpan(source1), [3, 10])
+
+    const source2 = '{2: {}}.(1 + 1).(1 + 1).(1 + 1)'
+    assert.deepEqual(compileErrorSpan(source2), [16, 23])
   })
 
   test('unknown keyword spans the keyword expression', () => {

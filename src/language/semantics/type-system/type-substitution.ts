@@ -7,6 +7,7 @@ import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something } from './prelude-types.js'
 import { isAssignable } from './subtyping.js'
 import {
+  isNothing,
   makeApplicationType,
   makeFunctionType,
   makeIndexedAccessType,
@@ -723,6 +724,3 @@ export const recursivelyInexact = (type: Type): Type =>
         ),
     })
   )
-
-const isNothing = (type: Type) =>
-  type.kind === 'union' && type.members.size === 0

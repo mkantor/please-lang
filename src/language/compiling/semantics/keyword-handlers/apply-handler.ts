@@ -3,6 +3,7 @@ import option, { type Option } from '@matt.kantor/option'
 import type { ElaborationError } from '../../../errors.js'
 import {
   applicableFunctionSignatures,
+  attachSpanIfAbsent,
   containedTypeParameters,
   containsAnyUnelaboratedNodes,
   getTypesForTypeParameters,
@@ -188,23 +189,40 @@ export const applyKeywordHandler: KeywordHandler = (
       const functionToApply = applyExpression[1].function
       const argument = applyExpression[1].argument
 
+      const subContextForFunction = {
+        ...context,
+        location: [...context.location, '1', 'function'],
+      }
+      const subContextForArgument = {
+        ...context,
+        location: [...context.location, '1', 'argument'],
+      }
+
       const argumentTypeCheck = either.flatMap(
-        inferType(functionToApply, {
-          ...context,
-          location: [...context.location, '1', 'function'],
-        }),
+        either.mapLeft(
+          inferType(functionToApply, subContextForFunction),
+          attachSpanIfAbsent(subContextForFunction),
+        ),
         functionType =>
           either.flatMap(
-            inferType(argument, {
-              ...context,
-              location: [...context.location, '1', 'argument'],
-            }),
+            either.mapLeft(
+              inferType(argument, subContextForArgument),
+              attachSpanIfAbsent(subContextForArgument),
+            ),
             argumentType =>
-              checkApplication(
-                argument,
-                functionType,
-                argumentType,
-                rigidTypeParameterIdentities(context),
+              either.mapLeft(
+                checkApplication(
+                  argument,
+                  functionType,
+                  argumentType,
+                  rigidTypeParameterIdentities(context),
+                ),
+                error =>
+                  // A `typeMismatch` here means the argument didn't fit the
+                  // parameter, so blame the argument specifically.
+                  error.kind === 'typeMismatch' ?
+                    attachSpanIfAbsent(subContextForArgument)(error)
+                  : error,
               ),
           ),
       )
