@@ -600,6 +600,14 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }.output`,
     success('it works!'),
   ],
+  [':option.make_some(7) option.get_or_else 0', success('7')],
+  [':option.none option.get_or_else 0', success('0')],
+  [':option.make_some(value) option.get_or_else fallback', success('value')],
+  [':option.none |> :option.get_or_else(fallback)', success('fallback')],
+  [':option.is_some(:option.make_some(7))', success('true')],
+  [':option.is_some(:option.none)', success('false')],
+  [':option.is_none(:option.none)', success('true')],
+  [':option.is_none(:option.make_some(7))', success('false')],
   [
     // Lookups should never target keyword expression properties.
     `{
