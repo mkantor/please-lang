@@ -296,6 +296,18 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [`hello atom.starts_with he`, success('true')],
   [`hello atom.starts_with lo`, success('false')],
   [`hello atom.ends_with lo`, success('true')],
+  [`{ a, b, c } atom.join ", "`, success('a, b, c')],
+  [`{} atom.join "-"`, success('')],
+  [`"a,b,c" atom.split ","`, success({ 0: 'a', 1: 'b', 2: 'c' })],
+  [`("a,b,c" atom.split ",") atom.join "-"`, success('a-b-c')],
+  [
+    `{ a: { nested: x } } atom.join ", "`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
   [`:integer.add(1)(1)`, success('2')],
   [
     `:integer.add(one)(juan)`,
