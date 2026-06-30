@@ -21,6 +21,7 @@ import {
   something,
 } from './prelude-types.js'
 import {
+  makeApplicationType,
   makeFunctionType,
   makeIntrinsicApplicationType,
   makeObjectType,
@@ -148,8 +149,17 @@ const getTypesForTypeParametersSuite = testCases(
     `getting types for type parameters in \`${stringifyTypeForEndUser(parameterType)}\` from \`${stringifyTypeForEndUser(argumentType)}\``,
 )
 
+const stuckParameter = makeTypeParameter('stuck', { assignableTo: something })
+const stuckApplicationReturningOption = makeApplicationType(
+  makeFunctionType({ parameter: stuckParameter, return: option(something) }),
+  atom,
+  new Set([stuckParameter.identity]),
+)
+
 getTypesForTypeParametersSuite('getTypesForTypeParameters', [
   [[A, atom], new Map([[A, atom]])],
+
+  [[option(B), stuckApplicationReturningOption], new Map([[B, something]])],
 
   [[extendsAnyAtom, atom], new Map([[extendsAnyAtom, atom]])],
 

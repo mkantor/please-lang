@@ -191,6 +191,29 @@ typeAssignabilitySuite('application types (not assignable)', [
   [[boolean, applicationBoolean], false],
 ])
 
+typeAssignabilitySuite('stuck application in a contravariant position', [
+  // A function which can handle arbitrary booleans satisfies a consumer of an
+  // unknown specific boolean.
+  [
+    [
+      makeFunctionType({ parameter: boolean, return: something }),
+      makeFunctionType({ parameter: applicationBoolean, return: something }),
+    ],
+    true,
+  ],
+
+  [
+    [
+      makeFunctionType({
+        parameter: makeUnionType(['true']),
+        return: something,
+      }),
+      makeFunctionType({ parameter: applicationBoolean, return: something }),
+    ],
+    false,
+  ],
+])
+
 typeAssignabilitySuite('opaque type from stuck type (assignable)', [
   [[makeUnionType([applicationBoolean]), atom], true],
   [[makeUnionType([indexedAccessBoolean]), atom], true],

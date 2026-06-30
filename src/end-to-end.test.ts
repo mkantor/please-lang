@@ -629,6 +629,10 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [':option.is_none(:option.none)', success('true')],
   [':option.is_none(:option.make_some(7))', success('false')],
   [
+    `:option.make_some(key) option.flat_map ((a: :atom.type) => { key: value } object.lookup :a)`,
+    success({ tag: 'some', value: 'value' }),
+  ],
+  [
     // Lookups should never target keyword expression properties.
     `{
       {
