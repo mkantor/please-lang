@@ -1,5 +1,9 @@
 import either from '@matt.kantor/either'
-import { objectNodeFromOrderedEntries } from '../object-node.js'
+import {
+  isObjectNode,
+  objectNodeFromOrderedEntries,
+  orderedEntriesOfObjectNode,
+} from '../object-node.js'
 import { types } from '../type-system.js'
 import { makeFunctionType } from '../type-system/type-formats.js'
 import { computeFromReturnType } from './return-type-refiners.js'
@@ -120,6 +124,190 @@ export const atom = {
             })
           } else {
             return either.makeRight(atomToPrepend + atomToPrependTo)
+          }
+        })
+      }
+    },
+  ),
+
+  length: preludeFunctionArity1(
+    ['atom', 'length'],
+    { parameter: types.atom, return: types.naturalNumber },
+    subject => {
+      if (typeof subject !== 'string') {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`length` expected an atom',
+        })
+      } else {
+        // Count codepoints rather than JavaScript's internal UTF-16 units.
+        return either.makeRight(String(Array.from(subject).length))
+      }
+    },
+  ),
+
+  contains: preludeFunctionArity2(
+    ['atom', 'contains'],
+    {
+      parameter: types.atom,
+      return: makeFunctionType({
+        parameter: types.atom,
+        return: types.boolean,
+      }),
+    },
+    needle => {
+      if (typeof needle !== 'string') {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`contains` expected an atom',
+        })
+      } else {
+        return either.makeRight(haystack => {
+          if (typeof haystack !== 'string') {
+            return either.makeLeft({
+              kind: 'typeMismatch',
+              message: '`contains` expected an atom',
+            })
+          } else {
+            return either.makeRight(String(haystack.includes(needle)))
+          }
+        })
+      }
+    },
+  ),
+
+  starts_with: preludeFunctionArity2(
+    ['atom', 'starts_with'],
+    {
+      parameter: types.atom,
+      return: makeFunctionType({
+        parameter: types.atom,
+        return: types.boolean,
+      }),
+    },
+    prefix => {
+      if (typeof prefix !== 'string') {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`starts_with` expected an atom',
+        })
+      } else {
+        return either.makeRight(subject => {
+          if (typeof subject !== 'string') {
+            return either.makeLeft({
+              kind: 'typeMismatch',
+              message: '`starts_with` expected an atom',
+            })
+          } else {
+            return either.makeRight(String(subject.startsWith(prefix)))
+          }
+        })
+      }
+    },
+  ),
+
+  ends_with: preludeFunctionArity2(
+    ['atom', 'ends_with'],
+    {
+      parameter: types.atom,
+      return: makeFunctionType({
+        parameter: types.atom,
+        return: types.boolean,
+      }),
+    },
+    suffix => {
+      if (typeof suffix !== 'string') {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`ends_with` expected an atom',
+        })
+      } else {
+        return either.makeRight(subject => {
+          if (typeof subject !== 'string') {
+            return either.makeLeft({
+              kind: 'typeMismatch',
+              message: '`ends_with` expected an atom',
+            })
+          } else {
+            return either.makeRight(String(subject.endsWith(suffix)))
+          }
+        })
+      }
+    },
+  ),
+
+  join: preludeFunctionArity2(
+    ['atom', 'join'],
+    {
+      parameter: types.atom,
+      return: makeFunctionType({
+        parameter: types.object,
+        return: types.atom,
+      }),
+    },
+    separator => {
+      if (typeof separator !== 'string') {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`join` expected an atom',
+        })
+      } else {
+        return either.makeRight(list => {
+          if (!isObjectNode(list)) {
+            return either.makeLeft({
+              kind: 'typeMismatch',
+              message: '`join` expected an object',
+            })
+          } else {
+            return either.map(
+              either.sequence(
+                orderedEntriesOfObjectNode(list).map(([_key, value]) =>
+                  typeof value === 'string' ?
+                    either.makeRight(value)
+                  : either.makeLeft({
+                      kind: 'typeMismatch',
+                      message: '`join` expected every value to be an atom',
+                    }),
+                ),
+              ),
+              values => values.join(separator),
+            )
+          }
+        })
+      }
+    },
+  ),
+
+  split: preludeFunctionArity2(
+    ['atom', 'split'],
+    {
+      parameter: types.atom,
+      return: makeFunctionType({
+        parameter: types.atom,
+        return: types.object,
+      }),
+    },
+    separator => {
+      if (typeof separator !== 'string') {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`split` expected an atom',
+        })
+      } else {
+        return either.makeRight(subject => {
+          if (typeof subject !== 'string') {
+            return either.makeLeft({
+              kind: 'typeMismatch',
+              message: '`split` expected an atom',
+            })
+          } else {
+            return either.makeRight(
+              objectNodeFromOrderedEntries(
+                subject
+                  .split(separator)
+                  .map((part, index) => [String(index), part]),
+              ),
+            )
           }
         })
       }

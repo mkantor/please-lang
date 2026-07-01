@@ -152,6 +152,60 @@ export const option = {
       }
     },
   ),
+
+  get_or_else: preludeFunctionArity2(
+    ['option', 'get_or_else'],
+    {
+      parameter: types.something,
+      return: makeFunctionType({
+        parameter: types.option(types.something),
+        return: types.something,
+      }),
+    },
+    fallback =>
+      either.makeRight(optionValue => {
+        if (!nodeIsOptionLike(optionValue)) {
+          return either.makeLeft({
+            kind: 'typeMismatch',
+            message: '`get_or_else` expected an option',
+          })
+        } else {
+          return either.makeRight(
+            optionValue.tag === 'none' ? fallback : optionValue.value,
+          )
+        }
+      }),
+  ),
+
+  is_some: preludeFunctionArity1(
+    ['option', 'is_some'],
+    { parameter: types.option(types.something), return: types.boolean },
+    optionValue => {
+      if (!nodeIsOptionLike(optionValue)) {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`is_some` expected an option',
+        })
+      } else {
+        return either.makeRight(String(optionValue.tag === 'some'))
+      }
+    },
+  ),
+
+  is_none: preludeFunctionArity1(
+    ['option', 'is_none'],
+    { parameter: types.option(types.something), return: types.boolean },
+    optionValue => {
+      if (!nodeIsOptionLike(optionValue)) {
+        return either.makeLeft({
+          kind: 'typeMismatch',
+          message: '`is_none` expected an option',
+        })
+      } else {
+        return either.makeRight(String(optionValue.tag === 'none'))
+      }
+    },
+  ),
 } as const
 
 type OptionLikeNode = ObjectNode & {

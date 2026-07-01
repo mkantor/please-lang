@@ -288,6 +288,26 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }`,
     success({ 0: 'true', 1: 'true', 2: 'false', 3: 'false' }),
   ],
+  [`:atom.length(hello)`, success('5')],
+  [`:atom.length("")`, success('0')],
+  [`:atom.length(👾) ~ 1`, success('1')],
+  [`hello atom.contains ell`, success('true')],
+  [`hello atom.contains xyz`, success('false')],
+  [`hello atom.starts_with he`, success('true')],
+  [`hello atom.starts_with lo`, success('false')],
+  [`hello atom.ends_with lo`, success('true')],
+  [`{ a, b, c } atom.join ", "`, success('a, b, c')],
+  [`{} atom.join "-"`, success('')],
+  [`"a,b,c" atom.split ","`, success({ 0: 'a', 1: 'b', 2: 'c' })],
+  [`("a,b,c" atom.split ",") atom.join "-"`, success('a-b-c')],
+  [
+    `{ a: { nested: x } } atom.join ", "`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
   [`:integer.add(1)(1)`, success('2')],
   [
     `:integer.add(one)(juan)`,
@@ -600,6 +620,14 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }.output`,
     success('it works!'),
   ],
+  [':option.make_some(7) option.get_or_else 0', success('7')],
+  [':option.none option.get_or_else 0', success('0')],
+  [':option.make_some(value) option.get_or_else fallback', success('value')],
+  [':option.none |> :option.get_or_else(fallback)', success('fallback')],
+  [':option.is_some(:option.make_some(7))', success('true')],
+  [':option.is_some(:option.none)', success('false')],
+  [':option.is_none(:option.none)', success('true')],
+  [':option.is_none(:option.make_some(7))', success('false')],
   [
     // Lookups should never target keyword expression properties.
     `{
