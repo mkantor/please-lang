@@ -9,7 +9,6 @@ import {
 import { types } from '../type-system.js'
 import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
-  makeFunctionType,
   makeObjectType,
   makeUnionType,
   unionOfTypes,
@@ -17,11 +16,9 @@ import {
   type Type,
 } from '../type-system/type-formats.js'
 import { applyKeyPathToType } from '../type-system/type-substitution.js'
+import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
-import {
-  preludeFunctionArity1,
-  preludeFunctionArity2,
-} from './stdlib-utilities.js'
+import { preludeFunction } from './stdlib-utilities.js'
 
 const computeFromPropertyReturnType = (
   parameterTypes: readonly Type[],
@@ -132,54 +129,32 @@ const lookupReturnForKey = (key: Atom, objectType: ObjectType): Type => {
 export const object = {
   type: objectNodeFromOrderedEntries([]),
 
-  lookup: preludeFunctionArity2(
+  lookup: preludeFunction(
     ['object', 'lookup'],
-    {
-      parameter: types.atom,
-      return: makeFunctionType({
-        parameter: types.object,
-        return: types.option(types.something),
+    [atomParameter, objectParameter],
+    types.option(types.something),
+    key =>
+      either.makeRight(argument => {
+        const propertyValue = argument[key]
+        return either.makeRight(
+          propertyValue !== undefined ?
+            objectNodeFromOrderedEntries([
+              ['tag', 'some'],
+              ['value', propertyValue],
+            ])
+          : objectNodeFromOrderedEntries([
+              ['tag', 'none'],
+              ['value', objectNodeFromOrderedEntries([])],
+            ]),
+        )
       }),
-    },
-    key => {
-      if (typeof key !== 'string') {
-        return either.makeLeft({
-          kind: 'typeMismatch',
-          message: '`lookup` key was not an atom',
-        })
-      } else {
-        return either.makeRight(argument => {
-          if (!isObjectNode(argument)) {
-            return either.makeLeft({
-              kind: 'typeMismatch',
-              message: '`lookup` expected an object',
-            })
-          } else {
-            const propertyValue = argument[key]
-            return either.makeRight(
-              propertyValue !== undefined ?
-                objectNodeFromOrderedEntries([
-                  ['tag', 'some'],
-                  ['value', propertyValue],
-                ])
-              : objectNodeFromOrderedEntries([
-                  ['tag', 'none'],
-                  ['value', objectNodeFromOrderedEntries([])],
-                ]),
-            )
-          }
-        })
-      }
-    },
     computeLookupReturnType,
   ),
 
-  from: preludeFunctionArity1(
+  from: preludeFunction(
     ['object', 'from'],
-    {
-      parameter: types.something,
-      return: types.option(types.object),
-    },
+    [anyValue(types.something)],
+    types.option(types.object),
     argument =>
       either.makeRight(
         isObjectNode(argument) ?
@@ -195,70 +170,37 @@ export const object = {
     computeFromReturnType(types.object),
   ),
 
-  from_property: preludeFunctionArity2(
+  from_property: preludeFunction(
     ['object', 'from_property'],
-    {
-      parameter: types.atom,
-      return: makeFunctionType({
-        parameter: types.something,
-        return: types.object,
-      }),
-    },
-    key => {
-      if (typeof key !== 'string') {
-        return either.makeLeft({
-          kind: 'typeMismatch',
-          message: '`from_property` key was not an atom',
-        })
-      } else {
-        return either.makeRight(value =>
-          either.makeRight(objectNodeFromOrderedEntries([[key, value]])),
-        )
-      }
-    },
+    [atomParameter, anyValue(types.something)],
+    types.object,
+    key =>
+      either.makeRight(value =>
+        either.makeRight(objectNodeFromOrderedEntries([[key, value]])),
+      ),
     computeFromPropertyReturnType,
   ),
 
-  overlay: preludeFunctionArity2(
+  overlay: preludeFunction(
     ['object', 'overlay'],
-    {
-      parameter: types.object,
-      return: makeFunctionType({
-        parameter: types.object,
-        return: types.object,
-      }),
-    },
-    object2 => {
-      if (typeof object2 !== 'object') {
-        return either.makeLeft({
-          kind: 'typeMismatch',
-          message: '`overlay` expected an object',
-        })
-      } else {
-        return either.makeRight(object1 => {
-          if (!isObjectNode(object1)) {
-            return either.makeLeft({
-              kind: 'typeMismatch',
-              message: '`overlay` expected an object',
-            })
-          } else {
-            // `object1` supplies the initial property order with `object2`
-            // overwriting values for shared keys in-place. New keys from
-            // `object2` are appended at the end in their original order.
-            return either.makeRight(
-              objectNodeFromOrderedEntries([
-                ...orderedEntriesOfObjectNode(object1).map(
-                  ([key, value]) => [key, object2[key] ?? value] as const,
-                ),
-                ...orderedEntriesOfObjectNode(object2).filter(
-                  ([key, _value]) => !(key in object1),
-                ),
-              ]),
-            )
-          }
-        })
-      }
-    },
+    [objectParameter, objectParameter],
+    types.object,
+    // `object1` supplies the initial property order with `object2` overwriting
+    // values for shared keys in-place. New keys from `object2` are appended at
+    // the end in their original order.
+    object2 =>
+      either.makeRight(object1 =>
+        either.makeRight(
+          objectNodeFromOrderedEntries([
+            ...orderedEntriesOfObjectNode(object1).map(
+              ([key, value]) => [key, object2[key] ?? value] as const,
+            ),
+            ...orderedEntriesOfObjectNode(object2).filter(
+              ([key, _value]) => !(key in object1),
+            ),
+          ]),
+        ),
+      ),
     computeOverlayReturnType,
   ),
 } as const
