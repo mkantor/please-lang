@@ -1338,6 +1338,32 @@ typeAssignabilitySuite('union to type parameter (assignable)', [
   [[makeUnionType([extendsAnyAtom]), extendsAnyAtom], true],
 ])
 
+typeAssignabilitySuite(
+  'union with a broadly-constrained type-parameter member (assignable)',
+  [
+    [[makeUnionType([A, object]), something], true],
+    [
+      [makeUnionType([A, makeObjectType({}, { exact: true })]), something],
+      true,
+    ],
+    [
+      [
+        makeFunctionType({
+          parameter: something,
+          return: makeUnionType([A, makeObjectType({}, { exact: true })]),
+        }),
+        something,
+      ],
+      true,
+    ],
+  ],
+)
+
+typeAssignabilitySuite(
+  'union with a broadly-constrained type-parameter member (not assignable)',
+  [[[makeUnionType([A, 'x']), atom], false]],
+)
+
 typeAssignabilitySuite('union to type parameter (not assignable)', [
   // `1 | :nothing.type` is not assignable to `?a`
   [[makeUnionType(['1']), A], false],

@@ -313,7 +313,15 @@ export const isAssignable = ({
                       }
                     }
                   }
-                  return false
+                  // A type parameter member can be assignable to the target
+                  // union while matching no single member, e.g. a parameter
+                  // constrained to `something` is assignable to `something`
+                  // even though `something` is itself a union.
+                  return (
+                    typeof sourceMember !== 'string' &&
+                    sourceMember.kind === 'parameter' &&
+                    isAssignable({ source: sourceMember, target })
+                  )
                 })()
 
                 if (!sourceMemberIsAssignableToSomeMemberOfSupertype) {
