@@ -11,6 +11,7 @@ import { types } from '../type-system.js'
 import {
   makeFunctionType,
   makeTypeParameter,
+  makeUnionType,
 } from '../type-system/type-formats.js'
 import {
   emptyContextForStdlibApplications,
@@ -156,10 +157,10 @@ export const option = {
   get_or_else: preludeFunctionArity2(
     ['option', 'get_or_else'],
     {
-      parameter: types.something,
+      parameter: B,
       return: makeFunctionType({
-        parameter: types.option(types.something),
-        return: types.something,
+        parameter: types.option(A),
+        return: makeUnionType([A, B]),
       }),
     },
     fallback =>

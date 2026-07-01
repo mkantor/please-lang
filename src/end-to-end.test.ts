@@ -624,6 +624,10 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [':option.none option.get_or_else 0', success('0')],
   [':option.make_some(value) option.get_or_else fallback', success('value')],
   [':option.none |> :option.get_or_else(fallback)', success('fallback')],
+  [
+    '((a: :atom.type) => (:option.make_some(:a) option.get_or_else other) ~ :atom.type)(hello)',
+    success('hello'),
+  ],
   [':option.is_some(:option.make_some(7))', success('true')],
   [':option.is_some(:option.none)', success('false')],
   [':option.is_none(:option.none)', success('true')],
