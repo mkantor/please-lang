@@ -2,16 +2,10 @@ import either from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { isFunctionNode } from '../function-node.js'
-import { isSemanticGraph } from '../is-semantic-graph.js'
-import {
-  isObjectNode,
-  lookupPropertyOfObjectNode,
-  type ObjectNode,
-} from '../object-node.js'
+import { isObjectNode, lookupPropertyOfObjectNode } from '../object-node.js'
 import {
   stringifySemanticGraphForEndUser,
   stringifyTypeForEndUser,
-  type SemanticGraph,
 } from '../semantic-graph.js'
 import { isAssignable, types } from '../type-system.js'
 import { typeFromSemanticGraph } from '../type-system/literal-type.js'
@@ -28,6 +22,7 @@ import {
   applyKeyPathToType,
   applyTypeToArgumentType,
 } from '../type-system/type-substitution.js'
+import { nodeIsTagged } from './parameters.js'
 import {
   emptyContextForStdlibApplications,
   preludeFunctionArity1,
@@ -38,17 +33,6 @@ import {
 const A = makeTypeParameter('a', { assignableTo: types.something })
 const B = makeTypeParameter('b', { assignableTo: types.something })
 const C = makeTypeParameter('c', { assignableTo: types.something })
-
-type TaggedNode = ObjectNode & {
-  readonly tag: Atom
-  readonly value: SemanticGraph
-}
-const nodeIsTagged = (node: SemanticGraph): node is TaggedNode =>
-  isObjectNode(node) &&
-  node['tag'] !== undefined &&
-  (typeof node['tag'] === 'string' ||
-    (isSemanticGraph(node['tag']) && typeof node['tag'] === 'string')) &&
-  node['value'] !== undefined
 
 /**
  * Computes the upper bound of `match`'s return type, which is the union of each

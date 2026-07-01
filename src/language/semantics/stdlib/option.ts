@@ -1,18 +1,14 @@
 import either from '@matt.kantor/either'
 import { makeUnionExpression } from '../expressions/union-expression.js'
 import { isFunctionNode } from '../function-node.js'
-import {
-  isObjectNode,
-  objectNodeFromOrderedEntries,
-  type ObjectNode,
-} from '../object-node.js'
-import { type SemanticGraph } from '../semantic-graph.js'
+import { objectNodeFromOrderedEntries } from '../object-node.js'
 import { types } from '../type-system.js'
 import {
   makeFunctionType,
   makeTypeParameter,
   makeUnionType,
 } from '../type-system/type-formats.js'
+import { nodeIsOptionLike } from './parameters.js'
 import {
   emptyContextForStdlibApplications,
   preludeFunctionArity1,
@@ -208,14 +204,3 @@ export const option = {
     },
   ),
 } as const
-
-type OptionLikeNode = ObjectNode & {
-  readonly tag: 'some' | 'none'
-  readonly value: SemanticGraph
-}
-
-// TODO: Consider using a type system assignability check instead.
-const nodeIsOptionLike = (node: SemanticGraph): node is OptionLikeNode =>
-  isObjectNode(node) &&
-  (node['tag'] === 'some' || node['tag'] === 'none') &&
-  node['value'] !== undefined

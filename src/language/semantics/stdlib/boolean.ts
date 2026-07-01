@@ -1,9 +1,9 @@
 import either from '@matt.kantor/either'
 import { makeUnionExpression } from '../expressions/union-expression.js'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
-import { type SemanticGraph } from '../semantic-graph.js'
 import { types } from '../type-system.js'
 import { makeFunctionType } from '../type-system/type-formats.js'
+import { nodeIsBoolean, type BooleanNode } from './parameters.js'
 import {
   computeFromReturnType,
   computeIsReturnType,
@@ -140,9 +140,5 @@ export const boolean = {
     },
   ),
 } as const
-
-type BooleanNode = 'true' | 'false'
-const nodeIsBoolean = (node: SemanticGraph) =>
-  node === 'true' || node === 'false'
 
 const booleanNodeToBoolean = (node: BooleanNode): boolean => node === 'true'
