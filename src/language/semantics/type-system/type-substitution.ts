@@ -17,6 +17,7 @@ import {
   makeUnionType,
   matchTypeFormat,
   unionOfTypes,
+  type ApplicationType,
   type FunctionType,
   type ObjectType,
   type Type,
@@ -218,6 +219,17 @@ export const replaceAllTypeParametersWithTheirConstraints = (
         type,
       )
 
+const upperBoundOfStuckApplication = (application: ApplicationType): Type =>
+  application.function.kind === 'function' ?
+    supplyTypeArguments(
+      application.function.signature.return,
+      getTypesForTypeParameters({
+        parameterType: application.function.signature.parameter,
+        argumentType: application.argument,
+      }),
+    )
+  : replaceAllTypeParametersWithTheirConstraints(application)
+
 /**
  * Finds concrete types for the `TypeParameter`s in `parameter` by locating the
  * corresponding position for each in `argument`.
@@ -240,6 +252,11 @@ export const getTypesForTypeParameters = ({
     return getTypesForTypeParameters({
       parameterType,
       argumentType: replaceAllTypeParametersWithTheirConstraints(argumentType),
+    })
+  } else if (argumentType.kind === 'application') {
+    return getTypesForTypeParameters({
+      parameterType,
+      argumentType: upperBoundOfStuckApplication(argumentType),
     })
   } else {
     return matchTypeFormat(parameterType, {

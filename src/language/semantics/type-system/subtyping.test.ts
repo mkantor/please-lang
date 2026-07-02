@@ -191,6 +191,29 @@ typeAssignabilitySuite('application types (not assignable)', [
   [[boolean, applicationBoolean], false],
 ])
 
+typeAssignabilitySuite('stuck application in a contravariant position', [
+  // A function which can handle arbitrary booleans satisfies a consumer of an
+  // unknown specific boolean.
+  [
+    [
+      makeFunctionType({ parameter: boolean, return: something }),
+      makeFunctionType({ parameter: applicationBoolean, return: something }),
+    ],
+    true,
+  ],
+
+  [
+    [
+      makeFunctionType({
+        parameter: makeUnionType(['true']),
+        return: something,
+      }),
+      makeFunctionType({ parameter: applicationBoolean, return: something }),
+    ],
+    false,
+  ],
+])
+
 typeAssignabilitySuite('opaque type from stuck type (assignable)', [
   [[makeUnionType([applicationBoolean]), atom], true],
   [[makeUnionType([indexedAccessBoolean]), atom], true],
@@ -1314,6 +1337,32 @@ typeAssignabilitySuite('union to type parameter (assignable)', [
   // `(?a: :atom.type) | :nothing.type` is assignable to `(?a: :atom.type)`
   [[makeUnionType([extendsAnyAtom]), extendsAnyAtom], true],
 ])
+
+typeAssignabilitySuite(
+  'union with a broadly-constrained type-parameter member (assignable)',
+  [
+    [[makeUnionType([A, object]), something], true],
+    [
+      [makeUnionType([A, makeObjectType({}, { exact: true })]), something],
+      true,
+    ],
+    [
+      [
+        makeFunctionType({
+          parameter: something,
+          return: makeUnionType([A, makeObjectType({}, { exact: true })]),
+        }),
+        something,
+      ],
+      true,
+    ],
+  ],
+)
+
+typeAssignabilitySuite(
+  'union with a broadly-constrained type-parameter member (not assignable)',
+  [[[makeUnionType([A, 'x']), atom], false]],
+)
 
 typeAssignabilitySuite('union to type parameter (not assignable)', [
   // `1 | :nothing.type` is not assignable to `?a`
