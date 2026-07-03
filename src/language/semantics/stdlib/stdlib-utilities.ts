@@ -14,8 +14,8 @@ import {
   type FunctionNodeCallError,
   type FunctionNodeCallSignature,
 } from '../function-node.js'
-import { type NonEmptyKeyPath } from '../key-path.js'
-import { type ObjectNode } from '../object-node.js'
+import type { NonEmptyKeyPath } from '../key-path.js'
+import type { ObjectNode } from '../object-node.js'
 import { nodeTag } from '../semantic-graph-node-tag.js'
 import {
   containsAnyUnelaboratedNodes,
@@ -34,10 +34,10 @@ import {
   getTypesForTypeParameters,
   supplyTypeArguments,
 } from '../type-system/type-substitution.js'
-import {
-  type AnyParameter,
-  type NonEmptyParameters,
-  type Parameter,
+import type {
+  AnyParameter,
+  NonEmptyParameters,
+  Parameter,
 } from './parameters.js'
 
 const handleUnavailableDependencies =

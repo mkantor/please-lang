@@ -9,8 +9,8 @@ import {
   zeroOrMore,
   type Parser,
 } from '@matt.kantor/parsing'
+import type { OrderedRecord } from '../../ordered-record.js'
 import * as orderedRecord from '../../ordered-record.js'
-import { type OrderedRecord } from '../../ordered-record.js'
 import { arrayToMolecule, ignoredKey } from '../semantics.js'
 import {
   atom,

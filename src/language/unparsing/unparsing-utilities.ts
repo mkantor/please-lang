@@ -1,4 +1,4 @@
-import { type Either } from '@matt.kantor/either'
+import type { Either } from '@matt.kantor/either'
 import type * as util from 'node:util'
 import type { UnserializableValueError } from '../errors.js'
 import type { Atom, Molecule } from '../parsing.js'

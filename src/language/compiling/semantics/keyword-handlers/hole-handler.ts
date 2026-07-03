@@ -1,10 +1,10 @@
 import either, { type Either } from '@matt.kantor/either'
-import { type ElaborationError } from '../../../errors.js'
-import {
-  type Expression,
-  type ExpressionContext,
-  type KeywordHandler,
-  type SemanticGraph,
+import type { ElaborationError } from '../../../errors.js'
+import type {
+  Expression,
+  ExpressionContext,
+  KeywordHandler,
+  SemanticGraph,
 } from '../../../semantics.js'
 
 export const holeKeywordHandler: KeywordHandler = (

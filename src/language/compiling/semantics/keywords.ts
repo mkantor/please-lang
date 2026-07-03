@@ -1,4 +1,4 @@
-import { type KeywordHandlers } from '../../semantics.js'
+import type { KeywordHandlers } from '../../semantics.js'
 import { applyKeywordHandler } from './keyword-handlers/apply-handler.js'
 import { checkKeywordHandler } from './keyword-handlers/check-handler.js'
 import { functionKeywordHandler } from './keyword-handlers/function-handler.js'

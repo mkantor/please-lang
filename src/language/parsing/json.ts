@@ -1,4 +1,4 @@
-import { type Either } from '@matt.kantor/either'
+import type { Either } from '@matt.kantor/either'
 import {
   anySingleCharacter,
   as,
