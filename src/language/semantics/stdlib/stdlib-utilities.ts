@@ -1,5 +1,7 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
+import type { Bug, UnserializableValueError } from '../../errors.js'
+import type { Atom } from '../../parsing.js'
 import {
   keyPathToLookupExpression,
   makeApplyExpression,
@@ -8,10 +10,13 @@ import {
 } from '../../semantics.js'
 import {
   makeFunctionNode,
+  type FunctionNode,
   type FunctionNodeCallError,
   type FunctionNodeCallSignature,
 } from '../function-node.js'
 import { type NonEmptyKeyPath } from '../key-path.js'
+import { type ObjectNode } from '../object-node.js'
+import { nodeTag } from '../semantic-graph-node-tag.js'
 import {
   containsAnyUnelaboratedNodes,
   type SemanticGraph,
@@ -29,6 +34,11 @@ import {
   getTypesForTypeParameters,
   supplyTypeArguments,
 } from '../type-system/type-substitution.js'
+import {
+  type AnyParameter,
+  type NonEmptyParameters,
+  type Parameter,
+} from './parameters.js'
 
 const handleUnavailableDependencies =
   (f: FunctionNodeCallSignature) =>
@@ -68,166 +78,237 @@ export const emptyContextForStdlibApplications: ExpressionContext = {
   isExternalToProgram: true,
 }
 
-export const serializeOnceAppliedFunction =
-  (keyPath: NonEmptyKeyPath, argument: SemanticGraph) => () =>
-    either.makeRight(
-      makeApplyExpression({
-        function: keyPathToLookupExpression(keyPath),
-        argument,
-      }),
-    )
+export type PreludeFunctionBody<Parameters extends readonly AnyParameter[]> =
+  Parameters extends (
+    readonly [
+      Parameter<infer Value>,
+      ...infer RemainingParameters extends readonly AnyParameter[],
+    ]
+  ) ?
+    (
+      value: Value,
+    ) => Either<
+      FunctionNodeCallError,
+      RemainingParameters extends readonly [] ? SemanticGraph
+      : PreludeFunctionBody<RemainingParameters>
+    >
+  : never
 
-export const serializeTwiceAppliedFunction =
-  (
-    keyPath: NonEmptyKeyPath,
-    argument1: SemanticGraph,
-    argument2: SemanticGraph,
-  ) =>
-  () =>
-    either.makeRight(
-      makeApplyExpression({
-        function: makeApplyExpression({
-          function: keyPathToLookupExpression(keyPath),
-          argument: argument1,
-        }),
-        argument: argument2,
-      }),
-    )
-
-export const preludeFunctionArity1 = (
+/**
+ * Build a standard library `FunctionNode` from typed parameter descriptors, a
+ * return type, and a curried body with one fallible stage per parameter. Each
+ * stage runs as its argument arrives, so partial applications precompute.
+ */
+export const preludeFunction = <const Parameters extends NonEmptyParameters>(
   keyPath: NonEmptyKeyPath,
-  signature: FunctionType['signature'],
-  f: FunctionNodeCallSignature,
+  parameters: Parameters,
+  returnType: Type,
+  body: PreludeFunctionBody<Parameters>,
   computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
-) =>
-  makeFunctionNode(
-    liftIntrinsicSignature(
-      signature,
-      intrinsicApplicationTypeReducerArity1(f),
-      computeRefinedReturnType,
-    ),
-    () => either.makeRight(keyPathToLookupExpression(keyPath)),
-    option.none,
-    handleUnavailableDependencies(f),
-  )
-
-export const preludeFunctionArity2 = (
-  keyPath: NonEmptyKeyPath,
-  signature: {
-    readonly parameter: Type
-    readonly return: FunctionType
-  },
-  f: (
-    argument1: SemanticGraph,
-  ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>,
-  computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
-) => {
+): FunctionNode => {
+  const definition = {
+    keyPath,
+    functionName: keyPath[keyPath.length - 1] ?? keyPath[0],
+    parameters,
+    body,
+  }
   const liftedSignature = liftIntrinsicSignature(
-    signature,
-    intrinsicApplicationTypeReducerArity2(f),
+    signatureFromParameters(parameters, returnType),
+    argumentValues =>
+      either.flatMap(applyBody(definition)(argumentValues), resultValue =>
+        typeFromSemanticGraph(resultValue, { objectsAreExact: true }),
+      ),
     computeRefinedReturnType,
   )
   return makeFunctionNode(
     liftedSignature,
     () => either.makeRight(keyPathToLookupExpression(keyPath)),
     option.none,
-    handleUnavailableDependencies(argument1 =>
-      either.flatMap(
-        refineReturnedFunctionType(
-          liftedSignature.parameter,
-          liftedSignature.return,
-          argument1,
-        ),
-        refinedReturn =>
-          either.map(f(argument1), f1 =>
-            makeFunctionNode(
-              refinedReturn.signature,
-              serializeOnceAppliedFunction(keyPath, argument1),
-              option.none,
-              handleUnavailableDependencies(f1),
-            ),
-          ),
-      ),
+    handleUnavailableDependencies(
+      acceptArgument(definition)({
+        remainingParameters: parameters,
+        argumentsSoFar: [],
+        signature: liftedSignature,
+        stage: definition.body,
+      }),
     ),
   )
 }
 
-export const preludeFunctionArity3 = (
-  keyPath: NonEmptyKeyPath,
-  signature: {
-    readonly parameter: Type
-    readonly return: FunctionType & {
-      readonly signature: {
-        readonly parameter: Type
-        readonly return: FunctionType
-      }
-    }
-  },
-  f: (
-    argument1: SemanticGraph,
-  ) => Either<
-    FunctionNodeCallError,
-    (
-      argument2: SemanticGraph,
-    ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>
-  >,
-  computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
-) => {
-  const liftedSignature = liftIntrinsicSignature(
-    signature,
-    intrinsicApplicationTypeReducerArity3(f),
-    computeRefinedReturnType,
-  )
-  return makeFunctionNode(
-    liftedSignature,
-    () => either.makeRight(keyPathToLookupExpression(keyPath)),
-    option.none,
-    handleUnavailableDependencies(argument1 =>
-      either.flatMap(
-        refineReturnedFunctionType(
-          liftedSignature.parameter,
-          liftedSignature.return,
-          argument1,
-        ),
-        refinedReturn1 =>
-          either.map(f(argument1), f1 =>
-            makeFunctionNode(
-              refinedReturn1.signature,
-              serializeOnceAppliedFunction(keyPath, argument1),
-              option.none,
-              handleUnavailableDependencies(argument2 =>
-                either.flatMap(
-                  refinedReturn1.signature.return.kind === 'function' ?
+type BodyStage = (
+  value: SemanticGraph,
+) => Either<FunctionNodeCallError, SemanticGraph | BodyStage>
+
+type PreludeFunctionDefinition = {
+  readonly keyPath: NonEmptyKeyPath
+  readonly functionName: Atom
+  readonly parameters: NonEmptyParameters
+  readonly body: BodyStage
+}
+
+const signatureFromParameters = (
+  parameters: NonEmptyParameters,
+  returnType: Type,
+): FunctionType['signature'] => {
+  const [firstParameter, ...restParameters] = parameters
+  return {
+    parameter: firstParameter.type,
+    return: restParameters.reduceRight(
+      (returnSoFar, parameter) =>
+        makeFunctionType({ parameter: parameter.type, return: returnSoFar }),
+      returnType,
+    ),
+  }
+}
+
+const asNextStage = (
+  result: SemanticGraph | BodyStage,
+): Either<Bug, BodyStage> =>
+  typeof result === 'function' && !(nodeTag in result) ?
+    either.makeRight(result)
+  : either.makeLeft({
+      kind: 'bug',
+      message:
+        'a standard library function produced a final result while parameters remained',
+    })
+
+const asFinalResult = (
+  result: SemanticGraph | BodyStage,
+): Either<Bug, SemanticGraph> =>
+  typeof result === 'function' && !(nodeTag in result) ?
+    either.makeLeft({
+      kind: 'bug',
+      message:
+        'a standard library function produced another function after its last parameter',
+    })
+  : either.makeRight(result)
+
+// Applies every stage at once, on behalf of intrinsic type reduction.
+const applyBody =
+  (definition: PreludeFunctionDefinition) =>
+  (
+    argumentValues: readonly SemanticGraph[],
+  ): Either<FunctionNodeCallError, SemanticGraph> =>
+    either.flatMap(
+      definition.parameters.reduce<
+        Either<FunctionNodeCallError, SemanticGraph | BodyStage>
+      >(
+        (resultSoFar, parameter, index) =>
+          either.flatMap(resultSoFar, result =>
+            either.flatMap(asNextStage(result), stage => {
+              const argumentValue = argumentValues[index]
+              return argumentValue === undefined ?
+                  either.makeLeft({
+                    kind: 'bug',
+                    message: "argument list didn't contain enough arguments",
+                  })
+                : either.flatMap(
+                    parseArgument(
+                      definition.functionName,
+                      parameter,
+                      argumentValue,
+                    ),
+                    stage,
+                  )
+            }),
+          ),
+        either.makeRight(definition.body),
+      ),
+      asFinalResult,
+    )
+
+const parseArgument = (
+  functionName: Atom,
+  parameter: AnyParameter,
+  argument: SemanticGraph,
+): Either<FunctionNodeCallError, SemanticGraph> =>
+  option.match(parameter.asExpected(argument), {
+    none: _ =>
+      either.makeLeft({
+        kind: 'typeMismatch',
+        message: `\`${functionName}\` expected ${parameter.expected}`,
+      }),
+    some: either.makeRight,
+  })
+
+type PartialApplicationState = {
+  readonly remainingParameters: readonly AnyParameter[]
+  // Arguments accepted so far, kept for serializing partial applications.
+  readonly argumentsSoFar: readonly SemanticGraph[]
+  // The signature of the function which will receive the next argument.
+  readonly signature: FunctionType['signature']
+  // The body stage which will receive the next argument.
+  readonly stage: BodyStage
+}
+
+/**
+ * Accept a single argument of a (possibly partially-applied) standard library
+ * function, validating it and running the pending body stage to produce either
+ * the next partial application (with a refined signature) or the final result.
+ */
+const acceptArgument =
+  (definition: PreludeFunctionDefinition) =>
+  (state: PartialApplicationState) =>
+  (argument: SemanticGraph): Either<FunctionNodeCallError, SemanticGraph> => {
+    const [parameter, ...restParameters] = state.remainingParameters
+    if (parameter === undefined) {
+      return either.makeLeft({
+        kind: 'bug',
+        message:
+          'a standard library function was applied with no parameters remaining',
+      })
+    } else {
+      return either.flatMap(
+        parseArgument(definition.functionName, parameter, argument),
+        validArgument =>
+          either.flatMap(state.stage(validArgument), stageResult => {
+            const argumentsSoFar: readonly SemanticGraph[] = [
+              ...state.argumentsSoFar,
+              validArgument,
+            ]
+            return restParameters.length === 0 ?
+                asFinalResult(stageResult)
+              : either.flatMap(asNextStage(stageResult), nextStage =>
+                  either.map(
                     refineReturnedFunctionType(
-                      refinedReturn1.signature.parameter,
-                      refinedReturn1.signature.return,
-                      argument2,
-                    )
-                  : either.makeLeft({
-                      kind: 'bug',
-                      message: `supplying type arguments in an arity-3 standard library function somehow transformed its first return type into a ${refinedReturn1.signature.return.kind} type (it should be a function type)`,
-                    }),
-                  refinedReturn2 =>
-                    either.map(f1(argument2), f2 =>
+                      state.signature.parameter,
+                      state.signature.return,
+                      argument,
+                    ),
+                    refinedReturn =>
                       makeFunctionNode(
-                        refinedReturn2.signature,
-                        serializeTwiceAppliedFunction(
-                          keyPath,
-                          argument1,
-                          argument2,
+                        refinedReturn.signature,
+                        serializeAppliedFunction(
+                          definition.keyPath,
+                          argumentsSoFar,
                         ),
                         option.none,
-                        handleUnavailableDependencies(f2),
+                        handleUnavailableDependencies(
+                          acceptArgument(definition)({
+                            remainingParameters: restParameters,
+                            argumentsSoFar,
+                            signature: refinedReturn.signature,
+                            stage: nextStage,
+                          }),
+                        ),
                       ),
-                    ),
-                ),
-              ),
-            ),
-          ),
+                  ),
+                )
+          }),
+      )
+    }
+  }
+
+const serializeAppliedFunction =
+  (keyPath: NonEmptyKeyPath, argumentsSoFar: readonly SemanticGraph[]) =>
+  (): Either<UnserializableValueError, ObjectNode> =>
+    either.makeRight(
+      argumentsSoFar.reduce<ObjectNode>(
+        (functionSoFar, argument) =>
+          makeApplyExpression({ function: functionSoFar, argument }),
+        keyPathToLookupExpression(keyPath),
       ),
-    ),
-  )
-}
+    )
 
 const synthesizeTypeParameterName = (index: number) => {
   if (index < 0 || !Number.isInteger(index)) {
@@ -238,95 +319,6 @@ const synthesizeTypeParameterName = (index: number) => {
     return String.fromCharCode((index % 26) + 97).concat(suffix)
   }
 }
-
-// The reducers below apply an intrinsic function (`f`) to concrete argument
-// values, lifting the result back to a type. This lets
-// `IntrinsicApplicationType`s reduce via the same code that evaluates values.
-// Returned object types are exact because they describe actual values produced
-// by `f`.
-
-const intrinsicApplicationTypeReducerArity1 =
-  (f: FunctionNodeCallSignature) =>
-  (
-    argumentValues: readonly SemanticGraph[],
-  ): Either<FunctionNodeCallError, Type> => {
-    const [argument] = argumentValues
-    return argument === undefined ?
-        either.makeLeft({
-          kind: 'bug',
-          message: "argument list didn't contain enough arguments",
-        })
-      : either.flatMap(
-          f(argument, emptyContextForStdlibApplications),
-          resultValue =>
-            typeFromSemanticGraph(resultValue, {
-              objectsAreExact: true,
-            }),
-        )
-  }
-
-const intrinsicApplicationTypeReducerArity2 =
-  (
-    f: (
-      argument1: SemanticGraph,
-    ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>,
-  ) =>
-  (
-    argumentValues: readonly SemanticGraph[],
-  ): Either<FunctionNodeCallError, Type> => {
-    const [argument1, argument2] = argumentValues
-    return argument1 === undefined || argument2 === undefined ?
-        either.makeLeft({
-          kind: 'bug',
-          message: "argument list didn't contain enough arguments",
-        })
-      : either.flatMap(
-          either.flatMap(f(argument1), f1 =>
-            f1(argument2, emptyContextForStdlibApplications),
-          ),
-          resultValue =>
-            typeFromSemanticGraph(resultValue, {
-              objectsAreExact: true,
-            }),
-        )
-  }
-
-const intrinsicApplicationTypeReducerArity3 =
-  (
-    f: (
-      argument1: SemanticGraph,
-    ) => Either<
-      FunctionNodeCallError,
-      (
-        argument2: SemanticGraph,
-      ) => Either<FunctionNodeCallError, FunctionNodeCallSignature>
-    >,
-  ) =>
-  (
-    argumentValues: readonly SemanticGraph[],
-  ): Either<FunctionNodeCallError, Type> => {
-    const [argument1, argument2, argument3] = argumentValues
-    return (
-        argument1 === undefined ||
-          argument2 === undefined ||
-          argument3 === undefined
-      ) ?
-        either.makeLeft({
-          kind: 'bug',
-          message: "argument list didn't contain enough arguments",
-        })
-      : either.flatMap(
-          either.flatMap(f(argument1), f1 =>
-            either.flatMap(f1(argument2), f2 =>
-              f2(argument3, emptyContextForStdlibApplications),
-            ),
-          ),
-          resultValue =>
-            typeFromSemanticGraph(resultValue, {
-              objectsAreExact: true,
-            }),
-        )
-  }
 
 type SignatureParts = {
   // The constraint at each curried parameter position, in application order.

@@ -2,23 +2,16 @@ import either from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { isFunctionNode } from '../function-node.js'
-import { isSemanticGraph } from '../is-semantic-graph.js'
-import {
-  isObjectNode,
-  lookupPropertyOfObjectNode,
-  type ObjectNode,
-} from '../object-node.js'
+import { lookupPropertyOfObjectNode } from '../object-node.js'
 import {
   stringifySemanticGraphForEndUser,
   stringifyTypeForEndUser,
-  type SemanticGraph,
 } from '../semantic-graph.js'
 import { isAssignable, types } from '../type-system.js'
 import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
   makeFunctionType,
-  makeObjectType,
   makeTypeParameter,
   matchTypeFormat,
   unionOfTypes,
@@ -29,26 +22,19 @@ import {
   applyTypeToArgumentType,
 } from '../type-system/type-substitution.js'
 import {
+  anyValue,
+  functionParameter,
+  objectParameter,
+  taggedParameter,
+} from './parameters.js'
+import {
   emptyContextForStdlibApplications,
-  preludeFunctionArity1,
-  preludeFunctionArity2,
-  preludeFunctionArity3,
+  preludeFunction,
 } from './stdlib-utilities.js'
 
 const A = makeTypeParameter('a', { assignableTo: types.something })
 const B = makeTypeParameter('b', { assignableTo: types.something })
 const C = makeTypeParameter('c', { assignableTo: types.something })
-
-type TaggedNode = ObjectNode & {
-  readonly tag: Atom
-  readonly value: SemanticGraph
-}
-const nodeIsTagged = (node: SemanticGraph): node is TaggedNode =>
-  isObjectNode(node) &&
-  node['tag'] !== undefined &&
-  (typeof node['tag'] === 'string' ||
-    (isSemanticGraph(node['tag']) && typeof node['tag'] === 'string')) &&
-  node['value'] !== undefined
 
 /**
  * Computes the upper bound of `match`'s return type, which is the union of each
@@ -86,46 +72,28 @@ const computeMatchReturnType = (parameterTypes: readonly Type[]): Type => {
 }
 
 export const globalFunctions = {
-  identity: preludeFunctionArity1(
-    ['identity'],
-    { parameter: A, return: A },
-    either.makeRight,
-  ),
+  identity: preludeFunction(['identity'], [anyValue(A)], A, either.makeRight),
 
   // a ~> ((a ~> b) ~> b)
-  apply: preludeFunctionArity2(
+  apply: preludeFunction(
     ['apply'],
-    {
-      parameter: A,
-      return: makeFunctionType({
-        parameter: makeFunctionType({ parameter: A, return: B }),
-        return: B,
-      }),
-    },
+    [
+      anyValue(A),
+      functionParameter(makeFunctionType({ parameter: A, return: B })),
+    ],
+    B,
     argument =>
-      either.makeRight(functionToApply => {
-        if (!isFunctionNode(functionToApply)) {
-          return either.makeLeft({
-            kind: 'typeMismatch',
-            message: '`apply` expected a function',
-          })
-        } else {
-          return functionToApply(argument, emptyContextForStdlibApplications)
-        }
-      }),
+      either.makeRight(functionToApply =>
+        functionToApply(argument, emptyContextForStdlibApplications),
+      ),
   ),
 
   // a ~> something ~> a
   // terminates with a `typeMismatch` error the value doesn't typecheck
-  assume: preludeFunctionArity2(
+  assume: preludeFunction(
     ['assume'],
-    {
-      parameter: A,
-      return: makeFunctionType({
-        parameter: types.something,
-        return: A,
-      }),
-    },
+    [anyValue(A), anyValue(types.something)],
+    A,
     type =>
       either.makeRight(value =>
         either.flatMap(
@@ -133,124 +101,62 @@ export const globalFunctions = {
           valueAsType =>
             either.flatMap(
               typeFromSemanticGraph(type, { objectsAreExact: false }),
-              typeAsType => {
-                if (
-                  isAssignable({
-                    source: valueAsType,
-                    target: typeAsType,
-                  })
-                ) {
-                  return either.makeRight(value)
-                } else {
-                  return either.makeLeft({
+              typeAsType =>
+                isAssignable({ source: valueAsType, target: typeAsType }) ?
+                  either.makeRight(value)
+                : either.makeLeft({
                     kind: 'typeMismatch',
                     message: `the value \`${stringifySemanticGraphForEndUser(
                       value,
                     )}\` is not assignable to the type \`${stringifyTypeForEndUser(typeAsType)}\``,
-                  })
-                }
-              },
+                  }),
             ),
         ),
       ),
   ),
 
   // (b ~> c) ~> (a ~> b) ~> (a ~> c)
-  flow: preludeFunctionArity3(
+  flow: preludeFunction(
     ['flow'],
-    {
-      parameter: makeFunctionType({
-        parameter: B,
-        return: C,
-      }),
-      return: makeFunctionType({
-        parameter: makeFunctionType({
-          parameter: A,
-          return: B,
-        }),
-        return: makeFunctionType({
-          parameter: A,
-          return: C,
-        }),
-      }),
-    },
-    secondFunction => {
-      if (!isFunctionNode(secondFunction)) {
-        return either.makeLeft({
-          kind: 'typeMismatch',
-          message: '`flow` expected a function',
-        })
-      } else {
-        return either.makeRight(firstFunction => {
-          if (!isFunctionNode(firstFunction)) {
-            return either.makeLeft({
-              kind: 'typeMismatch',
-              message: '`flow` expected a function',
-            })
-          } else {
-            return either.makeRight(firstArgument =>
-              either.flatMap(
-                firstFunction(firstArgument, emptyContextForStdlibApplications),
-                secondArgument =>
-                  secondFunction(
-                    secondArgument,
-                    emptyContextForStdlibApplications,
-                  ),
-              ),
-            )
-          }
-        })
-      }
-    },
+    [
+      functionParameter(makeFunctionType({ parameter: B, return: C })),
+      functionParameter(makeFunctionType({ parameter: A, return: B })),
+      anyValue(A),
+    ],
+    C,
+    secondFunction =>
+      either.makeRight(firstFunction =>
+        either.makeRight(firstArgument =>
+          either.flatMap(
+            firstFunction(firstArgument, emptyContextForStdlibApplications),
+            secondArgument =>
+              secondFunction(secondArgument, emptyContextForStdlibApplications),
+          ),
+        ),
+      ),
   ),
 
-  match: preludeFunctionArity2(
+  // TODO: Tighten this up, rejecting:
+  //  - Non-exhaustive cases.
+  //  - Case functions with incorrect parameter types.
+  match: preludeFunction(
     ['match'],
-    {
-      // TODO: Tighten this up, rejecting:
-      //  - Non-exhaustive cases.
-      //  - Case functions with incorrect parameter types.
-      parameter: types.object,
-      return: makeFunctionType({
-        parameter: makeObjectType({
-          tag: types.atom,
-          value: types.something,
+    [objectParameter, taggedParameter],
+    types.something,
+    cases =>
+      either.makeRight(argument =>
+        option.match(lookupPropertyOfObjectNode(argument.tag, cases), {
+          none: _ =>
+            either.makeLeft({
+              kind: 'panic',
+              message: `case for tag '${argument.tag}' was not defined`,
+            }),
+          some: relevantCase =>
+            isFunctionNode(relevantCase) ?
+              relevantCase(argument.value, emptyContextForStdlibApplications)
+            : either.makeRight(relevantCase),
         }),
-        return: types.something,
-      }),
-    },
-    cases => {
-      if (!isObjectNode(cases)) {
-        return either.makeLeft({
-          kind: 'typeMismatch',
-          message: '`match` cases must be an object',
-        })
-      } else {
-        return either.makeRight(argument => {
-          if (!nodeIsTagged(argument)) {
-            return either.makeLeft({
-              kind: 'typeMismatch',
-              message: '`match` argument was not tagged',
-            })
-          } else {
-            const relevantCase = lookupPropertyOfObjectNode(argument.tag, cases)
-            if (option.isNone(relevantCase)) {
-              return either.makeLeft({
-                kind: 'panic',
-                message: `case for tag '${argument.tag}' was not defined`,
-              })
-            } else {
-              return !isFunctionNode(relevantCase.value) ?
-                  either.makeRight(relevantCase.value)
-                : relevantCase.value(
-                    argument.value,
-                    emptyContextForStdlibApplications,
-                  )
-            }
-          }
-        })
-      }
-    },
+      ),
     computeMatchReturnType,
   ),
 } as const

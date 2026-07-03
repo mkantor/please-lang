@@ -1,17 +1,16 @@
 import either from '@matt.kantor/either'
 import { types } from '../type-system.js'
+import { anyValue } from './parameters.js'
 import { computeIsReturnType } from './return-type-refiners.js'
-import { preludeFunctionArity1 } from './stdlib-utilities.js'
+import { preludeFunction } from './stdlib-utilities.js'
 
 export const something = {
   type: types.somethingTypeSymbol,
 
-  is: preludeFunctionArity1(
+  is: preludeFunction(
     ['something', 'is'],
-    {
-      parameter: types.something,
-      return: types.boolean,
-    },
+    [anyValue(types.something)],
+    types.boolean,
     _ => either.makeRight('true'),
     computeIsReturnType(types.something),
   ),
