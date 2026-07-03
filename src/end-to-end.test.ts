@@ -637,6 +637,12 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success({ tag: 'some', value: 'value' }),
   ],
   [
+    `((code: :atom.type) =>
+      ({ en: Hello, es: Hola } object.lookup :code option.get_or_else Hi) ~ :atom.type
+    )(es)`,
+    success('Hola'),
+  ],
+  [
     // Lookups should never target keyword expression properties.
     `{
       {

@@ -1,5 +1,5 @@
 import either from '@matt.kantor/either'
-import option from '@matt.kantor/option'
+import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import {
   isObjectNode,
@@ -12,10 +12,8 @@ import {
   makeObjectType,
   makeUnionType,
   unionOfTypes,
-  type ObjectType,
   type Type,
 } from '../type-system/type-formats.js'
-import { applyKeyPathToType } from '../type-system/type-substitution.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
@@ -80,50 +78,96 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
   }
 }
 
-const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
-  const [keyType, objectType] = parameterTypes
-  if (keyType === undefined || objectType === undefined) {
-    throw new Error(
-      '`lookup` function did not receive two arguments. This is a bug!',
-    )
-  } else {
-    // TODO: Consider also supporting type parameters/stuck types via their
-    // upper bounds.
-    return keyType.kind === 'union' && objectType.kind === 'object' ?
-        option.match(asUnionWithLiteralAtomMembers(keyType), {
-          none: _ => types.option(types.something),
-          some: keys => {
-            const keysAsArray = [...keys.members]
-            return keysAsArray.length === 1 && keysAsArray[0] !== undefined ?
-                lookupReturnForKey(keysAsArray[0], objectType)
-              : types.option(types.something)
+/**
+ * The type of `lookup`'s result given every property value the key could
+ * possibly select. The `some` member is omitted when no value is selectable,
+ * and the `none` member is omitted when the key definitely selects a value.
+ */
+const lookupReturnType = ({
+  possibleValueTypes,
+  mayBeNone,
+}: {
+  readonly possibleValueTypes: readonly Type[]
+  readonly mayBeNone: boolean
+}): Type =>
+  unionOfTypes([
+    ...(possibleValueTypes.length === 0 ?
+      []
+    : [
+        makeObjectType(
+          {
+            tag: makeUnionType(['some']),
+            value: unionOfTypes(possibleValueTypes),
           },
-        })
-      : types.option(types.something)
-  }
-}
-
-// `lookup(key)(object)` returns `some(object[key])` when the key is definitely
-// present, `none` when it is definitely absent (an `exact` object lacking it),
-// or an `option` otherwise (the key may be an excess property).
-const lookupReturnForKey = (key: Atom, objectType: ObjectType): Type => {
-  const valueType = applyKeyPathToType(objectType, [key])
-  return (
-    valueType.kind === 'union' && valueType.members.size === 0 ?
-      objectType.exact ?
+          { exact: true },
+        ),
+      ]),
+    ...(mayBeNone ?
+      [
         makeObjectType(
           {
             tag: makeUnionType(['none']),
             value: makeObjectType({}, { exact: true }),
           },
           { exact: true },
-        )
-      : types.option(types.something)
-    : makeObjectType(
-        { tag: makeUnionType(['some']), value: valueType },
-        { exact: true },
-      )
-  )
+        ),
+      ]
+    : []),
+  ])
+
+/**
+ * Literal atoms the key could be at runtime (when statically enumerable).
+ */
+const literalLookupKeyCandidates = (
+  keyType: Type,
+): Option<ReadonlySet<Atom>> =>
+  keyType.kind === 'union' ?
+    option.map(asUnionWithLiteralAtomMembers(keyType), union => union.members)
+  : keyType.kind === 'parameter' ?
+    literalLookupKeyCandidates(keyType.constraint.assignableTo)
+  : option.none
+
+// `lookup(key)(object)` returns `some(object[key])` when the key is definitely
+// present, `none` when definitely absent (e.g. an `exact` object lacking it),
+// otherwise a union covering all possible outcomes.
+const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
+  const [keyType, objectType] = parameterTypes
+  if (keyType === undefined || objectType === undefined) {
+    throw new Error(
+      '`lookup` function did not receive two arguments. This is a bug!',
+    )
+  } else if (objectType.kind !== 'object') {
+    // TODO: Consider also supporting stuck/type-parameter object types via
+    // their upper bounds.
+    return types.option(types.something)
+  } else {
+    return option.match(literalLookupKeyCandidates(keyType), {
+      some: possibleKeys => {
+        const presentValueTypes = [...possibleKeys].flatMap(key => {
+          const valueType = objectType.children[key]
+          return valueType === undefined ? [] : [valueType]
+        })
+        const someKeyMayBeAbsent =
+          presentValueTypes.length !== possibleKeys.size
+        return someKeyMayBeAbsent && !objectType.exact ?
+            // The key may exist as an excess property (with an unknown type).
+            types.option(types.something)
+          : lookupReturnType({
+              possibleValueTypes: presentValueTypes,
+              mayBeNone: someKeyMayBeAbsent,
+            })
+      },
+      none: _ =>
+        objectType.exact ?
+          // Whatever the key turns out to be, it can only select one of the
+          // object's own property values (or nothing).
+          lookupReturnType({
+            possibleValueTypes: Object.values(objectType.children),
+            mayBeNone: true,
+          })
+        : types.option(types.something),
+    })
+  }
 }
 
 export const object = {
