@@ -58,6 +58,7 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
       ]),
     ),
   ],
+
   [
     'a => b => c',
     either.makeRight(
