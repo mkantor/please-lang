@@ -154,7 +154,16 @@ export const applyKeyPathToType = (
         }
       },
       indexedAccess: type =>
-        applyKeyPathToType(type.object, [firstKey, ...remainingKeyPath]),
+        // As with other stuck types, indexing stays stuck while the key path is
+        // valid for the upper bound. Otherwise the property doesn't exist.
+        option.map(
+          applyKeyPathToType(
+            replaceAllTypeParametersWithTheirConstraints(type),
+            keyPath,
+          ),
+          _typeAtKeyPathInUpperBound =>
+            nestedIndexedAccess(type, [firstKey, ...remainingKeyPath]),
+        ),
       opaque: _type => option.none,
       parameter: type => {
         if (typeof firstKey === 'string') {
