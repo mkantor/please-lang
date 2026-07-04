@@ -2300,4 +2300,52 @@ testCases(
       assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
+
+  [
+    `{
+      f: (key: :atom.type) => (x: :integer.type) =>
+        :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
+          { tag: some, value: @union { :integer.type, hello } },
+          { tag: none, value: {} }
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (key: :atom.type) => (x: :integer.type) =>
+        :object.lookup(:key)({ a: :x }) ~ { tag: some, value: :integer.type }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (o: { a: hello }) => (key: :atom.type) =>
+        :object.lookup(:key)(:o) ~ { tag: some, value: hello }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (key: @union { a, c }) => (x: :integer.type) =>
+        :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
+          { tag: some, value: :integer.type },
+          { tag: none, value: {} }
+        }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
 ])
