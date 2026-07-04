@@ -52,12 +52,11 @@ const computeMatchReturnType = (parameterTypes: readonly Type[]): Type => {
     return option.match(
       option.flatMap(enumerateTaggedVariants(matcheeType), variants =>
         option.sequence(
-          variants.map(({ tag, value }) => {
-            const caseType = applyKeyPathToType(casesType, [tag])
-            return caseType.kind === 'union' && caseType.members.size === 0 ?
-                option.none
-              : applyTypeToArgumentType(caseType, value)
-          }),
+          variants.map(({ tag, value }) =>
+            option.flatMap(applyKeyPathToType(casesType, [tag]), caseType =>
+              applyTypeToArgumentType(caseType, value),
+            ),
+          ),
         ),
       ),
       {

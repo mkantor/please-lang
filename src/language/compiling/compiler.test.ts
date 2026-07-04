@@ -1201,6 +1201,36 @@ testCases(
   ],
 
   [
+    `{ a: :nothing.type }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `(x: :nothing.type) => :x`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `_ => (@panic).x`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(x: :nothing.type) => :x.x`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `{ obj: { a: 1, b: 2 }, get: (key: a | b) => :obj.:key ~ (1 | 2) }`,
     result => {
       assert(either.isRight(result))

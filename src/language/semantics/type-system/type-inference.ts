@@ -18,6 +18,7 @@ import {
   readPanicExpression,
   readRuntimeExpression,
   readUnionExpression,
+  stringifyTypeForEndUser,
   type ExpressionContext,
   type FunctionParameterTypeInfo,
   type KeyPath,
@@ -47,6 +48,7 @@ import {
 } from './type-formats.js'
 import {
   functionParameterKey,
+  stringifyTypeKeyPathForEndUser,
   stringifyTypeKeyPathForInternalUse,
   typeKeyPathFromObjectNode,
 } from './type-key-path.js'
@@ -257,7 +259,7 @@ const inferTypeImplementation = (
           descendantContext(['1', 'object']),
         ),
         objectType =>
-          either.map(
+          either.flatMap(
             typeKeyPathFromObjectNode(
               query,
               descendantContext(['1', 'query']),
@@ -269,7 +271,19 @@ const inferTypeImplementation = (
                   context,
                 ),
             ),
-            keyPath => applyKeyPathToType(objectType, keyPath),
+            keyPath =>
+              option.match(applyKeyPathToType(objectType, keyPath), {
+                none: _ =>
+                  either.makeLeft({
+                    kind: 'typeMismatch',
+                    message: `property \`${stringifyTypeKeyPathForEndUser(
+                      keyPath,
+                    )}\` does not exist on type \`${stringifyTypeForEndUser(
+                      objectType,
+                    )}\``,
+                  }),
+                some: either.makeRight,
+              }),
           ),
       ),
     )

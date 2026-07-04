@@ -13,6 +13,9 @@ import {
   ignoredKey,
   isExpression,
   isSemanticGraph,
+  makeIndexExpression,
+  makeLookupExpression,
+  objectNodeFromOrderedEntries,
   readApplyExpression,
   readFunctionExpression,
   readHoleExpression,
@@ -588,37 +591,46 @@ const unparseSugaredUnion = (
   const { openGroupingParenthesis, closeGroupingParenthesis, unionBar } =
     punctuation(styleText)
 
-  // Unparse each member, adding parentheses when needed.
-  return Object.values(expression[1]).reduce(
-    (unparsedUnion: Either<UnserializableValueError, string>, member) =>
-      either.flatMap(unparsedUnion, unionAsString =>
-        either.map(
-          either.flatMap(
-            serializeIfNeeded(member),
-            unparseAtomOrMolecule(semanticContext),
-          ),
-          memberAsString => {
-            const possiblyParenthesizedMember =
-              isNonCompactExpression(member) ?
-                openGroupingParenthesis.concat(
-                  memberAsString,
-                  closeGroupingParenthesis,
-                )
-              : memberAsString
+  const members = Object.values(expression[1])
 
-            return unionAsString === '' ?
-                possiblyParenthesizedMember
-              : unionAsString.concat(
-                  ' ',
-                  unionBar,
-                  ' ',
-                  possiblyParenthesizedMember,
-                )
-          },
+  if (members.length === 0) {
+    return unparseSugaredIndex(getBottomTypeAsSemanticGraph(), {
+      unparseAtomOrMolecule,
+      semanticContext,
+    })
+  } else {
+    // Unparse each member, adding parentheses when needed.
+    return members.reduce(
+      (unparsedUnion: Either<UnserializableValueError, string>, member) =>
+        either.flatMap(unparsedUnion, unionAsString =>
+          either.map(
+            either.flatMap(
+              serializeIfNeeded(member),
+              unparseAtomOrMolecule(semanticContext),
+            ),
+            memberAsString => {
+              const possiblyParenthesizedMember =
+                isNonCompactExpression(member) ?
+                  openGroupingParenthesis.concat(
+                    memberAsString,
+                    closeGroupingParenthesis,
+                  )
+                : memberAsString
+
+              return unionAsString === '' ?
+                  possiblyParenthesizedMember
+                : unionAsString.concat(
+                    ' ',
+                    unionBar,
+                    ' ',
+                    possiblyParenthesizedMember,
+                  )
+            },
+          ),
         ),
-      ),
-    either.makeRight(''),
-  )
+      either.makeRight(''),
+    )
+  }
 }
 
 const unparseSugaredGeneralizedKeywordExpression = (
@@ -711,3 +723,9 @@ const isNonCompactExpression = (expression: SemanticGraph | Molecule) =>
       readInfixOperation,
     ),
   )
+
+const getBottomTypeAsSemanticGraph = () =>
+  makeIndexExpression({
+    object: makeLookupExpression('nothing'),
+    query: objectNodeFromOrderedEntries([['0', 'type']]),
+  })

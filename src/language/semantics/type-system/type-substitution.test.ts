@@ -50,7 +50,10 @@ const applyKeyPathSuite = testCases(
   // dynamically refer to function parameters/returns). If that changes, this
   // will need to be updated.
   ([type, keyPath]: [type: Type, keyPath: KeyPath]) =>
-    stringifyTypeForEndUser(applyKeyPathToType(type, keyPath)),
+    optionAdt.match(applyKeyPathToType(type, keyPath), {
+      none: _ => '(none)',
+      some: stringifyTypeForEndUser,
+    }),
   ([type, keyPath]) =>
     `applying key path \`${stringifyKeyPathForEndUser(keyPath)}\` to \`${stringifyTypeForEndUser(type)}\``,
 )
@@ -80,7 +83,7 @@ applyKeyPathSuite('applyKeyPathToType with object types', [
     [makeObjectType({ a: atom, b: integer }), ['b']],
     stringifyTypeForEndUser(integer),
   ],
-  [[makeObjectType({ a: atom }), ['z']], stringifyTypeForEndUser(nothing)],
+  [[makeObjectType({ a: atom }), ['z']], '(none)'],
   [
     [
       makeObjectType({
@@ -90,17 +93,14 @@ applyKeyPathSuite('applyKeyPathToType with object types', [
     ],
     stringifyTypeForEndUser(makeUnionType(['hello'])),
   ],
-  [[makeObjectType({ a: atom }), ['a', 'b']], stringifyTypeForEndUser(nothing)],
+  [[makeObjectType({ a: atom }), ['a', 'b']], '(none)'],
 ])
 
 applyKeyPathSuite('applyKeyPathToType with non-object types', [
-  [
-    [makeFunctionType({ parameter: atom, return: something }), ['a']],
-    stringifyTypeForEndUser(nothing),
-  ],
-  [[atom, ['a']], stringifyTypeForEndUser(nothing)],
-  [[integer, ['a']], stringifyTypeForEndUser(nothing)],
-  [[A, ['a']], stringifyTypeForEndUser(nothing)],
+  [[makeFunctionType({ parameter: atom, return: something }), ['a']], '(none)'],
+  [[atom, ['a']], '(none)'],
+  [[integer, ['a']], '(none)'],
+  [[A, ['a']], '(none)'],
 ])
 
 applyKeyPathSuite('applyKeyPathToType with union types', [
@@ -119,14 +119,14 @@ applyKeyPathSuite('applyKeyPathToType with union types', [
       makeUnionType([makeObjectType({ a: makeUnionType(['x']) }), 'some_atom']),
       ['a'],
     ],
-    stringifyTypeForEndUser(nothing),
+    '(none)',
   ],
   [
     [
       makeUnionType([makeObjectType({ b: atom }), makeObjectType({ c: atom })]),
       ['a'],
     ],
-    stringifyTypeForEndUser(nothing),
+    '(none)',
   ],
   [
     [
@@ -136,7 +136,23 @@ applyKeyPathSuite('applyKeyPathToType with union types', [
       ]),
       ['a'],
     ],
-    stringifyTypeForEndUser(nothing),
+    '(none)',
+  ],
+])
+
+applyKeyPathSuite('applyKeyPathToType with bottom types', [
+  [[makeObjectType({ a: nothing }), ['a']], stringifyTypeForEndUser(nothing)],
+  [[makeObjectType({ a: nothing }), ['a', 'b']], '(none)'],
+  [[nothing, ['a']], '(none)'],
+  [
+    [
+      makeUnionType([
+        makeObjectType({ a: nothing }),
+        makeObjectType({ a: atom }),
+      ]),
+      ['a'],
+    ],
+    stringifyTypeForEndUser(atom),
   ],
 ])
 
