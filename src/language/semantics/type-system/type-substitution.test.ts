@@ -202,6 +202,11 @@ applyKeyPathSuite('applyKeyPathToType with indexed access types', [
   ],
 ])
 
+applyKeyPathSuite('applyKeyPathToType with degenerate stuck types', [
+  [[makeApplicationType(atom, atom, new Set()), ['x']], '(none)'],
+  [[makeIndexedAccessType(makeObjectType({ x: atom }), atom), ['x']], '(none)'],
+])
+
 const getTypesForTypeParametersSuite = testCases(
   ([parameterType, argumentType]: readonly [
     parameterType: Type,

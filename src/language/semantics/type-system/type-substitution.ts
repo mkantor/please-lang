@@ -18,6 +18,8 @@ import {
   unionOfTypes,
   type ApplicationType,
   type FunctionType,
+  type IndexedAccessType,
+  type IntrinsicApplicationType,
   type ObjectType,
   type Type,
   type TypeParameter,
@@ -78,38 +80,26 @@ export const applyKeyPathToType = (
       }
     }
   } else {
+    // Indexing into a stuck type stays stuck, provided the key path is valid
+    // for the type's upper bound (which accounts for every type the stuck
+    // type could resolve to). Otherwise the property definitely doesn't
+    // exist. If the upper bound is itself still stuck, no progress can be
+    // made and the property can't be confirmed to exist.
+    const applyKeyPathToStuckType = (
+      stuckType: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
+    ): Option<Type> => {
+      const upperBound = replaceAllTypeParametersWithTheirConstraints(stuckType)
+      return upperBound.kind === stuckType.kind ?
+          option.none
+        : option.map(
+            applyKeyPathToType(upperBound, keyPath),
+            _typeAtKeyPathInUpperBound =>
+              nestedIndexedAccess(stuckType, [firstKey, ...remainingKeyPath]),
+          )
+    }
     return matchTypeFormat<Option<Type>>(type, {
-      application: applicationType =>
-        // Indexing into a stuck application stays stuck, provided the key path
-        // is valid for the application's upper bound. Otherwise the property
-        // definitely doesn't exist.
-        option.map(
-          applyKeyPathToType(
-            replaceAllTypeParametersWithTheirConstraints(applicationType),
-            keyPath,
-          ),
-          _typeAtKeyPathInUpperBound =>
-            nestedIndexedAccess(applicationType, [
-              firstKey,
-              ...remainingKeyPath,
-            ]),
-        ),
-      intrinsicApplication: intrinsicApplicationType =>
-        // As with `ApplicationType`s, indexing stays stuck while the key path
-        // is valid for the upper bound. Otherwise the property doesn't exist.
-        option.map(
-          applyKeyPathToType(
-            replaceAllTypeParametersWithTheirConstraints(
-              intrinsicApplicationType,
-            ),
-            keyPath,
-          ),
-          _typeAtKeyPathInUpperBound =>
-            nestedIndexedAccess(intrinsicApplicationType, [
-              firstKey,
-              ...remainingKeyPath,
-            ]),
-        ),
+      application: applyKeyPathToStuckType,
+      intrinsicApplication: applyKeyPathToStuckType,
       function: type => {
         if (typeof firstKey === 'string') {
           // Functions do not have properties.
@@ -153,17 +143,7 @@ export const applyKeyPathToType = (
           return option.none
         }
       },
-      indexedAccess: type =>
-        // As with other stuck types, indexing stays stuck while the key path is
-        // valid for the upper bound. Otherwise the property doesn't exist.
-        option.map(
-          applyKeyPathToType(
-            replaceAllTypeParametersWithTheirConstraints(type),
-            keyPath,
-          ),
-          _typeAtKeyPathInUpperBound =>
-            nestedIndexedAccess(type, [firstKey, ...remainingKeyPath]),
-        ),
+      indexedAccess: applyKeyPathToStuckType,
       opaque: _type => option.none,
       parameter: type => {
         if (typeof firstKey === 'string') {
