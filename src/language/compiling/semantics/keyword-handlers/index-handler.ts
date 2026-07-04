@@ -15,7 +15,6 @@ import {
 } from '../../../semantics.js'
 import { applyTypeKeyPathToSemanticGraph } from '../../../semantics/semantic-graph.js'
 import {
-  isNothing,
   stringifyTypeKeyPathForEndUser,
   typeKeyPathFromObjectNode,
   type TypeKeyPath,
@@ -35,7 +34,7 @@ const checkKeyPathExistsInType = (
       // `-1` if the entire `keyPath` is resolvable.
       const firstUnresolvableComponentIndex = keyPath.findIndex(
         (_component, endIndex) =>
-          isNothing(
+          option.isNone(
             applyKeyPathToType(objectType, keyPath.slice(0, endIndex + 1)),
           ),
       )

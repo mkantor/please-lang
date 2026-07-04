@@ -7,7 +7,6 @@ import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something } from './prelude-types.js'
 import { isAssignable } from './subtyping.js'
 import {
-  isNothing,
   makeApplicationType,
   makeFunctionType,
   makeIndexedAccessType,
@@ -37,15 +36,19 @@ import {
 } from './type-parameter-analysis.js'
 
 /**
- * Drill into `type` using the given `keyPath`, returning the bottom type
- * (`nothing`) whenever no match is found. A union can be drilled into only when
- * every member contains the key path; otherwise `nothing` is returned.
+ * Drill into `type` using the given `keyPath`, returning `none` whenever no
+ * match is found. A union can be drilled into only when every member contains
+ * the key path; otherwise `none` is returned. A resolved type may legitimately
+ * be the bottom type (e.g. `:nothing.type`), which is distinct from `none`.
  */
-export const applyKeyPathToType = (type: Type, keyPath: TypeKeyPath): Type => {
+export const applyKeyPathToType = (
+  type: Type,
+  keyPath: TypeKeyPath,
+): Option<Type> => {
   const [firstKey, ...remainingKeyPath] = keyPath
   if (firstKey === undefined) {
     // If the key path is empty, this is the type we're looking for.
-    return type
+    return option.makeSome(type)
   } else if (typeof firstKey === 'object') {
     switch (firstKey.kind) {
       case 'parameter':
@@ -53,86 +56,87 @@ export const applyKeyPathToType = (type: Type, keyPath: TypeKeyPath): Type => {
         // is instantiated), but only when the path resolves for the parameter's
         // constraint. Without this guard an instantiation could access a
         // missing property.
-        return (
-            isNothing(
-              applyKeyPathToType(type, [
-                firstKey.constraint.assignableTo,
-                ...remainingKeyPath,
-              ]),
-            )
-          ) ?
-            nothing
-          : nestedIndexedAccess(type, [firstKey, ...remainingKeyPath])
+        return option.map(
+          applyKeyPathToType(type, [
+            firstKey.constraint.assignableTo,
+            ...remainingKeyPath,
+          ]),
+          _typeAtKeyPathInConstraint =>
+            nestedIndexedAccess(type, [firstKey, ...remainingKeyPath]),
+        )
       case 'union': {
         const resultsPerKeyPossibility = [...firstKey.members].map(
           firstKeyMember =>
             applyKeyPathToType(type, [firstKeyMember, ...remainingKeyPath]),
         )
-        // The runtime key could be any member, so the every possible path must
-        // be valid.
-        return resultsPerKeyPossibility.some(isNothing) ? nothing : (
-            unionOfTypes(resultsPerKeyPossibility)
-          )
+        // The runtime key could be any member, so every possible path must be
+        // valid.
+        return option.map(
+          option.sequence(resultsPerKeyPossibility),
+          unionOfTypes,
+        )
       }
     }
   } else {
-    return matchTypeFormat<Type>(type, {
-      application: applicationType => {
+    return matchTypeFormat<Option<Type>>(type, {
+      application: applicationType =>
         // Indexing into a stuck application stays stuck, provided the key path
         // is valid for the application's upper bound. Otherwise the property
         // definitely doesn't exist.
-        const typeAtKeyPathInUpperBound = applyKeyPathToType(
-          replaceAllTypeParametersWithTheirConstraints(applicationType),
-          keyPath,
-        )
-        return isNothing(typeAtKeyPathInUpperBound) ? nothing : (
+        option.map(
+          applyKeyPathToType(
+            replaceAllTypeParametersWithTheirConstraints(applicationType),
+            keyPath,
+          ),
+          _typeAtKeyPathInUpperBound =>
             nestedIndexedAccess(applicationType, [
               firstKey,
               ...remainingKeyPath,
-            ])
-          )
-      },
-      intrinsicApplication: intrinsicApplicationType => {
+            ]),
+        ),
+      intrinsicApplication: intrinsicApplicationType =>
         // As with `ApplicationType`s, indexing stays stuck while the key path
         // is valid for the upper bound. Otherwise the property doesn't exist.
-        const typeAtKeyPathInUpperBound = applyKeyPathToType(
-          replaceAllTypeParametersWithTheirConstraints(
-            intrinsicApplicationType,
+        option.map(
+          applyKeyPathToType(
+            replaceAllTypeParametersWithTheirConstraints(
+              intrinsicApplicationType,
+            ),
+            keyPath,
           ),
-          keyPath,
-        )
-        return isNothing(typeAtKeyPathInUpperBound) ? nothing : (
+          _typeAtKeyPathInUpperBound =>
             nestedIndexedAccess(intrinsicApplicationType, [
               firstKey,
               ...remainingKeyPath,
-            ])
-          )
-      },
+            ]),
+        ),
       function: type => {
         if (typeof firstKey === 'string') {
           // Functions do not have properties.
-          return nothing
+          return option.none
         } else {
           switch (firstKey) {
             case functionParameterKey:
-              return makeFunctionType({
-                parameter: applyKeyPathToType(
-                  type.signature.parameter,
-                  remainingKeyPath,
-                ),
-                return: type.signature.return,
-              })
+              return option.map(
+                applyKeyPathToType(type.signature.parameter, remainingKeyPath),
+                parameter =>
+                  makeFunctionType({
+                    parameter,
+                    return: type.signature.return,
+                  }),
+              )
             case functionReturnKey:
-              return makeFunctionType({
-                parameter: type.signature.parameter,
-                return: applyKeyPathToType(
-                  type.signature.return,
-                  remainingKeyPath,
-                ),
-              })
+              return option.map(
+                applyKeyPathToType(type.signature.return, remainingKeyPath),
+                returnType =>
+                  makeFunctionType({
+                    parameter: type.signature.parameter,
+                    return: returnType,
+                  }),
+              )
             case typeParameterAssignableToConstraintKey:
               // Functions aren't type parameters.
-              return nothing
+              return option.none
           }
         }
       },
@@ -140,18 +144,18 @@ export const applyKeyPathToType = (type: Type, keyPath: TypeKeyPath): Type => {
         if (typeof firstKey === 'string') {
           const child = type.children[firstKey]
           if (child === undefined) {
-            return nothing
+            return option.none
           } else {
             return applyKeyPathToType(child, remainingKeyPath)
           }
         } else {
           // Objects have properties, not parameters/returns/constraints/etc.
-          return nothing
+          return option.none
         }
       },
       indexedAccess: type =>
         applyKeyPathToType(type.object, [firstKey, ...remainingKeyPath]),
-      opaque: _type => nothing,
+      opaque: _type => option.none,
       parameter: type => {
         if (typeof firstKey === 'string') {
           // Indexing into a type parameter yields a stuck (object-neutral)
@@ -159,41 +163,44 @@ export const applyKeyPathToType = (type: Type, keyPath: TypeKeyPath): Type => {
           // once the parameter is instantiated. This is only done when the key
           // path is valid for the parameter's constraint; otherwise the property
           // genuinely doesn't exist.
-          const typeAtKeyPathInConstraint = applyKeyPathToType(
-            type.constraint.assignableTo,
-            keyPath,
+          return option.map(
+            applyKeyPathToType(type.constraint.assignableTo, keyPath),
+            _typeAtKeyPathInConstraint =>
+              nestedIndexedAccess(type, [firstKey, ...remainingKeyPath]),
           )
-          return isNothing(typeAtKeyPathInConstraint) ? nothing : (
-              nestedIndexedAccess(type, [firstKey, ...remainingKeyPath])
-            )
         } else {
           switch (firstKey) {
             case typeParameterAssignableToConstraintKey:
-              return makeTypeParameter(type.name, {
-                assignableTo: applyKeyPathToType(
+              return option.map(
+                applyKeyPathToType(
                   type.constraint.assignableTo,
                   remainingKeyPath,
                 ),
-              })
+                assignableTo => makeTypeParameter(type.name, { assignableTo }),
+              )
             case functionParameterKey:
             case functionReturnKey:
               // Type parameters aren't function types, and drilling into the
               // constraint would lose precision.
-              return nothing
+              return option.none
           }
         }
       },
-      union: type => {
-        const memberResults = [...type.members].map(member =>
-          // Atoms have no properties.
-          typeof member === 'string' ? nothing : (
-            applyKeyPathToType(member, keyPath)
+      union: type =>
+        // The bottom type (an empty union) has no properties.
+        type.members.size === 0 ?
+          option.none
+        : option.map(
+            option.sequence(
+              [...type.members].map(member =>
+                // Atoms have no properties.
+                typeof member === 'string' ?
+                  option.none
+                : applyKeyPathToType(member, keyPath),
+              ),
+            ),
+            unionOfTypes,
           ),
-        )
-        return memberResults.some(isNothing) ? nothing : (
-            unionOfTypes(memberResults)
-          )
-      },
     })
   }
 }
@@ -633,9 +640,16 @@ export const supplyTypeArgument = (
             // TODO: Should this trigger an error?
             nothing,
           right: key =>
-            applyKeyPathToType(
-              supplyTypeArgument(type.object, typeParameter, typeArgument),
-              [key],
+            option.match(
+              applyKeyPathToType(
+                supplyTypeArgument(type.object, typeParameter, typeArgument),
+                [key],
+              ),
+              {
+                // TODO: Should this trigger an error?
+                none: _ => nothing,
+                some: typeAtKeyPath => typeAtKeyPath,
+              },
             ),
         })
       },

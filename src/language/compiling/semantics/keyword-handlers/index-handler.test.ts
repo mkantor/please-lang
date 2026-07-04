@@ -37,4 +37,14 @@ elaborationSuite('@index', [
       assert(either.isLeft(output))
     },
   ],
+  [
+    {
+      0: '@index',
+      1: {
+        object: { foo: { 0: '@union', 1: {} } },
+        query: { 0: 'foo' },
+      },
+    },
+    success({ 0: '@union', 1: {} }),
+  ],
 ])
