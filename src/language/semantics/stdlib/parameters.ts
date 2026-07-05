@@ -2,7 +2,7 @@ import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { isFunctionNode, type FunctionNode } from '../function-node.js'
 import { isObjectNode, type ObjectNode } from '../object-node.js'
-import { type SemanticGraph } from '../semantic-graph.js'
+import type { SemanticGraph } from '../semantic-graph.js'
 import { types } from '../type-system.js'
 import {
   makeObjectType,

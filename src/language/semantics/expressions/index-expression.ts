@@ -6,7 +6,7 @@ import {
   makeObjectNode,
   type ObjectNode,
 } from '../object-node.js'
-import { type SemanticGraph } from '../semantic-graph.js'
+import type { SemanticGraph } from '../semantic-graph.js'
 import { readArgumentsFromExpression } from './expression-utilities.js'
 
 export type IndexExpression = ObjectNode & {

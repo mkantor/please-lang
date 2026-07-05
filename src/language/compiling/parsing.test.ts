@@ -2,7 +2,7 @@ import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import * as orderedRecord from '../../ordered-record.js'
 import { testCases } from '../../test-utilities.test.js'
-import { type Atom, type SyntaxTree } from '../parsing.js'
+import type { Atom, SyntaxTree } from '../parsing.js'
 import { parse } from '../parsing/parser.js'
 
 type Entries = readonly (readonly [string, Atom | Entries])[]
@@ -58,6 +58,7 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
       ]),
     ),
   ],
+
   [
     'a => b => c',
     either.makeRight(

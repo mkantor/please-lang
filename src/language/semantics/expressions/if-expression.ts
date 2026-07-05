@@ -2,7 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import type { ElaborationError } from '../../errors.js'
 import { isKeywordExpressionWithArgument } from '../expression.js'
 import { makeObjectNode, type ObjectNode } from '../object-node.js'
-import { type SemanticGraph } from '../semantic-graph.js'
+import type { SemanticGraph } from '../semantic-graph.js'
 import { readArgumentsFromExpression } from './expression-utilities.js'
 
 // TODO: Evolve this into pattern matching/destructuring.

@@ -1,6 +1,6 @@
 import either, { type Either } from '@matt.kantor/either'
 import { parseArgs } from 'node:util'
-import { type SyntaxTree } from '../parsing/syntax-tree.js'
+import type { SyntaxTree } from '../parsing/syntax-tree.js'
 import {
   prettyJson,
   prettyPlz,
