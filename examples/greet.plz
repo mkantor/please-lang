@@ -1,0 +1,28 @@
+/**
+ * Greets the user in the language of their choice.
+ *
+ * Usage: cat ./examples/greet.plz | ./please --name=Alice --language=es
+ *
+ * Defaults to English when --language is missing or unrecognized, and to
+ * "user" when --name is missing.
+ */
+{
+  name: @runtime { context => :context.arguments.lookup(name) }
+    option.get_or_else user
+
+  sentence: (opening: :atom.type) => (closing: :atom.type) =>
+    :opening atom.append :name atom.append :closing
+
+  greetings: {
+    de: :sentence("Hallo, ")("!")
+    en: :sentence("Hello, ")("!")
+    es: :sentence("¡Hola, ")("!")
+    fr: :sentence("Bonjour, ")(" !")
+    ja: :sentence("こんにちは、")("！")
+    pt: :sentence("Olá, ")("!")
+  }
+
+  output: @runtime { context => :context.arguments.lookup(language) }
+    option.flat_map ((code: :atom.type) => :greetings object.lookup :code)
+    option.get_or_else :greetings.en
+}.output

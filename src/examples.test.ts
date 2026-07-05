@@ -37,6 +37,14 @@ const additionalCommandLineArguments: Readonly<
     '--a="not a number" --b=5',
     '--a=5',
   ],
+  'greet.plz': [
+    '--name=Alice --language=es',
+    '--name=Bob --language=de',
+    '--name=世界 --language=ja',
+    '--name=José --language=pt',
+    '--language=fr',
+    '--language=xx',
+  ],
   'is-prime.plz': [
     '--input=0',
     '--input=1',

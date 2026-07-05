@@ -293,6 +293,90 @@ exports[`examples > greatest-common-divisor.plz > stdout 1`] = `
 
 `;
 
+exports[`examples > greet.plz > --language=fr > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > --language=fr > stdout 1`] = `
+"Bonjour, user !"
+
+`;
+
+exports[`examples > greet.plz > --language=xx > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > --language=xx > stdout 1`] = `
+"Hello, user!"
+
+`;
+
+exports[`examples > greet.plz > --name=Alice --language=es > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > --name=Alice --language=es > stdout 1`] = `
+"¡Hola, Alice!"
+
+`;
+
+exports[`examples > greet.plz > --name=Bob --language=de > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > --name=Bob --language=de > stdout 1`] = `
+"Hallo, Bob!"
+
+`;
+
+exports[`examples > greet.plz > --name=José --language=pt > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > --name=José --language=pt > stdout 1`] = `
+"Olá, José!"
+
+`;
+
+exports[`examples > greet.plz > --name=世界 --language=ja > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > --name=世界 --language=ja > stdout 1`] = `
+こんにちは、世界！
+
+`;
+
+exports[`examples > greet.plz > roundtripped syntax tree 1`] = `
+{
+  name: @runtime {
+    context => :context.arguments.lookup(name)
+  } option.get_or_else user
+  sentence: (opening: :atom.type) => (closing: :atom.type) => :opening atom.append :name atom.append :closing
+  greetings: {
+    de: ! sentence "Hallo, "
+    en: ! sentence "Hello, "
+    es: ! sentence "¡Hola, "
+    fr: " !" sentence "Bonjour, "
+    ja: ！ sentence こんにちは、
+    pt: ! sentence "Olá, "
+  }
+  output: @runtime {
+    context => :context.arguments.lookup(language)
+  } option.flat_map ((code: :atom.type) => :greetings object.lookup :code) option.get_or_else :greetings.en
+}.output
+
+`;
+
+exports[`examples > greet.plz > stderr 1`] = `
+
+`;
+
+exports[`examples > greet.plz > stdout 1`] = `
+"Hello, user!"
+
+`;
+
 exports[`examples > is-prime.plz > --input=-1 > stderr 1`] = `
 
 `;
