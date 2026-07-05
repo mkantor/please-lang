@@ -130,9 +130,12 @@ export const atom = {
       either.makeRight(subject =>
         either.makeRight(
           objectNodeFromOrderedEntries(
-            subject
-              .split(separator)
-              .map((part, index) => [String(index), part]),
+            // `String.prototype.split` with an empty separator splits by UTF-16
+            // code units; spread iterates codepoints, agreeing with `length`.
+            // eslint-disable-next-line @typescript-eslint/no-misused-spread
+            (separator === '' ? [...subject] : subject.split(separator)).map(
+              (part, index) => [String(index), part],
+            ),
           ),
         ),
       ),
