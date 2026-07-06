@@ -6,7 +6,7 @@ import {
 } from '../expressions/hole-expression.js'
 import { readUnionExpression } from '../expressions/union-expression.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { typesBySymbol } from './prelude-types.js'
+import { nothing, something, typesBySymbol } from './prelude-types.js'
 import { makeObjectType, unionOfTypes, type Type } from './type-formats.js'
 
 /**
@@ -75,7 +75,7 @@ export const typeFromSemanticGraph = (
               ),
               entries =>
                 makeObjectType(Object.fromEntries(entries), {
-                  exact: options.objectsAreExact,
+                  excess: options.objectsAreExact ? nothing : something,
                 }),
             ),
         ),

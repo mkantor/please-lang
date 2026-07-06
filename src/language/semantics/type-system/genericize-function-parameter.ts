@@ -1,4 +1,5 @@
 import type { Atom } from '../../parsing.js'
+import { something } from './prelude-types.js'
 import {
   makeFunctionType,
   makeObjectType,
@@ -94,10 +95,13 @@ const genericizeFunctionParameterAnnotationAtKeyPath = (
             ] as const,
         )
         return {
+          // The annotation is an upper bound, so the rebuilt object admits
+          // arbitrary excess properties unconditionally.
           type: makeObjectType(
             Object.fromEntries(
               children.map(([key, child]) => [key, child.type]),
             ),
+            { excess: something },
           ),
           typeParametersBoundByFunction: new Set(
             children.flatMap(([_key, child]) => [

@@ -9,6 +9,7 @@ import {
 import { types } from '../type-system.js'
 import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
+  isNothing,
   makeObjectType,
   makeUnionType,
   unionOfTypes,
@@ -40,7 +41,7 @@ const computeFromPropertyReturnType = (
             ...keys.members
               .values()
               .map(key =>
-                makeObjectType({ [key]: valueType }, { exact: true }),
+                makeObjectType({ [key]: valueType }, { excess: types.nothing }),
               ),
           ]),
       },
@@ -65,14 +66,19 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
                 .filter(([key]) => object2Type.children[key] === undefined)
                 .map(([key, child]) => [
                   key,
-                  object2Type.exact ? child
+                  isNothing(object2Type.excess) ? child
                     // The property may exist as excess (with an unknown type).
                   : types.something,
                 ]),
             ),
             ...object2Type.children,
           },
-          { exact: object1Type.exact && object2Type.exact },
+          {
+            excess:
+              isNothing(object1Type.excess) && isNothing(object2Type.excess) ?
+                types.nothing
+              : types.something,
+          },
         )
       : types.object
   }
@@ -99,7 +105,7 @@ const lookupReturnType = ({
             tag: makeUnionType(['some']),
             value: unionOfTypes(possibleValueTypes),
           },
-          { exact: true },
+          { excess: types.nothing },
         ),
       ]),
     ...(mayBeNone ?
@@ -107,9 +113,9 @@ const lookupReturnType = ({
         makeObjectType(
           {
             tag: makeUnionType(['none']),
-            value: makeObjectType({}, { exact: true }),
+            value: makeObjectType({}, { excess: types.nothing }),
           },
-          { exact: true },
+          { excess: types.nothing },
         ),
       ]
     : []),
@@ -128,7 +134,7 @@ const literalLookupKeyCandidates = (
   : option.none
 
 // `lookup(key)(object)` returns `some(object[key])` when the key is definitely
-// present, `none` when definitely absent (e.g. an `exact` object lacking it),
+// present, `none` when definitely absent (e.g. a closed object lacking it),
 // otherwise a union covering all possible outcomes.
 const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
   const [keyType, objectType] = parameterTypes
@@ -149,7 +155,7 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
         })
         const someKeyMayBeAbsent =
           presentValueTypes.length !== possibleKeys.size
-        return someKeyMayBeAbsent && !objectType.exact ?
+        return someKeyMayBeAbsent && !isNothing(objectType.excess) ?
             // The key may exist as an excess property (with an unknown type).
             types.option(types.something)
           : lookupReturnType({
@@ -158,7 +164,7 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
             })
       },
       none: _ =>
-        objectType.exact ?
+        isNothing(objectType.excess) ?
           // Whatever the key turns out to be, it can only select one of the
           // object's own property values (or nothing).
           lookupReturnType({

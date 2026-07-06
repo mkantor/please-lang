@@ -479,7 +479,10 @@ const inferTypeImplementation = (
             return either.flatMap(inferThen(), thenType =>
               either.map(inferElse(), elseType =>
                 makeIndexedAccessType(
-                  makeObjectType({ false: elseType, true: thenType }),
+                  makeObjectType(
+                    { false: elseType, true: thenType },
+                    { excess: types.something },
+                  ),
                   conditionType,
                 ),
               ),
@@ -572,7 +575,7 @@ const inferTypeImplementation = (
         makeObjectType(Object.fromEntries(entries), {
           // Expressions will have different keys after elaboration, otherwise
           // this is a literal object where all properties are known.
-          exact: !isExpression(node),
+          excess: isExpression(node) ? types.something : types.nothing,
         }),
     ),
   )

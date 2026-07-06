@@ -1,6 +1,7 @@
 import type { Option } from '@matt.kantor/option'
 import option from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
+import { something } from './prelude-types.js'
 import {
   makeObjectType,
   makeUnionType,
@@ -231,33 +232,37 @@ export const isAssignable = ({
               )
             },
             object: target => {
-              if (target.exact && !source.exact) {
-                // Inexact object types aren't assignable to exact ones.
-                return false
-              } else {
-                // Make sure all properties in the target are present and valid
-                // in the source (recursively). Values may have additional
-                // properties beyond what is required by the target and still be
-                // assignable to it.
-                for (const [key, typePropertyValue] of Object.entries(
-                  target.children,
-                )) {
-                  if (source.children[key] === undefined) {
-                    return false
-                  } else {
-                    // Recursively check the property:
-                    if (
-                      !isAssignable({
-                        source: source.children[key],
-                        target: typePropertyValue,
-                      })
-                    ) {
-                      return false
-                    }
-                  }
-                }
-                return true
-              }
+              // Every property required by the target must be present and valid
+              // in the source (recursively).
+              const requiredPropertiesAreSatisfied = Object.entries(
+                target.children,
+              ).every(([key, targetChild]) => {
+                const sourceChild = source.children[key]
+                return (
+                  sourceChild !== undefined &&
+                  isAssignable({ source: sourceChild, target: targetChild })
+                )
+              })
+              // Source properties beyond the target's children, along with
+              // whatever excess the source itself admits, must fit within the
+              // target's excess bound.
+              const excessPropertiesAreSatisfied =
+                target.excess === something ||
+                (Object.entries(source.children).every(
+                  ([key, sourceChild]) =>
+                    target.children[key] !== undefined ||
+                    isAssignable({
+                      source: sourceChild,
+                      target: target.excess,
+                    }),
+                ) &&
+                  isAssignable({
+                    source: source.excess,
+                    target: target.excess,
+                  }))
+              return (
+                requiredPropertiesAreSatisfied && excessPropertiesAreSatisfied
+              )
             },
             opaque: target => target.isAssignableFrom(source),
             parameter: _target => false, // an object type is never directly assignable to a type parameter
@@ -425,80 +430,88 @@ export const asUnionWithLiteralAtomMembers = (
  * simplified to `{ a: 'a' | 'b' | 'c' } | atom`.
  */
 export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
-  const reducibleSubsets = new Map<
-    string,
-    {
-      readonly keys: readonly string[]
-      readonly typesToMerge: Set<ObjectType>
-    }
-  >()
-  for (const type of typeToSimplify.members) {
-    if (typeof type !== 'string' && type.kind === 'object') {
-      const keys = Object.keys(type.children)
+  const members = [...typeToSimplify.members]
 
-      // Object types with a single key are always mergeable with other object
-      // types containing the same single key. For example `{ a: 'a' } | { a:
-      // 'b' }` can become `{ a: 'a' | 'b' }`.
-      //
-      // TODO: Handle cases where there is more than one key but property types
-      // are compatible. For example `{ a: 'a', b: 'b' } | { a: 'b', b: 'b' }`
-      // can become `{ a: 'a' | 'b', b: 'b' }`.
-      const fingerprint = keys[0]
-      if (keys.length === 1 && fingerprint !== undefined) {
-        const objectTypesWithThisFingerprint = reducibleSubsets.get(
-          fingerprint,
-        ) ?? { keys, typesToMerge: new Set() }
-        reducibleSubsets.set(fingerprint, {
-          keys,
-          typesToMerge: objectTypesWithThisFingerprint.typesToMerge.add(type),
-        })
-      }
-    }
+  // Object types with a single key are mergeable with other object types
+  // containing the same single key (as long as their excess bounds agree).
+  // For example `{ a: 'a' } | { a: 'b' }` can become `{ a: 'a' | 'b' }`.
+  //
+  // TODO: Handle cases where there is more than one key but property types
+  // are compatible. For example `{ a: 'a', b: 'b' } | { a: 'b', b: 'b' }`
+  // can become `{ a: 'a' | 'b', b: 'b' }`.
+  const isObjectType = (member: Atom | Exclude<Type, UnionType>) =>
+    typeof member !== 'string' && member.kind === 'object'
+  const isMergeable = (member: ObjectType) =>
+    Object.keys(member.children).length === 1
+
+  const excessBoundsAgree = (first: Type, second: Type): boolean =>
+    isAssignable({ source: first, target: second }) &&
+    isAssignable({ source: second, target: first })
+
+  type MergeGroup = {
+    readonly key: string
+    readonly excess: Type
+    readonly typesToMerge: readonly ObjectType[]
   }
 
-  const canonicalizedTargetMembers = new Set<Atom | Exclude<Type, UnionType>>(
-    typeToSimplify.members,
-  )
-
-  // Reduce `reducibleSubsets` by merging all candidate, updating
-  // `canonicalizedTargetMembers`. Merge algorithm:
-  //  - for each reducible subset of object types:
-  //    - for each shared key within that subset:
-  //      - get the key's property type from every member of `typesToMerge`
-  //      - create a union allowing any of those types
-  //    - create single object type where each property has the appropriate
-  //      union type
-  for (const { keys, typesToMerge } of reducibleSubsets.values()) {
-    const mergedObjectTypeChildren = Object.fromEntries(
-      keys.map(key => {
-        const typesForThisProperty = typesToMerge.values().flatMap(type => {
-          const propertyType = type.children[key]
-          return (
-            propertyType === undefined ? []
-            : propertyType.kind === 'union' ?
-              [...propertyType.members] // flatten any existing unions in property types
-            : [propertyType]
+  const mergeGroups = members
+    .filter(isObjectType)
+    .filter(isMergeable)
+    .reduce<readonly MergeGroup[]>((groups, objectType) => {
+      const [key] = Object.keys(objectType.children)
+      const groupIndex =
+        key === undefined ? -1 : (
+          groups.findIndex(
+            group =>
+              group.key === key &&
+              excessBoundsAgree(group.excess, objectType.excess),
           )
-        })
-        const propertyTypeAsUnion = excludeRedundantUnionTypeMembers(
-          makeUnionType(typesForThisProperty),
         )
-        return [key, propertyTypeAsUnion] as const
-      }),
+      return (
+        key === undefined ? groups
+        : groupIndex === -1 ?
+          [
+            ...groups,
+            { key, excess: objectType.excess, typesToMerge: [objectType] },
+          ]
+        : groups.map((group, index) =>
+            index === groupIndex ?
+              { ...group, typesToMerge: [...group.typesToMerge, objectType] }
+            : group,
+          )
+      )
+    }, [])
+
+  // Merge each group into a single object type whose sole required property is
+  // the union of every group member's sole property type.
+  const mergedObjectTypes = mergeGroups.map(({ key, excess, typesToMerge }) => {
+    const typesForTheProperty = typesToMerge.flatMap(objectType => {
+      const propertyType = objectType.children[key]
+      return (
+        propertyType === undefined ? []
+        : propertyType.kind === 'union' ?
+          [...propertyType.members] // flatten any existing unions in property types
+        : [propertyType]
+      )
+    })
+    return makeObjectType(
+      {
+        [key]: excludeRedundantUnionTypeMembers(
+          makeUnionType(typesForTheProperty),
+        ),
+      },
+      { excess },
     )
-    const mergedObjectType = makeObjectType(mergedObjectTypeChildren)
-
-    // Remove all `typesToMerge` from `canonicalizedTargetMembers`.
-    for (const typeWhichHasBeenMerged of typesToMerge) {
-      canonicalizedTargetMembers.delete(typeWhichHasBeenMerged)
-    }
-    canonicalizedTargetMembers.add(mergedObjectType)
-  }
-
-  return excludeRedundantUnionTypeMembers({
-    kind: 'union',
-    members: canonicalizedTargetMembers,
   })
+
+  return excludeRedundantUnionTypeMembers(
+    makeUnionType([
+      ...members.filter(
+        member => !isObjectType(member) || !isMergeable(member),
+      ),
+      ...mergedObjectTypes,
+    ]),
+  )
 }
 
 const excludeRedundantUnionTypeMembers = (type: UnionType) => {
