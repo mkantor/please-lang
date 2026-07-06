@@ -19,6 +19,7 @@ import {
   effectiveExcessClauses,
   excessBoundForKey,
 } from '../type-system/subtyping.js'
+import { replaceAllTypeParametersWithTheirConstraints } from '../type-system/type-substitution.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
@@ -39,7 +40,10 @@ const computeFromPropertyReturnType = (
         asUnionWithLiteralAtomMembers(keyType)
       : option.none,
       {
-        none: _ => types.object,
+        // The key isn't statically known, but every property value is the
+        // supplied one.
+        none: _ =>
+          makeObjectType({}, [{ keys: types.atom, values: valueType }]),
         some: keys =>
           unionOfTypes([
             ...keys.members
@@ -56,7 +60,15 @@ const computeFromPropertyReturnType = (
 }
 
 const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
-  const [object2Type, object1Type] = parameterTypes
+  const [rawObject2Type, rawObject1Type] = parameterTypes
+  const object2Type =
+    rawObject2Type === undefined ? rawObject2Type : (
+      replaceAllTypeParametersWithTheirConstraints(rawObject2Type)
+    )
+  const object1Type =
+    rawObject1Type === undefined ? rawObject1Type : (
+      replaceAllTypeParametersWithTheirConstraints(rawObject1Type)
+    )
   if (object2Type === undefined || object1Type === undefined) {
     throw new Error(
       '`overlay` function did not receive two arguments. This is a bug!',
@@ -102,8 +114,6 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
         ],
     )
   } else {
-    // TODO: Consider also supporting type parameters/stuck types via their
-    // upper bounds.
     return types.object
   }
 }
