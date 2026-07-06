@@ -23,6 +23,7 @@ import {
 import {
   makeApplicationType,
   makeFunctionType,
+  makeIndexedAccessType,
   makeIntrinsicApplicationType,
   makeObjectType,
   makeTypeParameter,
@@ -30,6 +31,7 @@ import {
   type Type,
   type TypeParameter,
 } from './type-formats.js'
+import { nestedIndexedAccess } from './type-key-path.js'
 import {
   applyKeyPathToType,
   applyTypeToArgumentType,
@@ -154,6 +156,55 @@ applyKeyPathSuite('applyKeyPathToType with bottom types', [
     ],
     stringifyTypeForEndUser(atom),
   ],
+])
+
+const keyAssignableToAOrB = makeTypeParameter('key', {
+  assignableTo: makeUnionType(['a', 'b']),
+})
+const stuckAccessWithCommonXProperty = makeIndexedAccessType(
+  makeObjectType({
+    a: makeObjectType({ x: atom }),
+    b: makeObjectType({ x: integer }),
+  }),
+  keyAssignableToAOrB,
+)
+
+applyKeyPathSuite('applyKeyPathToType with indexed access types', [
+  [
+    [stuckAccessWithCommonXProperty, ['x']],
+    stringifyTypeForEndUser(
+      nestedIndexedAccess(stuckAccessWithCommonXProperty, ['x']),
+    ),
+  ],
+  [[stuckAccessWithCommonXProperty, ['z']], '(none)'],
+  [
+    [
+      makeIndexedAccessType(
+        makeObjectType({
+          a: makeObjectType({ x: atom }),
+          b: makeObjectType({}),
+        }),
+        keyAssignableToAOrB,
+      ),
+      ['x'],
+    ],
+    '(none)',
+  ],
+  [
+    [
+      makeIndexedAccessType(
+        makeObjectType({ x: atom, a: atom, b: atom }),
+        keyAssignableToAOrB,
+      ),
+      ['x'],
+    ],
+    '(none)',
+  ],
+])
+
+applyKeyPathSuite('applyKeyPathToType with degenerate stuck types', [
+  [[makeApplicationType(atom, atom, new Set()), ['x']], '(none)'],
+  [[makeIndexedAccessType(makeObjectType({ x: atom }), atom), ['x']], '(none)'],
 ])
 
 const getTypesForTypeParametersSuite = testCases(
