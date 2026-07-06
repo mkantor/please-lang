@@ -820,6 +820,34 @@ typeAssignabilitySuite('custom types (not assignable)', [
     [makeObjectType({}, { exact: false }), makeObjectType({}, { exact: true })],
     false,
   ],
+  // FIXME: This test case currently fails!
+  // [
+  //   [
+  //     // exact objects with extra properties aren't assignable to exact objects
+  //     // lacking them
+  //     makeObjectType(
+  //       { a: makeUnionType(['a']), b: makeUnionType(['b']) },
+  //       { exact: true },
+  //     ),
+  //     makeObjectType({ a: makeUnionType(['a']) }, { exact: true }),
+  //   ],
+  //   false,
+  // ],
+  // FIXME: This test case currently fails!
+  // [
+  //   [
+  //     // similar to above, but with unions in the mix
+  //     makeObjectType(
+  //       { a: makeUnionType(['a']), b: makeUnionType(['b']) },
+  //       { exact: true },
+  //     ),
+  //     makeUnionType([
+  //       makeObjectType({ a: makeUnionType(['a']) }, { exact: true }),
+  //       makeObjectType({ b: makeUnionType(['b']) }, { exact: true }),
+  //     ]),
+  //   ],
+  //   false,
+  // ],
 ])
 
 typeAssignabilitySuite('generic function types (assignable)', [
