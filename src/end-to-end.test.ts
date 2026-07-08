@@ -300,6 +300,13 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [`{} atom.join "-"`, success('')],
   [`"a,b,c" atom.split ","`, success({ 0: 'a', 1: 'b', 2: 'c' })],
   [`("a,b,c" atom.split ",") atom.join "-"`, success('a-b-c')],
+  [`hello atom.split ""`, success({ 0: 'h', 1: 'e', 2: 'l', 3: 'l', 4: 'o' })],
+  [`"a👾b" atom.split ""`, success({ 0: 'a', 1: '👾', 2: 'b' })],
+  [`:atom.length("a👾b") ~ 3`, success('3')],
+  [`"" atom.split ""`, success({})],
+  [`"🇺🇸" atom.split ""`, success({ 0: '🇺', 1: '🇸' })],
+  [`"a👾b" atom.split 👾`, success({ 0: 'a', 1: 'b' })],
+  [`("a👾b" atom.split "") atom.join ""`, success('a👾b')],
   [
     `{ a: { nested: x } } atom.join ", "`,
     result => {
