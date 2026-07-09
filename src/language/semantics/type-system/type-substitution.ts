@@ -4,8 +4,8 @@ import type { Writable } from '../../../utility-types.js'
 import type { FunctionNodeCallError } from '../function-node.js'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { nothing, something } from './prelude-types.js'
-import { isAssignable } from './subtyping.js'
+import { nothing } from './prelude-types.js'
+import { effectiveExcessClauses, isAssignable } from './subtyping.js'
 import {
   makeApplicationType,
   type ApplicationType,
@@ -14,10 +14,7 @@ import {
   makeFunctionType,
   type FunctionType,
 } from './type-formats/function-type.js'
-import {
-  makeIndexedAccessType,
-  type IndexedAccessType,
-} from './type-formats/indexed-access-type.js'
+import { type IndexedAccessType } from './type-formats/indexed-access-type.js'
 import {
   makeIntrinsicApplicationType,
   type IntrinsicApplicationType,
@@ -282,7 +279,10 @@ export const getTypesForTypeParameters = ({
         } else {
           // Type parameters in excess bounds unify against everything the
           // argument could hold beyond the parameter's required properties.
-          const bindingsFromExcess = (): ReadonlyMap<TypeParameter, Type> => {
+          // Which clause an unlisted key would select isn't computed here, so
+          // every clause unifies against the same union (wide bindings are
+          // acceptable; they're validated downstream).
+          const unmatchedArgumentBound = (): Type => {
             const unmatchedArgumentChildTypes = Object.entries(
               argumentType.children,
             )
@@ -290,15 +290,12 @@ export const getTypesForTypeParameters = ({
                 ([key, _child]) => parameterType.children[key] === undefined,
               )
               .map(([_key, child]) => child)
-            return getTypesForTypeParameters({
-              parameterType: parameterType.excess,
-              argumentType: unionOfTypes([
-                ...unmatchedArgumentChildTypes,
-                ...(isBottomType(argumentType.excess) ?
-                  []
-                : [argumentType.excess]),
-              ]),
-            })
+            return unionOfTypes([
+              ...unmatchedArgumentChildTypes,
+              ...effectiveExcessClauses(argumentType.excess)
+                .map(clause => clause.values)
+                .filter(clauseValues => !isBottomType(clauseValues)),
+            ])
           }
           return [
             ...Object.entries(parameterType.children).map(
@@ -312,12 +309,17 @@ export const getTypesForTypeParameters = ({
                     })
               },
             ),
-            containedTypeParameters(parameterType.excess).size === 0 ?
-              new Map<TypeParameter, Type>()
-              // Excess bindings come last so type parameters prefer binding to
-              // required properties instead of excess (when the same type
-              // parameter appears in both places).
-            : bindingsFromExcess(),
+            ...parameterType.excess.map(clause =>
+              containedTypeParameters(clause.values).size === 0 ?
+                new Map<TypeParameter, Type>()
+                // Excess bindings come last so type parameters prefer binding
+                // to required properties instead (when the same type parameter
+                // appears in both places).
+              : getTypesForTypeParameters({
+                  parameterType: clause.values,
+                  argumentType: unmatchedArgumentBound(),
+                }),
+            ),
           ].reduce(
             (types, typesFromChild) => new Map([...typesFromChild, ...types]),
             new Map<TypeParameter, Type>(),
@@ -526,7 +528,11 @@ export const enumerateInhabitants = (
       opaque: _ => option.none,
       parameter: _ => option.none,
       object: type =>
-        !isBottomType(type.excess) ?
+        (
+          !effectiveExcessClauses(type.excess).every(clause =>
+            isBottomType(clause.values),
+          )
+        ) ?
           option.none
         : option.map(
             option.sequence(
@@ -632,9 +638,17 @@ export const supplyTypeArgument = (
             typeArgument,
           )
         }
-        return makeObjectType(substitutedChildren, {
-          excess: supplyTypeArgument(type.excess, typeParameter, typeArgument),
-        })
+        return makeObjectType(
+          substitutedChildren,
+          type.excess.map(clause => ({
+            keys: supplyTypeArgument(clause.keys, typeParameter, typeArgument),
+            values: supplyTypeArgument(
+              clause.values,
+              typeParameter,
+              typeArgument,
+            ),
+          })),
+        )
       },
       application: type =>
         reduceApplication(
@@ -719,68 +733,3 @@ export const supplyTypeArguments = (
         supplyTypeArgument(partiallyAppliedType, typeParameter, typeArgument),
       type,
     )
-
-/**
- * Recursively widen every closed (`excess: nothing`) object type to an open
- * one; any other excess bound is preserved as written. Used when a type is
- * adopted from a user-written type position (e.g. parameter type annotations),
- * where subtyping means wider values may inhabit it.
- *
- * Type parameters are kept by reference (their identities matter), so their
- * constraints are not adjusted here; make sure constraints are inexact while
- * creating type parameters instead.
- */
-export const recursivelyInexact = (type: Type): Type =>
-  // Avoid infinite recursion when we hit the top type.
-  isTopType(type) ? type : (
-    matchTypeFormat<Type>(type, {
-      application: type =>
-        makeApplicationType(
-          recursivelyInexact(type.function),
-          recursivelyInexact(type.argument),
-          type.parametersStuckOn,
-        ),
-      function: type =>
-        makeFunctionType({
-          parameter: recursivelyInexact(type.signature.parameter),
-          return: recursivelyInexact(type.signature.return),
-        }),
-      indexedAccess: type =>
-        makeIndexedAccessType(
-          recursivelyInexact(type.object),
-          recursivelyInexact(type.key),
-        ),
-      intrinsicApplication: type =>
-        makeIntrinsicApplicationType(
-          type.parameterTypes.map(recursivelyInexact),
-          type.reduce,
-          parameterTypes =>
-            recursivelyInexact(type.computeUpperBound(parameterTypes)),
-        ),
-      object: type =>
-        makeObjectType(
-          Object.fromEntries(
-            Object.entries(type.children).map(([key, child]) => [
-              key,
-              recursivelyInexact(child),
-            ]),
-          ),
-          { excess: isBottomType(type.excess) ? something : type.excess },
-        ),
-      opaque: type => type,
-      parameter: type => type,
-      union: type =>
-        makeUnionType(
-          [...type.members].flatMap(member => {
-            if (typeof member === 'string') {
-              return [member]
-            } else {
-              const strippedMember = recursivelyInexact(member)
-              return strippedMember.kind === 'union' ?
-                  [...strippedMember.members]
-                : [strippedMember]
-            }
-          }),
-        ),
-    })
-  )

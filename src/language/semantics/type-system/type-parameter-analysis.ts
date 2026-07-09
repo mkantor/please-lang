@@ -51,13 +51,16 @@ const containedTypeParametersImplementation = (
           ...Object.entries(type.children).map(([key, child]) =>
             containedTypeParametersImplementation(child, [...root, key]),
           ),
-          // Excess bounds may also contain type parameters (which need to be
+          // Excess clauses may also contain type parameters (which need to be
           // visible here for stuckness detection). There's no way to talk about
           // them in `TypeKeyPath`, so they're currently (imprecisely) reported
           // at the object's own key path.
           // TODO: Should there be a `TypeKeyPath` symbol to allow addressing
-          // excess bounds explicitly?
-          containedTypeParametersImplementation(type.excess, root),
+          // excess clauses explicitly?
+          ...type.excess.flatMap(clause => [
+            containedTypeParametersImplementation(clause.keys, root),
+            containedTypeParametersImplementation(clause.values, root),
+          ]),
         ].reduce(mergeTypeParametersByKeyPath, new Map()),
       application: type =>
         mergeTypeParametersByKeyPath(

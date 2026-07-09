@@ -1,5 +1,4 @@
 import type { Atom } from '../../parsing.js'
-import { something } from './prelude-types.js'
 import { makeFunctionType } from './type-formats/function-type.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
 import { makeObjectType } from './type-formats/object-type.js'
@@ -11,7 +10,6 @@ import {
   stringifyTypeKeyPathForEndUser,
   type TypeKeyPath,
 } from './type-key-path.js'
-import { recursivelyInexact } from './type-substitution.js'
 
 export type GenericizedFunctionParameterAnnotation = {
   readonly type: Type
@@ -93,13 +91,11 @@ const genericizeFunctionParameterAnnotationAtKeyPath = (
             ] as const,
         )
         return {
-          // The annotation is an upper bound, so the rebuilt object admits
-          // arbitrary excess properties unconditionally.
           type: makeObjectType(
             Object.fromEntries(
               children.map(([key, child]) => [key, child.type]),
             ),
-            { excess: something },
+            type.excess,
           ),
           typeParametersBoundByFunction: new Set(
             children.flatMap(([_key, child]) => [
@@ -126,10 +122,7 @@ const genericizeLeaf =
   (leafType: Type): GenericizedFunctionParameterAnnotation => {
     const typeParameter = makeTypeParameter(
       synthesizeTypeParameterName(parameterName, keyPath),
-      {
-        // The constraint is an upper bound, so it can't be exact.
-        assignableTo: recursivelyInexact(leafType),
-      },
+      { assignableTo: leafType },
     )
     return {
       type: typeParameter,
