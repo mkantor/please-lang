@@ -51,11 +51,18 @@ const containedTypeParametersImplementation = (
           ]),
         ),
       object: type =>
-        Object.entries(type.children)
-          .map(([key, child]) =>
+        [
+          ...Object.entries(type.children).map(([key, child]) =>
             containedTypeParametersImplementation(child, [...root, key]),
-          )
-          .reduce(mergeTypeParametersByKeyPath, new Map()),
+          ),
+          // Excess bounds may also contain type parameters (which need to be
+          // visible here for stuckness detection). There's no way to talk about
+          // them in `TypeKeyPath`, so they're currently (imprecisely) reported
+          // at the object's own key path.
+          // TODO: Should there be a `TypeKeyPath` symbol to allow addressing
+          // excess bounds explicitly?
+          containedTypeParametersImplementation(type.excess, root),
+        ].reduce(mergeTypeParametersByKeyPath, new Map()),
       application: type =>
         mergeTypeParametersByKeyPath(
           containedTypeParametersImplementation(type.function, root),
@@ -130,6 +137,9 @@ const findKeyPathsToTypeParameterImplementation = (
           ),
         ]),
       object: type =>
+        // Note that this is asymmetric with `containedTypeParameters` in that
+        // it doesn't explore excess bounds. If they ever become explicitly
+        // addressable in `TypeKeyPath` then that should change.
         Object.entries(type.children)
           .map(([key, child]) =>
             findKeyPathsToTypeParameterImplementation(

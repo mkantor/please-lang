@@ -154,7 +154,7 @@ export const updateTypeAtKeyPathIfValid = (
                   operation,
                 ),
               },
-              { exact: type.exact },
+              { excess: type.excess },
             )
           }
         } else {

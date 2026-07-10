@@ -7,6 +7,7 @@ import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something } from './prelude-types.js'
 import { isAssignable } from './subtyping.js'
 import {
+  isNothing,
   makeApplicationType,
   makeFunctionType,
   makeIndexedAccessType,
@@ -270,23 +271,54 @@ export const getTypesForTypeParameters = ({
           ])
         : new Map(),
 
-      object: parameterType =>
-        argumentType.kind === 'object' ?
-          Object.entries(parameterType.children)
-            .map(([key, childParameter]) => {
-              const childArgument = argumentType.children[key]
-              return childArgument === undefined ?
-                  new Map<TypeParameter, Type>()
-                : getTypesForTypeParameters({
-                    parameterType: childParameter,
-                    argumentType: childArgument,
-                  })
-            })
-            .reduce(
-              (types, typesFromChild) => new Map([...typesFromChild, ...types]),
-              new Map<TypeParameter, Type>(),
+      object: parameterType => {
+        if (argumentType.kind !== 'object') {
+          return new Map()
+        } else {
+          // Type parameters in excess bounds unify against everything the
+          // argument could hold beyond the parameter's required properties.
+          const bindingsFromExcess = (): ReadonlyMap<TypeParameter, Type> => {
+            const unmatchedArgumentChildTypes = Object.entries(
+              argumentType.children,
             )
-        : new Map(),
+              .filter(
+                ([key, _child]) => parameterType.children[key] === undefined,
+              )
+              .map(([_key, child]) => child)
+            return getTypesForTypeParameters({
+              parameterType: parameterType.excess,
+              argumentType: unionOfTypes([
+                ...unmatchedArgumentChildTypes,
+                ...(isNothing(argumentType.excess) ?
+                  []
+                : [argumentType.excess]),
+              ]),
+            })
+          }
+          return [
+            ...Object.entries(parameterType.children).map(
+              ([key, childParameter]) => {
+                const childArgument = argumentType.children[key]
+                return childArgument === undefined ?
+                    new Map<TypeParameter, Type>()
+                  : getTypesForTypeParameters({
+                      parameterType: childParameter,
+                      argumentType: childArgument,
+                    })
+              },
+            ),
+            containedTypeParameters(parameterType.excess).size === 0 ?
+              new Map<TypeParameter, Type>()
+              // Excess bindings come last so type parameters prefer binding to
+              // required properties instead of excess (when the same type
+              // parameter appears in both places).
+            : bindingsFromExcess(),
+          ].reduce(
+            (types, typesFromChild) => new Map([...typesFromChild, ...types]),
+            new Map<TypeParameter, Type>(),
+          )
+        }
+      },
 
       opaque: _ => new Map(),
 
@@ -471,9 +503,9 @@ const cartesianProduct = <Element>(lists: readonly (readonly Element[])[]) =>
 
 /**
  * Enumerate every value inhabiting the given finitely-sized `type`, or return
- * `none` if `type` has infinite inhabitants. Literal atom types, exact object
- * types whose property types are enumerable, and unions of enumerable types are
- * enumerable.
+ * `none` if `type` has infinite inhabitants. Literal atom types, closed object
+ * types (no excess properties) whose property types are enumerable, and unions
+ * of enumerable types are enumerable.
  */
 export const enumerateInhabitants = (
   type: Type,
@@ -489,7 +521,7 @@ export const enumerateInhabitants = (
       opaque: _ => option.none,
       parameter: _ => option.none,
       object: type =>
-        !type.exact ?
+        !isNothing(type.excess) ?
           option.none
         : option.map(
             option.sequence(
@@ -595,7 +627,9 @@ export const supplyTypeArgument = (
             typeArgument,
           )
         }
-        return makeObjectType(substitutedChildren, { exact: type.exact })
+        return makeObjectType(substitutedChildren, {
+          excess: supplyTypeArgument(type.excess, typeParameter, typeArgument),
+        })
       },
       application: type =>
         reduceApplication(
@@ -682,9 +716,10 @@ export const supplyTypeArguments = (
     )
 
 /**
- * Recursively clear `exact` from every object type within `type`. Used when a
- * type is adopted from a user-written type position (e.g. parameter type
- * annotations), where subtyping means wider values may inhabit it.
+ * Recursively widen every closed (`excess: nothing`) object type to an open
+ * one; any other excess bound is preserved as written. Used when a type is
+ * adopted from a user-written type position (e.g. parameter type annotations),
+ * where subtyping means wider values may inhabit it.
  *
  * Type parameters are kept by reference (their identities matter), so their
  * constraints are not adjusted here; make sure constraints are inexact while
@@ -725,7 +760,7 @@ export const recursivelyInexact = (type: Type): Type =>
               recursivelyInexact(child),
             ]),
           ),
-          { exact: false },
+          { excess: isNothing(type.excess) ? something : type.excess },
         ),
       opaque: type => type,
       parameter: type => type,

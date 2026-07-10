@@ -60,7 +60,10 @@ export const computeFromReturnType =
       )
     } else {
       return isAssignable({ source: argumentType, target: elementType }) ?
-          makeObjectType({ tag: makeUnionType(['some']), value: argumentType })
+          makeObjectType(
+            { tag: makeUnionType(['some']), value: argumentType },
+            { excess: types.something },
+          )
         : optionType(elementType)
     }
   }

@@ -113,10 +113,13 @@ export const optionParameter = (
 })
 
 export const taggedParameter: Parameter<TaggedNode> = {
-  type: makeObjectType({
-    tag: types.atom,
-    value: types.something,
-  }),
+  type: makeObjectType(
+    {
+      tag: types.atom,
+      value: types.something,
+    },
+    { excess: types.something },
+  ),
   asExpected: value =>
     nodeIsTagged(value) ? option.makeSome(value) : option.none,
   expected: 'a tagged value',
