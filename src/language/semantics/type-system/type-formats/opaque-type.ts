@@ -16,9 +16,9 @@ export const makeOpaqueType = (
   symbol: TypeSymbol,
   subtyping: {
     readonly isAssignableFromLiteralType: (literalType: string) => boolean
-    // `upperBoundOfStuckType` is injected to avoid a
-    // cycle with `type-substitution.ts`. `makeOpaqueType` is called in static
-    // module scope from `prelude-types.ts`.
+    // `upperBoundOfStuckType` is injected to avoid a static dependency cycle.
+    // `makeOpaqueType` is called in static module scope to initialize prelude
+    // types.
     readonly upperBoundOfStuckType: (
       type: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
     ) => Type
