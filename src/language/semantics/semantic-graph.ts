@@ -14,7 +14,6 @@ import {
   makeLookupExpression,
   makeUnionExpression,
   readFunctionExpression,
-  types,
   type Type,
 } from '../semantics.js'
 import { inlinePlz, unparse, type Notation } from '../unparsing.js'
@@ -36,6 +35,7 @@ import { nodeTag } from './semantic-graph-node-tag.js'
 import {
   functionParameterKey,
   functionReturnKey,
+  isTopType,
   matchTypeFormat,
   typeParameterAssignableToConstraintKey,
   type TypeKeyPath,
@@ -370,7 +370,7 @@ export const typeToSemanticGraph = (
       }
     },
     union: type => {
-      if (type === types.something) {
+      if (isTopType(type)) {
         return typeSymbolToSemanticGraph(somethingTypeSymbol)
       } else {
         const [firstMember, ...remainingMembers] = type.members

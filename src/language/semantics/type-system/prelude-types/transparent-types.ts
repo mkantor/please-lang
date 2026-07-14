@@ -1,3 +1,4 @@
+import { somethingTypeSymbol } from '../prelude-types.js'
 import {
   makeFunctionType,
   type FunctionType,
@@ -16,14 +17,15 @@ export const nullType = makeUnionType(['null'])
 export const boolean = makeUnionType(['false', 'true'])
 
 // `functionType`, `object`, and `something` reference each other directly, so
-// we need to do a dance. Note that many type traversals rely on reference
-// equality of `something` to avoid infinite recursion/iteration.
+// we need to do a dance.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-export const functionType: FunctionType = {} as FunctionType
+export const functionType = {} as FunctionType
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-export const object: ObjectType = {} as ObjectType
+export const object = {} as ObjectType
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-export const something: UnionType = {} as UnionType // the top type
+export const something = {} as UnionType & {
+  readonly identity: typeof somethingTypeSymbol
+} // the top type
 Object.assign(
   functionType,
   makeFunctionType({
@@ -38,6 +40,7 @@ Object.assign(
 Object.assign(
   something,
   makeUnionType([functionType, atom, object]) satisfies UnionType,
+  { identity: somethingTypeSymbol },
 )
 
 export const option = (value: Type) =>

@@ -1,19 +1,15 @@
-import {
-  atom,
-  atomTypeSymbol,
-  integer,
-  integerTypeSymbol,
-  naturalNumber,
-  naturalNumberTypeSymbol,
-} from './prelude-types/opaque-types.js'
+import { atom, integer, naturalNumber } from './prelude-types/opaque-types.js'
 import { something } from './prelude-types/transparent-types.js'
+import {
+  atomTypeSymbol,
+  integerTypeSymbol,
+  naturalNumberTypeSymbol,
+  somethingTypeSymbol,
+} from './prelude-types/type-symbols.js'
 
 export * from './prelude-types/opaque-types.js'
 export * from './prelude-types/transparent-types.js'
-
-// Despite not being opaque, `something` gets a type symbol to avoid
-// complications in value space stemming from its circular definition.
-export const somethingTypeSymbol = Symbol('something')
+export * from './prelude-types/type-symbols.js'
 
 export const typesBySymbol = {
   [atomTypeSymbol]: atom,

@@ -34,6 +34,3 @@ export const unionOfTypes = (types: readonly Type[]): Type =>
         type.kind === 'union' ? [...type.members] : [type],
       ),
     )
-
-export const isNothing = (type: Type) =>
-  type.kind === 'union' && type.members.size === 0
