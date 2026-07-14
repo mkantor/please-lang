@@ -1,6 +1,16 @@
 import { testCases } from '../../../test-utilities.test.js'
 import { stringifyTypeForEndUser } from '../semantic-graph.js'
 import {
+  makeApplicationType,
+  makeFunctionType,
+  makeIndexedAccessType,
+  makeObjectType,
+  makeTypeParameter,
+  makeUnionType,
+  type Type,
+  type UnionType,
+} from '../type-system.js'
+import {
   atom,
   boolean,
   functionType,
@@ -12,16 +22,6 @@ import {
   something,
 } from './prelude-types.js'
 import { isAssignable, simplifyUnionType } from './subtyping.js'
-import {
-  makeApplicationType,
-  makeFunctionType,
-  makeIndexedAccessType,
-  makeObjectType,
-  makeTypeParameter,
-  makeUnionType,
-  type Type,
-  type UnionType,
-} from './type-formats.js'
 
 const typeAssignabilitySuite = testCases(
   ([source, target]: [source: Type, target: Type]) =>

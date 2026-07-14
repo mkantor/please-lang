@@ -36,6 +36,7 @@ import { nodeTag } from './semantic-graph-node-tag.js'
 import {
   functionParameterKey,
   functionReturnKey,
+  matchTypeFormat,
   typeParameterAssignableToConstraintKey,
   type TypeKeyPath,
 } from './type-system.js'
@@ -45,7 +46,6 @@ import {
   naturalNumberTypeSymbol,
   somethingTypeSymbol,
 } from './type-system/prelude-types.js'
-import { matchTypeFormat } from './type-system/type-formats.js'
 
 export type TypeSymbol =
   | typeof atomTypeSymbol

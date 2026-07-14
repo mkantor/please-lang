@@ -2,14 +2,10 @@ import type { Option } from '@matt.kantor/option'
 import option from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { something } from './prelude-types.js'
-import {
-  makeObjectType,
-  makeUnionType,
-  matchTypeFormat,
-  type ObjectType,
-  type Type,
-  type UnionType,
-} from './type-formats.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
+import { makeObjectType, type ObjectType } from './type-formats/object-type.js'
+import type { Type } from './type-formats/type.js'
+import { makeUnionType, type UnionType } from './type-formats/union-type.js'
 import { updateTypeAtKeyPathIfValid } from './type-key-path.js'
 import {
   containedTypeParameters,

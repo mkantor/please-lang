@@ -6,15 +6,15 @@ import {
   objectNodeFromOrderedEntries,
   orderedEntriesOfObjectNode,
 } from '../object-node.js'
-import { types } from '../type-system.js'
-import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
   isNothing,
   makeObjectType,
   makeUnionType,
+  types,
   unionOfTypes,
   type Type,
-} from '../type-system/type-formats.js'
+} from '../type-system.js'
+import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'

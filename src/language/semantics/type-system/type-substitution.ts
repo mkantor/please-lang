@@ -7,24 +7,33 @@ import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something } from './prelude-types.js'
 import { isAssignable } from './subtyping.js'
 import {
-  isNothing,
   makeApplicationType,
-  makeFunctionType,
-  makeIndexedAccessType,
-  makeIntrinsicApplicationType,
-  makeObjectType,
-  makeTypeParameter,
-  makeUnionType,
-  matchTypeFormat,
-  unionOfTypes,
   type ApplicationType,
+} from './type-formats/application-type.js'
+import {
+  makeFunctionType,
   type FunctionType,
+} from './type-formats/function-type.js'
+import {
+  makeIndexedAccessType,
   type IndexedAccessType,
+} from './type-formats/indexed-access-type.js'
+import {
+  makeIntrinsicApplicationType,
   type IntrinsicApplicationType,
-  type ObjectType,
-  type Type,
+} from './type-formats/intrinsic-application-type.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
+import { makeObjectType, type ObjectType } from './type-formats/object-type.js'
+import {
+  makeTypeParameter,
   type TypeParameter,
-} from './type-formats.js'
+} from './type-formats/type-parameter-type.js'
+import type { Type } from './type-formats/type.js'
+import {
+  isNothing,
+  makeUnionType,
+  unionOfTypes,
+} from './type-formats/union-type.js'
 import {
   atomKeyPathComponentFromType,
   functionParameterKey,

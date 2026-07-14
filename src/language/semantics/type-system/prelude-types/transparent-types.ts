@@ -1,13 +1,11 @@
 import {
   makeFunctionType,
-  makeObjectType,
-  makeTypeParameter,
-  makeUnionType,
   type FunctionType,
-  type ObjectType,
-  type Type,
-  type UnionType,
-} from '../type-formats.js'
+} from '../type-formats/function-type.js'
+import { makeObjectType, type ObjectType } from '../type-formats/object-type.js'
+import { makeTypeParameter } from '../type-formats/type-parameter-type.js'
+import type { Type } from '../type-formats/type.js'
+import { makeUnionType, type UnionType } from '../type-formats/union-type.js'
 import { atom } from './opaque-types.js'
 
 export const nothing = makeUnionType([]) // the bottom type

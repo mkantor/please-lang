@@ -1,11 +1,11 @@
-import { types } from '../type-system.js'
-import { option as optionType } from '../type-system/prelude-types.js'
-import { isAssignable } from '../type-system/subtyping.js'
 import {
   makeObjectType,
   makeUnionType,
+  types,
   type Type,
-} from '../type-system/type-formats.js'
+} from '../type-system.js'
+import { option as optionType } from '../type-system/prelude-types.js'
+import { isAssignable } from '../type-system/subtyping.js'
 
 /**
  * Builds a `computeRefinedReturnType` function for an operation closed over

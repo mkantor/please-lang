@@ -1,12 +1,10 @@
 import type { Atom } from '../../parsing.js'
 import { something } from './prelude-types.js'
-import {
-  makeFunctionType,
-  makeObjectType,
-  makeTypeParameter,
-  matchTypeFormat,
-  type Type,
-} from './type-formats.js'
+import { makeFunctionType } from './type-formats/function-type.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
+import { makeObjectType } from './type-formats/object-type.js'
+import { makeTypeParameter } from './type-formats/type-parameter-type.js'
+import type { Type } from './type-formats/type.js'
 import {
   functionParameterKey,
   functionReturnKey,

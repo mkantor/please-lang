@@ -21,14 +21,14 @@ import {
   containsAnyUnelaboratedNodes,
   type SemanticGraph,
 } from '../semantic-graph.js'
-import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import {
   makeFunctionType,
   makeIntrinsicApplicationType,
   makeTypeParameter,
   type FunctionType,
   type Type,
-} from '../type-system/type-formats.js'
+} from '../type-system.js'
+import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import { containedTypeParameters } from '../type-system/type-parameter-analysis.js'
 import {
   getTypesForTypeParameters,
