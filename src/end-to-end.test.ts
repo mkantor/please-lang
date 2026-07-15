@@ -47,6 +47,24 @@ const endToEnd = (input: string) => {
   return runtimeOutput
 }
 
+const typeMismatch = (result: ProgramResult) => {
+  assert(either.isLeft(result))
+  assert('kind' in result.value)
+  assert.deepEqual(result.value.kind, 'typeMismatch')
+}
+
+const invalidExpression = (result: ProgramResult) => {
+  assert(either.isLeft(result))
+  assert('kind' in result.value)
+  assert.deepEqual(result.value.kind, 'invalidExpression')
+}
+
+const panic = (result: ProgramResult) => {
+  assert(either.isLeft(result))
+  assert('kind' in result.value)
+  assert.deepEqual(result.value.kind, 'panic')
+}
+
 // These tests can't be fully-roundtripped because their output depends on
 // runtime state.
 testCases(parseAndCompileAndRun, code => code)('runtime-derived values', [
@@ -128,14 +146,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ['{a,1:overwritten,c}', success({ 0: 'a', 1: 'c' })],
   ['{overwritten,0:a,c}', success({ 0: 'a', 1: 'c' })],
   ['@check {type:true, value:true}', success('true')],
-  [
-    '@panic',
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'panic')
-    },
-  ],
+  ['@panic', panic],
   ['{a:A, b:{"@lookup", {a}}}', success({ a: 'A', b: 'A' })],
   [
     '{a:A, {"@lookup", {a}}}',
@@ -162,14 +173,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       assert(either.isRight(result))
     },
   ],
-  [
-    '@runtime {_ => @panic}',
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'panic')
-    },
-  ],
+  ['@runtime {_ => @panic}', panic],
   [
     'a => :a',
     success({
@@ -307,14 +311,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [`"🇺🇸" atom.split ""`, success({ 0: '🇺', 1: '🇸' })],
   [`"a👾b" atom.split 👾`, success({ 0: 'a', 1: 'b' })],
   [`("a👾b" atom.split "") atom.join ""`, success('a👾b')],
-  [
-    `{ a: { nested: x } } atom.join ", "`,
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'typeMismatch')
-    },
-  ],
+  [`{ a: { nested: x } } atom.join ", "`, typeMismatch],
   [`:integer.add(1)(1)`, success('2')],
   [
     `:integer.add(one)(juan)`,
@@ -720,14 +717,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       e: 'not a number',
     }),
   ],
-  [
-    `"not a number" assume :integer.type`,
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'typeMismatch')
-    },
-  ],
+  [`"not a number" assume :integer.type`, typeMismatch],
   [
     `@runtime { context =>
       :context.environment.lookup("not a legal environment variable name")
@@ -784,14 +774,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success('it works'),
   ],
   [`(:boolean.not ~ (:boolean.type ~> :boolean.type))(false)`, success('true')],
-  [
-    `:boolean.not ~ (:boolean.type ~> :integer.type)`,
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'typeMismatch')
-    },
-  ],
+  [`:boolean.not ~ (:boolean.type ~> :integer.type)`, typeMismatch],
   [
     `{ 1 integer.equals 1, 1 integer.equals 2 }`,
     success({ 0: 'true', 1: 'false' }),
@@ -820,14 +803,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       assert(either.isRight(result))
     },
   ],
-  [
-    `"arbitrary value" ~ :nothing.type`,
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'typeMismatch')
-    },
-  ],
+  [`"arbitrary value" ~ :nothing.type`, typeMismatch],
   [
     // `true | (false || true) | false`
     'true | false || true | false',
@@ -915,22 +891,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success('2'),
   ],
   // `_` is an ignored property/parameter:
-  [
-    `(_ => :_)(a)`,
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'invalidExpression')
-    },
-  ],
-  [
-    `{ _: a, b: :_ }`,
-    result => {
-      assert(either.isLeft(result))
-      assert('kind' in result.value)
-      assert.deepEqual(result.value.kind, 'invalidExpression')
-    },
-  ],
+  [`(_ => :_)(a)`, invalidExpression],
+  [`{ _: a, b: :_ }`, invalidExpression],
   // `_` can still be used as part of an `@index` query:
   [`{ _: a }._`, success('a')],
   [
