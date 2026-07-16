@@ -903,4 +903,12 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }.0`,
     success('it works'),
   ],
+  [
+    `:match({ a: (v: :integer.type) => :v })({ tag: a, value: hello })`,
+    typeMismatch,
+  ],
+  [
+    `:match({ a: (v: :integer.type) => :v + 1 })({ tag: a, value: 41 })`,
+    success('42'),
+  ],
 ])

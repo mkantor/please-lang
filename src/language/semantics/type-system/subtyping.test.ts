@@ -30,6 +30,8 @@ const typeAssignabilitySuite = testCases(
     `assignability of \`${stringifyTypeForEndUser(source)}\` to \`${stringifyTypeForEndUser(target)}\``,
 )
 
+const exactEmptyObject = makeObjectType({}, [{ keys: atom, values: nothing }])
+
 const A = makeTypeParameter('a', { assignableTo: something })
 const B = makeTypeParameter('b', { assignableTo: something })
 const C = makeTypeParameter('c', { assignableTo: something })
@@ -58,13 +60,10 @@ const extendsExtendsAnyAtom = makeTypeParameter('u', {
 })
 
 const indexedAccessBoolean = makeIndexedAccessType(
-  makeObjectType(
-    {
-      a: makeUnionType(['true']),
-      b: makeUnionType(['false']),
-    },
-    { excess: something },
-  ),
+  makeObjectType({
+    a: makeUnionType(['true']),
+    b: makeUnionType(['false']),
+  }),
   makeTypeParameter('key', {
     assignableTo: makeUnionType(['a', 'b']),
   }),
@@ -108,33 +107,28 @@ testCases(
     makeUnionType([
       'a',
       atom,
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
-      makeObjectType(
-        {
-          a: makeUnionType(['b']),
-        },
-        { excess: something },
-      ),
-      makeObjectType(
-        {
-          a: makeUnionType(['c']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+      }),
+      makeObjectType({
+        a: makeUnionType(['b']),
+      }),
+      makeObjectType({
+        a: makeUnionType(['c']),
+      }),
     ]),
     ':atom.type | { a: a | b | c }',
   ],
   [
     // Members whose excess bounds disagree must not merge with each other.
     makeUnionType([
-      makeObjectType({ a: makeUnionType(['a']) }, { excess: nothing }),
-      makeObjectType({ a: makeUnionType(['b']) }, { excess: nothing }),
-      makeObjectType({ a: makeUnionType(['c']) }, { excess: something }),
+      makeObjectType({ a: makeUnionType(['a']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({ a: makeUnionType(['b']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({ a: makeUnionType(['c']) }),
     ]),
     '{ a: a | b } | { a: c }',
   ],
@@ -317,58 +311,40 @@ typeAssignabilitySuite('custom types (assignable)', [
   [[makeUnionType(['0', '-1']), integer], true],
   [
     [
-      makeObjectType(
-        {
-          a: makeUnionType(['a']),
-          b: object,
-        },
-        { excess: something },
-      ),
-      makeObjectType(
-        {
-          a: atom,
-          b: object,
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a']),
+        b: object,
+      }),
+      makeObjectType({
+        a: atom,
+        b: object,
+      }),
     ],
     true,
   ],
   [
     [
-      makeObjectType(
-        {
-          a: makeUnionType(['a']),
-          b: makeObjectType({ c: boolean }, { excess: something }),
-          c: nullType,
-        },
-        { excess: something },
-      ),
-      makeObjectType(
-        {
-          a: atom,
-          b: object,
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a']),
+        b: makeObjectType({ c: boolean }),
+        c: nullType,
+      }),
+      makeObjectType({
+        a: atom,
+        b: object,
+      }),
     ],
     true,
   ],
   [
     [
-      makeObjectType(
-        {
-          a: makeUnionType(['a']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a']),
+      }),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
       ]),
     ],
     true,
@@ -376,19 +352,13 @@ typeAssignabilitySuite('custom types (assignable)', [
   [
     [
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-      ]),
-      makeObjectType(
-        {
+        makeObjectType({
           a: makeUnionType(['a']),
-        },
-        { excess: something },
-      ),
+        }),
+      ]),
+      makeObjectType({
+        a: makeUnionType(['a']),
+      }),
     ],
     true,
   ],
@@ -396,25 +366,16 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a } | { a: b }` is assignable to `{ a: a | b }`
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+        }),
       ]),
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+      }),
     ],
     true,
   ],
@@ -422,25 +383,16 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a } | { a: b }` is assignable to `{ a: a | b | c }`
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+        }),
       ]),
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b', 'c']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b', 'c']),
+      }),
     ],
     true,
   ],
@@ -448,28 +400,19 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a, b: a } | { a: b, b: b }` is assignable to `{ a: a | b, b: a | b }`
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-            b: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-            b: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+          b: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+          b: makeUnionType(['b']),
+        }),
       ]),
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-          b: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+        b: makeUnionType(['a', 'b']),
+      }),
     ],
     true,
   ],
@@ -477,27 +420,18 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a } | { a: b } | c` is assignable to `{ a: a | b } | c`
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+        }),
         'c',
       ]),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a', 'b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a', 'b']),
+        }),
         'c',
       ]),
     ],
@@ -506,25 +440,16 @@ typeAssignabilitySuite('custom types (assignable)', [
   [
     [
       // `{ a: a | b }` is assignable to `{ a: a } | { a: b }`
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+      }),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+        }),
       ]),
     ],
     true,
@@ -532,31 +457,19 @@ typeAssignabilitySuite('custom types (assignable)', [
   [
     [
       // `{ a: a | b }` is assignable to `{ a: a } | { a: b } | { a: c }`
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+      }),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['c']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['c']),
+        }),
       ]),
     ],
     true,
@@ -564,36 +477,21 @@ typeAssignabilitySuite('custom types (assignable)', [
   [
     [
       // `{ a: { a: a | b } }` is assignable to `{ a: { a: a } | { a: b } }`
-      makeObjectType(
-        {
-          a: makeObjectType(
-            {
-              a: makeUnionType(['a', 'b']),
-            },
-            { excess: something },
-          ),
-        },
-        { excess: something },
-      ),
-      makeObjectType(
-        {
-          a: makeUnionType([
-            makeObjectType(
-              {
-                a: makeUnionType(['a']),
-              },
-              { excess: something },
-            ),
-            makeObjectType(
-              {
-                a: makeUnionType(['b']),
-              },
-              { excess: something },
-            ),
-          ]),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeObjectType({
+          a: makeUnionType(['a', 'b']),
+        }),
+      }),
+      makeObjectType({
+        a: makeUnionType([
+          makeObjectType({
+            a: makeUnionType(['a']),
+          }),
+          makeObjectType({
+            a: makeUnionType(['b']),
+          }),
+        ]),
+      }),
     ],
     true,
   ],
@@ -601,21 +499,15 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a } | { a: b, b: c }` is assignable to `{ a: a | b }`
       makeUnionType([
-        makeObjectType({ a: makeUnionType(['a']) }, { excess: something }),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-            b: makeUnionType(['c']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({ a: makeUnionType(['a']) }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+          b: makeUnionType(['c']),
+        }),
       ]),
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+      }),
     ],
     true,
   ],
@@ -623,27 +515,18 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a | b } | c` is assignable to `{ a: a } | { a: b } | c`
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a', 'b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a', 'b']),
+        }),
         'c',
       ]),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+        }),
         'c',
       ]),
     ],
@@ -652,18 +535,15 @@ typeAssignabilitySuite('custom types (assignable)', [
   [
     [
       // `{ a: a | b } | { b: a | b }` is assignable to `{ a: a } | { a: b } | { b: a } | { b: b }`
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-          b: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+        b: makeUnionType(['a', 'b']),
+      }),
       makeUnionType([
-        makeObjectType({ a: makeUnionType(['a']) }, { excess: something }),
-        makeObjectType({ a: makeUnionType(['b']) }, { excess: something }),
-        makeObjectType({ b: makeUnionType(['a']) }, { excess: something }),
-        makeObjectType({ b: makeUnionType(['b']) }, { excess: something }),
+        makeObjectType({ a: makeUnionType(['a']) }),
+        makeObjectType({ a: makeUnionType(['b']) }),
+        makeObjectType({ b: makeUnionType(['a']) }),
+        makeObjectType({ b: makeUnionType(['b']) }),
       ]),
     ],
     true,
@@ -672,24 +552,18 @@ typeAssignabilitySuite('custom types (assignable)', [
     [
       // `{ a: a } | { a: b } | { b: a } | { b: b }` is assignable to `{ a: a | b } | { b: a | b }`
       makeUnionType([
-        makeObjectType({ a: makeUnionType(['a']) }, { excess: something }),
-        makeObjectType({ a: makeUnionType(['b']) }, { excess: something }),
-        makeObjectType({ b: makeUnionType(['a']) }, { excess: something }),
-        makeObjectType({ b: makeUnionType(['b']) }, { excess: something }),
+        makeObjectType({ a: makeUnionType(['a']) }),
+        makeObjectType({ a: makeUnionType(['b']) }),
+        makeObjectType({ b: makeUnionType(['a']) }),
+        makeObjectType({ b: makeUnionType(['b']) }),
       ]),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a', 'b']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            b: makeUnionType(['a', 'b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a', 'b']),
+        }),
+        makeObjectType({
+          b: makeUnionType(['a', 'b']),
+        }),
       ]),
     ],
     true,
@@ -783,18 +657,14 @@ typeAssignabilitySuite('custom types (assignable)', [
     ],
     true,
   ],
-  [
-    [
-      makeObjectType({}, { excess: nothing }),
-      makeObjectType({}, { excess: nothing }),
-    ],
-    true,
-  ],
+  [[exactEmptyObject, exactEmptyObject], true],
   [
     [
       // Closed object types are assignable to open ones.
-      makeObjectType({ a: makeUnionType(['a']) }, { excess: nothing }),
-      makeObjectType({}, { excess: something }),
+      makeObjectType({ a: makeUnionType(['a']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({}),
     ],
     true,
   ],
@@ -806,13 +676,13 @@ typeAssignabilitySuite('custom types (assignable)', [
   //     makeObjectType({
   //       a: makeUnionType(['a', 'b']),
   //       b: makeUnionType(['c']),
-  //     }, { excess: something }),
+  //     }, []),
   //     makeUnionType([
-  //       makeObjectType({ a: makeUnionType(['a']) }, { excess: something }),
+  //       makeObjectType({ a: makeUnionType(['a']) }),
   //       makeObjectType({
   //         a: makeUnionType(['b']),
   //         b: makeUnionType(['c']),
-  //       }, { excess: something }),
+  //       }, []),
   //     ]),
   //   ],
   //   true,
@@ -825,20 +695,17 @@ typeAssignabilitySuite('custom types (not assignable)', [
   [[makeUnionType(['-0']), integer], false],
   [
     [
-      makeObjectType(
-        {
-          a: atom,
-          b: object,
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: atom,
+        b: object,
+      }),
       makeObjectType(
         {
           a: atom,
           b: object,
           c: boolean, // required property in target not present in source
         },
-        { excess: something },
+        [],
       ),
     ],
     false,
@@ -846,28 +713,19 @@ typeAssignabilitySuite('custom types (not assignable)', [
   [
     [
       // `{ a: a | b, b: a | b }` is not assignable to `{ a: a, b: a } | { a: b, b: b }`
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
-          b: makeUnionType(['a', 'b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+        b: makeUnionType(['a', 'b']),
+      }),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-            b: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-            b: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+          b: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
+          b: makeUnionType(['b']),
+        }),
       ]),
     ],
     false,
@@ -875,28 +733,19 @@ typeAssignabilitySuite('custom types (not assignable)', [
   [
     [
       // `{ a: a, b: b }` is not assignable to `{ a: a, b: z } | { b: b, a: z }`
-      makeObjectType(
-        {
-          a: makeUnionType(['a']),
-          b: makeUnionType(['b']),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeUnionType(['a']),
+        b: makeUnionType(['b']),
+      }),
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-            b: makeUnionType(['z']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['z']),
-            b: makeUnionType(['b']),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeUnionType(['a']),
+          b: makeUnionType(['z']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['z']),
+          b: makeUnionType(['b']),
+        }),
       ]),
     ],
     false,
@@ -905,27 +754,18 @@ typeAssignabilitySuite('custom types (not assignable)', [
     [
       // `{ a: a } | { a: b, b: c }` is not assignable to `{ a: a | b, b: c }`
       makeUnionType([
-        makeObjectType(
-          {
-            a: makeUnionType(['a']),
-          },
-          { excess: something },
-        ),
-        makeObjectType(
-          {
-            a: makeUnionType(['b']),
-            b: makeUnionType(['c']),
-          },
-          { excess: something },
-        ),
-      ]),
-      makeObjectType(
-        {
-          a: makeUnionType(['a', 'b']),
+        makeObjectType({
+          a: makeUnionType(['a']),
+        }),
+        makeObjectType({
+          a: makeUnionType(['b']),
           b: makeUnionType(['c']),
-        },
-        { excess: something },
-      ),
+        }),
+      ]),
+      makeObjectType({
+        a: makeUnionType(['a', 'b']),
+        b: makeUnionType(['c']),
+      }),
     ],
     false,
   ],
@@ -995,8 +835,8 @@ typeAssignabilitySuite('custom types (not assignable)', [
   [
     [
       // Open object types aren't assignable to closed ones.
-      makeObjectType({}, { excess: something }),
-      makeObjectType({}, { excess: nothing }),
+      makeObjectType({}),
+      exactEmptyObject,
     ],
     false,
   ],
@@ -1005,10 +845,15 @@ typeAssignabilitySuite('custom types (not assignable)', [
       // Closed objects with extra properties aren't assignable to closed
       // objects lacking them.
       makeObjectType(
-        { a: makeUnionType(['a']), b: makeUnionType(['b']) },
-        { excess: nothing },
+        {
+          a: makeUnionType(['a']),
+          b: makeUnionType(['b']),
+        },
+        [{ keys: atom, values: nothing }],
       ),
-      makeObjectType({ a: makeUnionType(['a']) }, { excess: nothing }),
+      makeObjectType({ a: makeUnionType(['a']) }, [
+        { keys: atom, values: nothing },
+      ]),
     ],
     false,
   ],
@@ -1016,66 +861,275 @@ typeAssignabilitySuite('custom types (not assignable)', [
     [
       // Similar to above, but with unions in the mix.
       makeObjectType(
-        { a: makeUnionType(['a']), b: makeUnionType(['b']) },
-        { excess: nothing },
+        {
+          a: makeUnionType(['a']),
+          b: makeUnionType(['b']),
+        },
+        [{ keys: atom, values: nothing }],
       ),
       makeUnionType([
-        makeObjectType({ a: makeUnionType(['a']) }, { excess: nothing }),
-        makeObjectType({ b: makeUnionType(['b']) }, { excess: nothing }),
+        makeObjectType({ a: makeUnionType(['a']) }, [
+          { keys: atom, values: nothing },
+        ]),
+        makeObjectType({ b: makeUnionType(['b']) }, [
+          { keys: atom, values: nothing },
+        ]),
       ]),
     ],
     false,
   ],
 ])
 
-typeAssignabilitySuite('bounded-excess object types', [
+typeAssignabilitySuite('excess clauses (default clause only)', [
   [
     [
       makeObjectType(
-        { a: makeUnionType(['a']), b: makeUnionType(['b']) },
-        { excess: nothing },
+        {
+          a: makeUnionType(['a']),
+          b: makeUnionType(['b']),
+        },
+        [{ keys: atom, values: nothing }],
       ),
-      makeObjectType({ a: makeUnionType(['a']) }, { excess: atom }),
+      makeObjectType({ a: makeUnionType(['a']) }, [
+        { keys: atom, values: atom },
+      ]),
     ],
     true,
   ],
   [
     [
-      makeObjectType(
-        { a: makeUnionType(['a']), b: object },
-        { excess: nothing },
-      ),
-      makeObjectType({ a: makeUnionType(['a']) }, { excess: atom }),
+      makeObjectType({ a: makeUnionType(['a']), b: object }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({ a: makeUnionType(['a']) }, [
+        { keys: atom, values: atom },
+      ]),
     ],
     false,
   ],
   [
     [
-      makeObjectType({}, { excess: naturalNumber }),
-      makeObjectType({}, { excess: integer }),
+      makeObjectType({}, [{ keys: atom, values: naturalNumber }]),
+      makeObjectType({}, [{ keys: atom, values: integer }]),
     ],
     true,
   ],
   [
     [
-      makeObjectType({}, { excess: atom }),
-      makeObjectType({}, { excess: naturalNumber }),
+      makeObjectType({}, [{ keys: atom, values: atom }]),
+      makeObjectType({}, [{ keys: atom, values: naturalNumber }]),
     ],
     false,
   ],
-  [[object, makeObjectType({}, { excess: atom })], false],
-  [[makeObjectType({}, { excess: atom }), object], true],
+  [[object, makeObjectType({}, [{ keys: atom, values: atom }])], false],
+  [[makeObjectType({}, [{ keys: atom, values: atom }]), object], true],
+  [
+    [exactEmptyObject, makeObjectType({}, [{ keys: atom, values: atom }])],
+    true,
+  ],
   [
     [
-      makeObjectType({}, { excess: nothing }),
-      makeObjectType({}, { excess: atom }),
+      makeObjectType({}, [{ keys: atom, values: atom }]),
+      makeObjectType({ a: atom }),
+    ],
+    false,
+  ],
+])
+
+typeAssignabilitySuite('excess clauses', [
+  [
+    [
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: naturalNumber, values: naturalNumber },
+      ]),
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: naturalNumber, values: integer },
+      ]),
     ],
     true,
   ],
   [
     [
-      makeObjectType({}, { excess: atom }),
-      makeObjectType({ a: atom }, { excess: something }),
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: integer, values: integer },
+        { keys: naturalNumber, values: integer },
+      ]),
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: integer, values: integer },
+      ]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({}, [{ keys: naturalNumber, values: naturalNumber }]),
+      makeObjectType({}),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: naturalNumber, values: naturalNumber },
+      ]),
+      makeObjectType({}, [{ keys: atom, values: atom }]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({}),
+      makeObjectType({}, [{ keys: naturalNumber, values: atom }]),
+    ],
+    false,
+  ],
+  [
+    [
+      makeObjectType({}, [{ keys: atom, values: atom }]),
+      makeObjectType({}, [
+        { keys: atom, values: atom },
+        { keys: naturalNumber, values: integer },
+      ]),
+    ],
+    false,
+  ],
+  [
+    [
+      exactEmptyObject,
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: naturalNumber, values: atom },
+      ]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({ 5: integer }, [{ keys: atom, values: nothing }]),
+      makeObjectType({}, [
+        { keys: atom, values: nothing },
+        { keys: naturalNumber, values: integer },
+      ]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({ 5: atom }, [{ keys: atom, values: nothing }]),
+      makeObjectType({}, [{ keys: naturalNumber, values: integer }]),
+    ],
+    false,
+  ],
+  [
+    [
+      makeObjectType({}),
+      makeObjectType({}, [{ keys: atom, values: something }]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({}, [{ keys: atom, values: something }]),
+      makeObjectType({}),
+    ],
+    true,
+  ],
+  [
+    [makeObjectType({}), makeObjectType({}, [{ keys: atom, values: atom }])],
+    false,
+  ],
+  [
+    [
+      makeObjectType({ c: atom }, [{ keys: atom, values: nothing }]),
+      makeObjectType({}, [
+        { keys: makeUnionType(['a', 'b']), values: nothing },
+      ]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({ a: atom }, [{ keys: atom, values: nothing }]),
+      makeObjectType({}, [
+        { keys: makeUnionType(['a', 'b']), values: nothing },
+      ]),
+    ],
+    false,
+  ],
+  [
+    [
+      makeObjectType({}, [
+        { keys: makeUnionType(['a', 'b']), values: nothing },
+      ]),
+      exactEmptyObject,
+    ],
+    false,
+  ],
+  // Overlapping clauses: a key inhabiting several domains is bounded by the
+  // last matching clause, not an earlier more-permissive one.
+  [
+    [
+      makeObjectType({ a: makeUnionType(['hello']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({}, [
+        { keys: atom, values: atom },
+        { keys: makeUnionType(['a', 'b']), values: integer },
+      ]),
+    ],
+    false,
+  ],
+  [
+    [
+      makeObjectType({ c: makeUnionType(['hello']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({}, [
+        { keys: atom, values: atom },
+        { keys: makeUnionType(['a', 'b']), values: integer },
+      ]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({ a: makeUnionType(['hello']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({ a: atom }, [
+        { keys: makeUnionType(['a', 'b']), values: nothing },
+      ]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType(
+        {
+          a: makeUnionType(['hello']),
+          b: makeUnionType(['x']),
+        },
+        [{ keys: atom, values: nothing }],
+      ),
+      makeObjectType({ a: atom }, [
+        { keys: makeUnionType(['a', 'b']), values: nothing },
+      ]),
+    ],
+    false,
+  ],
+  [
+    [
+      makeObjectType({ a: makeUnionType(['hello']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({ a: integer }, [
+        { keys: makeUnionType(['a']), values: atom },
+      ]),
     ],
     false,
   ],
@@ -1143,7 +1197,7 @@ typeAssignabilitySuite('generic function types (assignable)', [
       // `(?a: :atom.type) ~> { a: :a }` is assignable to `:atom.type ~> :something.type`
       makeFunctionType({
         parameter: extendsAnyAtom,
-        return: makeObjectType({ a: extendsAnyAtom }, { excess: something }),
+        return: makeObjectType({ a: extendsAnyAtom }),
       }),
       makeFunctionType({
         parameter: atom,
@@ -1157,17 +1211,14 @@ typeAssignabilitySuite('generic function types (assignable)', [
       // `?a ~> { a: :a, b: :atom.type }` is assignable to `(?a: :atom.type) ~> { a: a }`
       makeFunctionType({
         parameter: A,
-        return: makeObjectType(
-          {
-            a: A,
-            b: atom,
-          },
-          { excess: something },
-        ),
+        return: makeObjectType({
+          a: A,
+          b: atom,
+        }),
       }),
       makeFunctionType({
         parameter: extendsAnyAtom,
-        return: makeObjectType({ a: extendsAnyAtom }, { excess: something }),
+        return: makeObjectType({ a: extendsAnyAtom }),
       }),
     ],
     true,
@@ -1177,11 +1228,11 @@ typeAssignabilitySuite('generic function types (assignable)', [
       // `(?a: :atom.type) ~> { a: :a }` is assignable to `:atom.type ~> { a: :atom.type }`
       makeFunctionType({
         parameter: extendsAnyAtom,
-        return: makeObjectType({ a: extendsAnyAtom }, { excess: something }),
+        return: makeObjectType({ a: extendsAnyAtom }),
       }),
       makeFunctionType({
         parameter: atom,
-        return: makeObjectType({ a: atom }, { excess: something }),
+        return: makeObjectType({ a: atom }),
       }),
     ],
     true,
@@ -1190,21 +1241,15 @@ typeAssignabilitySuite('generic function types (assignable)', [
     [
       // `{ a: ?a } ~> :a` is assignable to `{ a: (?a: :atom.type) } ~> :a`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: A,
+        }),
         return: A,
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: extendsAnyAtom,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: extendsAnyAtom,
+        }),
         return: extendsAnyAtom,
       }),
     ],
@@ -1214,32 +1259,20 @@ typeAssignabilitySuite('generic function types (assignable)', [
     [
       // `{ a: a } ~> { b: a }` is assignable to `{ a: (?a: :atom.type) } ~> { b: a }`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: A,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            b: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: A,
+        }),
+        return: makeObjectType({
+          b: A,
+        }),
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: extendsAnyAtom,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            b: extendsAnyAtom,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: extendsAnyAtom,
+        }),
+        return: makeObjectType({
+          b: extendsAnyAtom,
+        }),
       }),
     ],
     true,
@@ -1298,23 +1331,17 @@ typeAssignabilitySuite('generic function types (assignable)', [
       // `?a ~> { 0: :a, 1: :a }` is assignable to `(?a: :atom.type) ~> { 0: :a, 1: :atom.type }`
       makeFunctionType({
         parameter: A,
-        return: makeObjectType(
-          {
-            0: A,
-            1: A,
-          },
-          { excess: something },
-        ),
+        return: makeObjectType({
+          0: A,
+          1: A,
+        }),
       }),
       makeFunctionType({
         parameter: extendsAnyAtom,
-        return: makeObjectType(
-          {
-            0: extendsAnyAtom,
-            1: atom,
-          },
-          { excess: something },
-        ),
+        return: makeObjectType({
+          0: extendsAnyAtom,
+          1: atom,
+        }),
       }),
     ],
     true,
@@ -1323,36 +1350,24 @@ typeAssignabilitySuite('generic function types (assignable)', [
     [
       // `{ 0: ?a, 1: ?b } ~> { 0: :b, 1: :a }` is assignable to `{ 0: ?a, 1: ?b } ~> { 0: :b, 1: :a }`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: A,
-            1: B,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: B,
-            1: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: A,
+          1: B,
+        }),
+        return: makeObjectType({
+          0: B,
+          1: A,
+        }),
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: C,
-            1: D,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: D,
-            1: C,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: C,
+          1: D,
+        }),
+        return: makeObjectType({
+          0: D,
+          1: C,
+        }),
       }),
     ],
     true,
@@ -1361,36 +1376,24 @@ typeAssignabilitySuite('generic function types (assignable)', [
     [
       // `{ 0: ?a, 1: ?b } ~> { 0: :b, 1: :a }` is assignable to `{ 0: (?a: :atom.type), 1: (?b: a) } ~> { 0: :b, 1: ?a }`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: A,
-            1: B,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: B,
-            1: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: A,
+          1: B,
+        }),
+        return: makeObjectType({
+          0: B,
+          1: A,
+        }),
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: extendsAnyAtom,
-            1: extendsSpecificAtom,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: extendsSpecificAtom,
-            1: extendsAnyAtom,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: extendsAnyAtom,
+          1: extendsSpecificAtom,
+        }),
+        return: makeObjectType({
+          0: extendsSpecificAtom,
+          1: extendsAnyAtom,
+        }),
       }),
     ],
     true,
@@ -1399,36 +1402,24 @@ typeAssignabilitySuite('generic function types (assignable)', [
     [
       // `{ 0: ?a, 1: ?b } ~> { 0: ?b, 1: ?a }` is assignable to `{ 0: ?a, 1: (?b: :a) } ~> { 0: :b, 1: :a }`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: B,
-            1: C,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: C,
-            1: B,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: B,
+          1: C,
+        }),
+        return: makeObjectType({
+          0: C,
+          1: B,
+        }),
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: A,
-            1: extendsA,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: extendsA,
-            1: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: A,
+          1: extendsA,
+        }),
+        return: makeObjectType({
+          0: extendsA,
+          1: A,
+        }),
       }),
     ],
     true,
@@ -1437,40 +1428,28 @@ typeAssignabilitySuite('generic function types (assignable)', [
     [
       // `{ a: ?a, b: ?b, c: :atom.type | :b } ~> { b: :a, a: :b, c: :a }` is assignable to `{ a: (?a: :atom.type), b: (?b: :a), c: :b } ~> { b: :a, a: :b | :a, c: :atom.type }`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: A,
-            b: B,
-            c: makeUnionType([atom, B]),
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            b: A,
-            a: B,
-            c: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: A,
+          b: B,
+          c: makeUnionType([atom, B]),
+        }),
+        return: makeObjectType({
+          b: A,
+          a: B,
+          c: A,
+        }),
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: extendsAnyAtom,
-            b: extendsExtendsAnyAtom,
-            c: extendsExtendsAnyAtom,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            b: extendsAnyAtom,
-            a: makeUnionType([extendsAnyAtom, extendsExtendsAnyAtom]),
-            c: atom,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: extendsAnyAtom,
+          b: extendsExtendsAnyAtom,
+          c: extendsExtendsAnyAtom,
+        }),
+        return: makeObjectType({
+          b: extendsAnyAtom,
+          a: makeUnionType([extendsAnyAtom, extendsExtendsAnyAtom]),
+          c: atom,
+        }),
       }),
     ],
     true,
@@ -1539,11 +1518,11 @@ typeAssignabilitySuite('generic function types (not assignable)', [
       // `?a ~> { a: :a }` is not assignable to `?a ~> { b: :a }`
       makeFunctionType({
         parameter: A,
-        return: makeObjectType({ a: A }, { excess: something }),
+        return: makeObjectType({ a: A }),
       }),
       makeFunctionType({
         parameter: A,
-        return: makeObjectType({ b: A }, { excess: something }),
+        return: makeObjectType({ b: A }),
       }),
     ],
     false,
@@ -1566,36 +1545,24 @@ typeAssignabilitySuite('generic function types (not assignable)', [
     [
       // `{ 0: ?a, 1: (?b: :a) } ~> { 0: :b, 1: :a }` is not assignable to `{ 0: ?a, 1: ?b } ~> { 0: :b, 1: :a }`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: A,
-            1: extendsA,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: extendsA,
-            1: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: A,
+          1: extendsA,
+        }),
+        return: makeObjectType({
+          0: extendsA,
+          1: A,
+        }),
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            0: A,
-            1: B,
-          },
-          { excess: something },
-        ),
-        return: makeObjectType(
-          {
-            0: B,
-            1: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          0: A,
+          1: B,
+        }),
+        return: makeObjectType({
+          0: B,
+          1: A,
+        }),
       }),
     ],
     false,
@@ -1635,21 +1602,15 @@ typeAssignabilitySuite('generic function types (not assignable)', [
     [
       // `{ a: ?a } ~> :a` is not assignable to `{ b: ?a } ~> :a`
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            a: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          a: A,
+        }),
         return: A,
       }),
       makeFunctionType({
-        parameter: makeObjectType(
-          {
-            b: A,
-          },
-          { excess: something },
-        ),
+        parameter: makeObjectType({
+          b: A,
+        }),
         return: A,
       }),
     ],
@@ -1660,21 +1621,15 @@ typeAssignabilitySuite('generic function types (not assignable)', [
       // `?a ~> { a: :a }` is not assignable to `?a ~> { b: :a }`
       makeFunctionType({
         parameter: A,
-        return: makeObjectType(
-          {
-            a: A,
-          },
-          { excess: something },
-        ),
+        return: makeObjectType({
+          a: A,
+        }),
       }),
       makeFunctionType({
         parameter: A,
-        return: makeObjectType(
-          {
-            b: A,
-          },
-          { excess: something },
-        ),
+        return: makeObjectType({
+          b: A,
+        }),
       }),
     ],
     false,
@@ -1700,15 +1655,12 @@ typeAssignabilitySuite(
   'union with a broadly-constrained type-parameter member (assignable)',
   [
     [[makeUnionType([A, object]), something], true],
-    [
-      [makeUnionType([A, makeObjectType({}, { excess: nothing })]), something],
-      true,
-    ],
+    [[makeUnionType([A, exactEmptyObject]), something], true],
     [
       [
         makeFunctionType({
           parameter: something,
-          return: makeUnionType([A, makeObjectType({}, { excess: nothing })]),
+          return: makeUnionType([A, exactEmptyObject]),
         }),
         something,
       ],

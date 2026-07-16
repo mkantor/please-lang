@@ -1,7 +1,11 @@
 import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { isFunctionNode, type FunctionNode } from '../function-node.js'
-import { isObjectNode, type ObjectNode } from '../object-node.js'
+import {
+  isObjectNode,
+  orderedEntriesOfObjectNode,
+  type ObjectNode,
+} from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
 import {
   makeObjectType,
@@ -65,6 +69,20 @@ export const objectParameter: Parameter<ObjectNode> = {
   expected: 'an object',
 }
 
+export const objectOfAtomsParameter: Parameter<ObjectNode> = {
+  type: makeObjectType({}, [{ keys: types.atom, values: types.atom }]),
+  asExpected: value =>
+    (
+      isObjectNode(value) &&
+      orderedEntriesOfObjectNode(value).every(
+        ([_key, value]) => typeof value === 'string',
+      )
+    ) ?
+      option.makeSome(value)
+    : option.none,
+  expected: 'an object whose property values are atoms',
+}
+
 export const booleanParameter: Parameter<BooleanNode> = {
   type: types.boolean,
   asExpected: value =>
@@ -113,13 +131,10 @@ export const optionParameter = (
 })
 
 export const taggedParameter: Parameter<TaggedNode> = {
-  type: makeObjectType(
-    {
-      tag: types.atom,
-      value: types.something,
-    },
-    { excess: types.something },
-  ),
+  type: makeObjectType({
+    tag: types.atom,
+    value: types.something,
+  }),
   asExpected: value =>
     nodeIsTagged(value) ? option.makeSome(value) : option.none,
   expected: 'a tagged value',

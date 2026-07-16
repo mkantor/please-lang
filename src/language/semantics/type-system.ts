@@ -13,6 +13,7 @@ export * from './type-system/type-formats/type.js'
 export * from './type-system/type-formats/union-type.js'
 export {
   inferType,
+  inferTypeOfTypeAnnotation,
   resolveParameterTypes,
   rigidTypeParameterIdentities,
 } from './type-system/type-inference.js'
@@ -34,7 +35,6 @@ export {
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForTypeParameters,
-  recursivelyInexact,
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArgument,
   supplyTypeArguments,

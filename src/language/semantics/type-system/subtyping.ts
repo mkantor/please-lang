@@ -1,10 +1,19 @@
 import type { Option } from '@matt.kantor/option'
 import option from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
+import { atom, something } from './prelude-types.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
-import { makeObjectType, type ObjectType } from './type-formats/object-type.js'
+import {
+  makeObjectType,
+  type ExcessClause,
+  type ObjectType,
+} from './type-formats/object-type.js'
 import { isTopType, type Type } from './type-formats/type.js'
-import { makeUnionType, type UnionType } from './type-formats/union-type.js'
+import {
+  makeUnionType,
+  unionOfTypes,
+  type UnionType,
+} from './type-formats/union-type.js'
 import { updateTypeAtKeyPathIfValid } from './type-key-path.js'
 import {
   containedTypeParameters,
@@ -95,10 +104,10 @@ export const isAssignable = ({
                 source.signature.parameter.identity ===
                   source.signature.return.identity
               ) {
-                // The source is an identity function (`a => a`), which means this
-                // much simpler check can be performed. This also allows correctly
-                // handling the fact that `a => a` is assignable to a type like
-                // `atom => atom`.
+                // The source is an identity function (`a => a`), which means
+                // this much simpler check can be performed. This also allows
+                // correctly handling the fact that `a => a` is assignable to a
+                // type like `atom => atom`.
                 return (
                   isAssignable({
                     source: target.signature.parameter,
@@ -117,17 +126,17 @@ export const isAssignable = ({
                   target.signature.parameter,
                 )
 
-                // An example showing how this will be used: When checking whether
-                // `{ a: (a <: atom) } => a` is assignable to `{ a: (b <: "a") }
-                // => b`, the parameter types are compatible if `{ a: (b <: "a")
-                // }` is assignable to `{ a: atom }` (it is).
+                // An example showing how this will be used: When checking
+                // whether `{ a: (a <: atom) } => a` is assignable to `{ a: (b
+                // <: "a") } => b`, the parameter types are compatible if `{ a:
+                // (b <: "a") }` is assignable to `{ a: atom }` (it is).
                 let sourceParameterWithTypeParametersReplacedByConstraints =
                   source.signature.parameter
 
-                // An example showing how this will be used: When checking whether
-                // `a => { a: a, b: atom }` is assignable to `(b <: atom) => { a:
-                // b }`, the return types are compatible if `{ a: b, b: atom }` is
-                // assignable to `{ a: b }` (it is).
+                // An example showing how this will be used: When checking
+                // whether `a => { a: a, b: atom }` is assignable to `(b <:
+                // atom) => { a: b }`, the return types are compatible if `{ a:
+                // b, b: atom }` is assignable to `{ a: b }` (it is).
                 let sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
                   source.signature.return
 
@@ -238,25 +247,58 @@ export const isAssignable = ({
                   isAssignable({ source: sourceChild, target: targetChild })
                 )
               })
-              // Source properties beyond the target's children, along with
-              // whatever excess the source itself admits, must fit within the
-              // target's excess bound.
-              const excessPropertiesAreSatisfied =
-                isTopType(target.excess) ||
-                (Object.entries(source.children).every(
-                  ([key, sourceChild]) =>
-                    target.children[key] !== undefined ||
-                    isAssignable({
-                      source: sourceChild,
-                      target: target.excess,
-                    }),
-                ) &&
-                  isAssignable({
-                    source: source.excess,
-                    target: target.excess,
-                  }))
+              // Each source property beyond the target's children must fit
+              // within the target's bound for its specific key.
+              const unlistedSourceChildrenAreSatisfied = Object.entries(
+                source.children,
+              ).every(([key, sourceChild]) => {
+                const targetBound = excessBoundForKey(key, target.excess)
+                return (
+                  target.children[key] !== undefined ||
+                  isTopType(targetBound) ||
+                  isAssignable({ source: sourceChild, target: targetBound })
+                )
+              })
+              // Whatever the source's clauses admit must fit within the
+              // target's clauses wherever they overlap. A pair of clauses
+              // overlaps only if some key can inhabit both domains while
+              // escaping all later domains. Clauses with no overlap are
+              // irrelevant to subtyping.
+              const sourceExcess = effectiveExcessClauses(source.excess)
+              const targetExcess = effectiveExcessClauses(target.excess)
+              const excessClausesAreSatisfied = sourceExcess.every(
+                (sourceClause, sourceIndex) =>
+                  targetExcess.every((targetClause, targetIndex) => {
+                    const laterDomains = unionOfTypes([
+                      ...sourceExcess
+                        .slice(sourceIndex + 1)
+                        .map(clause => clause.keys),
+                      ...targetExcess
+                        .slice(targetIndex + 1)
+                        .map(clause => clause.keys),
+                    ])
+                    const pairIsUnreachable =
+                      isAssignable({
+                        source: sourceClause.keys,
+                        target: laterDomains,
+                      }) ||
+                      isAssignable({
+                        source: targetClause.keys,
+                        target: laterDomains,
+                      })
+                    return (
+                      pairIsUnreachable ||
+                      isAssignable({
+                        source: sourceClause.values,
+                        target: targetClause.values,
+                      })
+                    )
+                  }),
+              )
               return (
-                requiredPropertiesAreSatisfied && excessPropertiesAreSatisfied
+                requiredPropertiesAreSatisfied &&
+                unlistedSourceChildrenAreSatisfied &&
+                excessClausesAreSatisfied
               )
             },
             opaque: target => target.isAssignableFrom(source),
@@ -418,6 +460,41 @@ export const asUnionWithLiteralAtomMembers = (
 }
 
 /**
+ * The bound an object type places on the value of the given property when it
+ * isn't among the type's required children.
+ */
+export const excessBoundForKey = (
+  key: Atom,
+  excess: ObjectType['excess'],
+): Type =>
+  excess.findLast(clause =>
+    isAssignable({ source: makeUnionType([key]), target: clause.keys }),
+  )?.values ?? something
+
+/**
+ * Whether every possible key inhabits some explicit clause's `keys`.
+ */
+export const excessClausesAreTotal = (
+  excess: readonly ExcessClause[],
+): boolean =>
+  excess.some(clause => clause.keys === atom) || // fast path
+  isAssignable({
+    source: atom,
+    target: unionOfTypes(excess.map(clause => clause.keys)),
+  })
+
+/**
+ * Make an excess clause list total by prepending an open base clause when
+ * necessary, which is often more convenient to work with.
+ */
+export const effectiveExcessClauses = (
+  excess: readonly ExcessClause[],
+): readonly ExcessClause[] =>
+  excessClausesAreTotal(excess) ? excess : (
+    [{ keys: atom, values: something }, ...excess]
+  )
+
+/**
  * Removes redundancies and otherwise attempts to reduce the number of members
  * in a union while preserving the semantics of the given `UnionType`.
  *
@@ -439,13 +516,32 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
   const isMergeable = (member: ObjectType) =>
     Object.keys(member.children).length === 1
 
-  const excessBoundsAgree = (first: Type, second: Type): boolean =>
+  const typesAreEquivalent = (first: Type, second: Type): boolean =>
     isAssignable({ source: first, target: second }) &&
     isAssignable({ source: second, target: first })
 
+  const excessBoundsAgree = (
+    first: ObjectType['excess'],
+    second: ObjectType['excess'],
+  ): boolean => {
+    const effectiveFirst = effectiveExcessClauses(first)
+    const effectiveSecond = effectiveExcessClauses(second)
+    return (
+      effectiveFirst.length === effectiveSecond.length &&
+      effectiveFirst.every((firstClause, index) => {
+        const secondClause = effectiveSecond[index]
+        return (
+          secondClause !== undefined &&
+          typesAreEquivalent(firstClause.keys, secondClause.keys) &&
+          typesAreEquivalent(firstClause.values, secondClause.values)
+        )
+      })
+    )
+  }
+
   type MergeGroup = {
     readonly key: string
-    readonly excess: Type
+    readonly excess: ObjectType['excess']
     readonly typesToMerge: readonly ObjectType[]
   }
 
@@ -495,7 +591,7 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
           makeUnionType(typesForTheProperty),
         ),
       },
-      { excess },
+      excess,
     )
   })
 

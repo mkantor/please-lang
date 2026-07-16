@@ -14,7 +14,12 @@ import {
   unionOfTypes,
   type Type,
 } from '../type-system.js'
-import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
+import {
+  asUnionWithLiteralAtomMembers,
+  effectiveExcessClauses,
+  excessBoundForKey,
+} from '../type-system/subtyping.js'
+import { replaceAllTypeParametersWithTheirConstraints } from '../type-system/type-substitution.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
@@ -35,13 +40,18 @@ const computeFromPropertyReturnType = (
         asUnionWithLiteralAtomMembers(keyType)
       : option.none,
       {
-        none: _ => types.object,
+        // The key isn't statically known, but every property value is the
+        // supplied one.
+        none: _ =>
+          makeObjectType({}, [{ keys: types.atom, values: valueType }]),
         some: keys =>
           unionOfTypes([
             ...keys.members
               .values()
               .map(key =>
-                makeObjectType({ [key]: valueType }, { excess: types.nothing }),
+                makeObjectType({ [key]: valueType }, [
+                  { keys: types.atom, values: types.nothing },
+                ]),
               ),
           ]),
       },
@@ -50,40 +60,61 @@ const computeFromPropertyReturnType = (
 }
 
 const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
-  const [object2Type, object1Type] = parameterTypes
+  const [rawObject2Type, rawObject1Type] = parameterTypes
+  const object2Type =
+    rawObject2Type === undefined ? rawObject2Type : (
+      replaceAllTypeParametersWithTheirConstraints(rawObject2Type)
+    )
+  const object1Type =
+    rawObject1Type === undefined ? rawObject1Type : (
+      replaceAllTypeParametersWithTheirConstraints(rawObject1Type)
+    )
   if (object2Type === undefined || object1Type === undefined) {
     throw new Error(
       '`overlay` function did not receive two arguments. This is a bug!',
     )
+  } else if (object2Type.kind === 'object' && object1Type.kind === 'object') {
+    const object1Excess = effectiveExcessClauses(object1Type.excess)
+    const object2Excess = effectiveExcessClauses(object2Type.excess)
+    return makeObjectType(
+      {
+        ...Object.fromEntries(
+          Object.entries(object1Type.children)
+            .filter(([key]) => object2Type.children[key] === undefined)
+            .map(([key, child]) => {
+              const object2Bound = excessBoundForKey(key, object2Type.excess)
+              return [
+                key,
+                isBottomType(object2Bound) ? child
+                  // The property may exist unlisted in `object2`, in which case
+                  // its value overwrites `object1`'s.
+                : unionOfTypes([child, object2Bound]),
+              ]
+            }),
+        ),
+        ...object2Type.children,
+      },
+      // Unlisted properties of the result come from either operand's clauses.
+      // Which clause applies to which key isn't tracked here, so the result
+      // gets a single clause bounding every key, or stays fully open when
+      // either operand admits arbitrary values somewhere.
+      (
+        object1Excess.some(clause => clause.values === types.something) ||
+          object2Excess.some(clause => clause.values === types.something)
+      ) ?
+        []
+      : [
+          {
+            keys: types.atom,
+            values: unionOfTypes([
+              ...object1Excess.map(clause => clause.values),
+              ...object2Excess.map(clause => clause.values),
+            ]),
+          },
+        ],
+    )
   } else {
-    // TODO: Consider also supporting type parameters/stuck types via their
-    // upper bounds.
-    return object2Type.kind === 'object' && object1Type.kind === 'object' ?
-        makeObjectType(
-          {
-            ...Object.fromEntries(
-              Object.entries(object1Type.children)
-                .filter(([key]) => object2Type.children[key] === undefined)
-                .map(([key, child]) => [
-                  key,
-                  isBottomType(object2Type.excess) ? child
-                    // The property may exist as excess (with an unknown type).
-                  : types.something,
-                ]),
-            ),
-            ...object2Type.children,
-          },
-          {
-            excess:
-              (
-                isBottomType(object1Type.excess) &&
-                isBottomType(object2Type.excess)
-              ) ?
-                types.nothing
-              : types.something,
-          },
-        )
-      : types.object
+    return types.object
   }
 }
 
@@ -108,7 +139,7 @@ const lookupReturnType = ({
             tag: makeUnionType(['some']),
             value: unionOfTypes(possibleValueTypes),
           },
-          { excess: types.nothing },
+          [{ keys: types.atom, values: types.nothing }],
         ),
       ]),
     ...(mayBeNone ?
@@ -116,9 +147,11 @@ const lookupReturnType = ({
         makeObjectType(
           {
             tag: makeUnionType(['none']),
-            value: makeObjectType({}, { excess: types.nothing }),
+            value: makeObjectType({}, [
+              { keys: types.atom, values: types.nothing },
+            ]),
           },
-          { excess: types.nothing },
+          [{ keys: types.atom, values: types.nothing }],
         ),
       ]
     : []),
@@ -158,23 +191,45 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
         })
         const someKeyMayBeAbsent =
           presentValueTypes.length !== possibleKeys.size
-        return someKeyMayBeAbsent && !isBottomType(objectType.excess) ?
-            // The key may exist as an excess property (with an unknown type).
+        const absentKeyBounds = [...possibleKeys]
+          .filter(key => objectType.children[key] === undefined)
+          .map(key => excessBoundForKey(key, objectType.excess))
+        return (
+          !someKeyMayBeAbsent ?
+            lookupReturnType({
+              possibleValueTypes: presentValueTypes,
+              mayBeNone: false,
+            })
+            // A key not among the children may exist as an unlisted property,
+            // whose value is bounded by the last clause matching the key.
+          : absentKeyBounds.some(bound => bound === types.something) ?
             types.option(types.something)
           : lookupReturnType({
-              possibleValueTypes: presentValueTypes,
-              mayBeNone: someKeyMayBeAbsent,
+              possibleValueTypes: [
+                ...presentValueTypes,
+                ...absentKeyBounds.filter(bound => !isBottomType(bound)),
+              ],
+              mayBeNone: true,
+            })
+        )
+      },
+      none: _ => {
+        // Whatever the key turns out to be, it can only select one of the
+        // object's own property values, an unlisted property's value (bounded
+        // by the object's excess clauses), or nothing.
+        const objectExcess = effectiveExcessClauses(objectType.excess)
+        return objectExcess.some(clause => clause.values === types.something) ?
+            types.option(types.something)
+          : lookupReturnType({
+              possibleValueTypes: [
+                ...Object.values(objectType.children),
+                ...objectExcess
+                  .map(clause => clause.values)
+                  .filter(clauseValues => !isBottomType(clauseValues)),
+              ],
+              mayBeNone: true,
             })
       },
-      none: _ =>
-        isBottomType(objectType.excess) ?
-          // Whatever the key turns out to be, it can only select one of the
-          // object's own property values (or nothing).
-          lookupReturnType({
-            possibleValueTypes: Object.values(objectType.children),
-            mayBeNone: true,
-          })
-        : types.option(types.something),
     })
   }
 }

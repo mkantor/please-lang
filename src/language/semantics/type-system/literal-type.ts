@@ -6,10 +6,11 @@ import {
 } from '../expressions/hole-expression.js'
 import { readUnionExpression } from '../expressions/union-expression.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { nothing, something, typesBySymbol } from './prelude-types.js'
+import { atom, nothing, typesBySymbol } from './prelude-types.js'
 import { makeObjectType } from './type-formats/object-type.js'
 import type { Type } from './type-formats/type.js'
 import { unionOfTypes } from './type-formats/union-type.js'
+
 /**
  * Attempt to interpret `node` as a `Type` in a very basic way:
  * - `Atom`s become singleton `UnionType`s.
@@ -75,9 +76,12 @@ export const typeFromSemanticGraph = (
                 ),
               ),
               entries =>
-                makeObjectType(Object.fromEntries(entries), {
-                  excess: options.objectsAreExact ? nothing : something,
-                }),
+                makeObjectType(
+                  Object.fromEntries(entries),
+                  options.objectsAreExact ?
+                    [{ keys: atom, values: nothing }]
+                  : [],
+                ),
             ),
         ),
     })

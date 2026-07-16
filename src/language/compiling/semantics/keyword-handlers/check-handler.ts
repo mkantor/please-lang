@@ -13,7 +13,7 @@ import {
 } from '../../../semantics.js'
 import {
   inferType,
-  recursivelyInexact,
+  inferTypeOfTypeAnnotation,
 } from '../../../semantics/type-system.js'
 import { isSingletonType } from '../../../semantics/type-system/type-substitution.js'
 
@@ -42,24 +42,21 @@ const check = ({
     valueAsType =>
       either.flatMap(
         either.mapLeft(
-          inferType(type, subContextForType),
+          inferTypeOfTypeAnnotation(type, subContextForType),
           attachSpanIfAbsent(subContextForType),
         ),
-        typeAsType => {
-          // `@check` targets are upper bounds; they allow width subtyping.
-          const targetType = recursivelyInexact(typeAsType)
-          return isAssignable({ source: valueAsType, target: targetType }) ?
-              either.makeRight(value)
-              // The value is what failed the check, so blame it specifically.
-            : either.makeLeft(
-                attachSpanIfAbsent(subContextForValue)({
-                  kind: 'typeMismatch',
-                  message: `the value \`${stringifySemanticGraphForEndUser(
-                    value,
-                  )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
-                }),
-              )
-        },
+        targetType =>
+          isAssignable({ source: valueAsType, target: targetType }) ?
+            either.makeRight(value)
+            // The value is what failed the check, so blame it specifically.
+          : either.makeLeft(
+              attachSpanIfAbsent(subContextForValue)({
+                kind: 'typeMismatch',
+                message: `the value \`${stringifySemanticGraphForEndUser(
+                  value,
+                )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
+              }),
+            ),
       ),
   )
 }

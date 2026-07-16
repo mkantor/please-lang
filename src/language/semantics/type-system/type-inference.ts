@@ -9,6 +9,7 @@ import {
   isAssignable,
   isExpression,
   isFunctionNode,
+  isObjectNode,
   lookup,
   readApplyExpression,
   readFunctionExpression,
@@ -38,12 +39,16 @@ import {
 import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
 import { typeFromSemanticGraph } from './literal-type.js'
 import * as types from './prelude-types.js'
+import { effectiveExcessClauses } from './subtyping.js'
 import { makeApplicationType } from './type-formats/application-type.js'
 import { makeFunctionType } from './type-formats/function-type.js'
 import { makeIndexedAccessType } from './type-formats/indexed-access-type.js'
+import { makeIntrinsicApplicationType } from './type-formats/intrinsic-application-type.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
 import { makeObjectType } from './type-formats/object-type.js'
 import type { Type } from './type-formats/type.js'
-import { unionOfTypes } from './type-formats/union-type.js'
+import { isBottomType, isTopType } from './type-formats/type.js'
+import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
   functionParameterKey,
   stringifyTypeKeyPathForEndUser,
@@ -58,7 +63,6 @@ import {
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForTypeParameters,
-  recursivelyInexact,
   supplyTypeArguments,
 } from './type-substitution.js'
 
@@ -102,6 +106,29 @@ export const inferType = (
   context: ExpressionContext,
 ): Either<ElaborationError, Type> =>
   inferTypeImplementation(
+    node,
+    resolveParameterTypes(context),
+    new Set(),
+    context,
+  )
+
+/**
+ * Like `inferType`, but for a `node` occurring in a type annotation (e.g. a
+ * function parameter type or `@check` type). The denoted type is interpreted as
+ * an open upper bound:
+ * - Each `@union` member is interpreted as if it were written bare in the
+ *   same position (`inferTypeOfTypeAnnotation` distributes over union members).
+ * - A plain object literal is open (allowing arbitrary excess properties), in
+ *   contrast to value positions where inference gives closed object types.
+ * - Anything indirect (lookups, indexed accesses, applications, …) is
+ *   interpreted as its inferred type with every closed object widened to an
+ *   open one.
+ */
+export const inferTypeOfTypeAnnotation = (
+  node: SemanticGraph,
+  context: ExpressionContext,
+): Either<ElaborationError, Type> =>
+  inferTypeOfTypeAnnotationImplementation(
     node,
     resolveParameterTypes(context),
     new Set(),
@@ -477,10 +504,7 @@ const inferTypeImplementation = (
             return either.flatMap(inferThen(), thenType =>
               either.map(inferElse(), elseType =>
                 makeIndexedAccessType(
-                  makeObjectType(
-                    { false: elseType, true: thenType },
-                    { excess: types.something },
-                  ),
+                  makeObjectType({ false: elseType, true: thenType }),
                   conditionType,
                 ),
               ),
@@ -534,7 +558,8 @@ const inferTypeImplementation = (
       case 'expression':
         return cacheOnSuccess(
           either.map(
-            inferTypeImplementation(
+            // Constraints are type annotations (upper bounds).
+            inferTypeOfTypeAnnotationImplementation(
               holeExpression[1].constraint.assignableTo,
               parameterTypes,
               lookingUpKeys,
@@ -570,13 +595,73 @@ const inferTypeImplementation = (
         ),
       ),
       entries =>
-        makeObjectType(Object.fromEntries(entries), {
+        makeObjectType(
+          Object.fromEntries(entries),
           // Expressions will have different keys after elaboration, otherwise
           // this is a literal object where all properties are known.
-          excess: isExpression(node) ? types.something : types.nothing,
-        }),
+          isExpression(node) ?
+            []
+          : [{ keys: types.atom, values: types.nothing }],
+        ),
     ),
   )
+}
+
+/** @see `inferTypeOfTypeAnnotation` for the rules applied here. */
+const inferTypeOfTypeAnnotationImplementation = (
+  node: SemanticGraph,
+  parameterTypes: ReadonlyMap<Atom, Type>,
+  lookingUpKeys: ReadonlySet<Atom>,
+  context: ExpressionContext,
+): Either<ElaborationError, Type> => {
+  const isPlainObjectLiteral = isObjectNode(node) && !isExpression(node)
+  const descendantContext = (subPath: KeyPath): ExpressionContext => ({
+    ...context,
+    location: [...context.location, ...subPath],
+    cacheKeyPrefixOverride:
+      context.cacheKeyPrefixOverride === undefined ?
+        undefined
+      : [...context.cacheKeyPrefixOverride, ...subPath],
+  })
+  const unionExpressionResult = readUnionExpression(node)
+  if (either.isRight(unionExpressionResult)) {
+    // Distribute over union members.
+    return either.map(
+      either.sequence(
+        Object.entries(unionExpressionResult.value[1]).map(([key, member]) =>
+          inferTypeOfTypeAnnotationImplementation(
+            member,
+            parameterTypes,
+            lookingUpKeys,
+            descendantContext(['1', key]),
+          ),
+        ),
+      ),
+      unionOfTypes,
+    )
+  } else if (isPlainObjectLiteral) {
+    return either.map(
+      either.sequence(
+        Object.entries(node).map(([key, propertyValue]) =>
+          either.map(
+            inferTypeOfTypeAnnotationImplementation(
+              propertyValue,
+              parameterTypes,
+              lookingUpKeys,
+              descendantContext([key]),
+            ),
+            propertyType => [key, propertyType],
+          ),
+        ),
+      ),
+      entries => makeObjectType(Object.fromEntries(entries)),
+    )
+  } else {
+    return either.map(
+      inferTypeImplementation(node, parameterTypes, lookingUpKeys, context),
+      recursivelyOpenObjectTypes,
+    )
+  }
 }
 
 /**
@@ -616,7 +701,7 @@ const getFunctionParameterType = (
             // than their own location (a property within the `@function`), so
             // `location` stays anchored at the function while cache keys are
             // rooted at the annotation's true position.
-            inferType(annotation, {
+            inferTypeOfTypeAnnotation(annotation, {
               ...contextOfFunction,
               cacheKeyPrefixOverride: [
                 ...(contextOfFunction.cacheKeyPrefixOverride ??
@@ -634,8 +719,9 @@ const getFunctionParameterType = (
               // to describe concrete function types rather than generic ones.
               if (parameterName === ignoredKey) {
                 return {
-                  // Function parameter types are always inexact.
-                  parameterType: recursivelyInexact(annotationType),
+                  // The annotation was already interpreted as an upper bound by
+                  // `inferTypeOfTypeAnnotation`.
+                  parameterType: annotationType,
                   typeParametersBoundByFunction: new Set<symbol>(),
                 }
               } else {
@@ -728,7 +814,9 @@ const getFunctionParameterType = (
                       .signature.parameter
                   return option.makeSome({
                     // Function parameter types are always inexact.
-                    parameterType: recursivelyInexact(borrowedParameterType),
+                    parameterType: recursivelyOpenObjectTypes(
+                      borrowedParameterType,
+                    ),
                     typeParametersBoundByFunction:
                       typeParameterIdentitiesWithinType(borrowedParameterType),
                   })
@@ -870,3 +958,73 @@ const resolveEnclosingFunctionParameters = (
   }
   return collectFromLocation(context.location)
 }
+
+/**
+ * Recursively widen every closed object type (one whose excess clauses have
+ * bottom-typed `values`) to an open one. Other excess bounds are preserved as
+ * written.
+ *
+ * Type parameters are kept by reference (their identities matter), so their
+ * constraints are not adjusted here; make sure constraints are inexact while
+ * creating type parameters instead.
+ */
+const recursivelyOpenObjectTypes = (type: Type): Type =>
+  // Avoid infinite recursion when we hit the top type.
+  isTopType(type) ? type : (
+    matchTypeFormat<Type>(type, {
+      application: type =>
+        makeApplicationType(
+          recursivelyOpenObjectTypes(type.function),
+          recursivelyOpenObjectTypes(type.argument),
+          type.parametersStuckOn,
+        ),
+      function: type =>
+        makeFunctionType({
+          parameter: recursivelyOpenObjectTypes(type.signature.parameter),
+          return: recursivelyOpenObjectTypes(type.signature.return),
+        }),
+      indexedAccess: type =>
+        makeIndexedAccessType(
+          recursivelyOpenObjectTypes(type.object),
+          recursivelyOpenObjectTypes(type.key),
+        ),
+      intrinsicApplication: type =>
+        makeIntrinsicApplicationType(
+          type.parameterTypes.map(recursivelyOpenObjectTypes),
+          type.reduce,
+          parameterTypes =>
+            recursivelyOpenObjectTypes(type.computeUpperBound(parameterTypes)),
+        ),
+      object: type =>
+        makeObjectType(
+          Object.fromEntries(
+            Object.entries(type.children).map(([key, child]) => [
+              key,
+              recursivelyOpenObjectTypes(child),
+            ]),
+          ),
+          (
+            effectiveExcessClauses(type.excess).every(clause =>
+              isBottomType(clause.values),
+            )
+          ) ?
+            []
+          : type.excess,
+        ),
+      opaque: type => type,
+      parameter: type => type,
+      union: type =>
+        makeUnionType(
+          [...type.members].flatMap(member => {
+            if (typeof member === 'string') {
+              return [member]
+            } else {
+              const strippedMember = recursivelyOpenObjectTypes(member)
+              return strippedMember.kind === 'union' ?
+                  [...strippedMember.members]
+                : [strippedMember]
+            }
+          }),
+        ),
+    })
+  )

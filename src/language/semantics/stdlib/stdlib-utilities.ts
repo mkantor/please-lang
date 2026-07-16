@@ -19,6 +19,8 @@ import type { ObjectNode } from '../object-node.js'
 import { nodeTag } from '../semantic-graph-node-tag.js'
 import {
   containsAnyUnelaboratedNodes,
+  stringifySemanticGraphForEndUser,
+  stringifyTypeForEndUser,
   type SemanticGraph,
 } from '../semantic-graph.js'
 import {
@@ -29,9 +31,11 @@ import {
   type Type,
 } from '../type-system.js'
 import { typeFromSemanticGraph } from '../type-system/literal-type.js'
+import { isAssignable } from '../type-system/subtyping.js'
 import { containedTypeParameters } from '../type-system/type-parameter-analysis.js'
 import {
   getTypesForTypeParameters,
+  replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArguments,
 } from '../type-system/type-substitution.js'
 import type {
@@ -52,6 +56,34 @@ const handleUnavailableDependencies =
       return f(argument, emptyContextForStdlibApplications)
     }
   }
+
+/**
+ * Validate an `argument` against the parameter type of a `functionNode`'s
+ * signature, then apply it if valid. Applications occurring from the standard
+ * library don't get the normal `@apply` static analysis, so use this instead.
+ */
+export const applyValidatingParameterType = (
+  functionNode: FunctionNode,
+  argument: SemanticGraph,
+): Either<FunctionNodeCallError, SemanticGraph> =>
+  either.flatMap(
+    typeFromSemanticGraph(argument, { objectsAreExact: true }),
+    argumentType => {
+      // Values are never directly assignable to (rigid) type parameters, so
+      // validate against the parameter's bound instead.
+      const parameterBound = replaceAllTypeParametersWithTheirConstraints(
+        functionNode.signature.parameter,
+      )
+      return isAssignable({ source: argumentType, target: parameterBound }) ?
+          functionNode(argument, emptyContextForStdlibApplications)
+        : either.makeLeft({
+            kind: 'typeMismatch',
+            message: `the value \`${stringifySemanticGraphForEndUser(
+              argument,
+            )}\` is not assignable to the function's parameter type \`${stringifyTypeForEndUser(parameterBound)}\``,
+          })
+    },
+  )
 
 /**
  * Use with function calls from the standard library (which conceptually occur

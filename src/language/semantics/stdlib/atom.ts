@@ -3,8 +3,12 @@ import {
   objectNodeFromOrderedEntries,
   orderedEntriesOfObjectNode,
 } from '../object-node.js'
-import { types } from '../type-system.js'
-import { anyValue, atomParameter, objectParameter } from './parameters.js'
+import { makeObjectType, types } from '../type-system.js'
+import {
+  anyValue,
+  atomParameter,
+  objectOfAtomsParameter,
+} from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
 
@@ -102,7 +106,7 @@ export const atom = {
 
   join: preludeFunction(
     ['atom', 'join'],
-    [atomParameter, objectParameter],
+    [atomParameter, objectOfAtomsParameter],
     types.atom,
     separator =>
       either.makeRight(list =>
@@ -125,7 +129,7 @@ export const atom = {
   split: preludeFunction(
     ['atom', 'split'],
     [atomParameter, atomParameter],
-    types.object,
+    makeObjectType({}, [{ keys: types.atom, values: types.atom }]),
     separator =>
       either.makeRight(subject =>
         either.makeRight(

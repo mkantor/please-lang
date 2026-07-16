@@ -66,8 +66,8 @@ applyKeyPathSuite('applyKeyPathToType with empty key path', [
   [[nothing, []], stringifyTypeForEndUser(nothing)],
   [[something, []], stringifyTypeForEndUser(something)],
   [
-    [makeObjectType({ a: atom }, { excess: something }), []],
-    stringifyTypeForEndUser(makeObjectType({ a: atom }, { excess: something })),
+    [makeObjectType({ a: atom }), []],
+    stringifyTypeForEndUser(makeObjectType({ a: atom })),
   ],
   [
     [makeFunctionType({ parameter: atom, return: something }), []],
@@ -79,30 +79,24 @@ applyKeyPathSuite('applyKeyPathToType with empty key path', [
 
 applyKeyPathSuite('applyKeyPathToType with object types', [
   [
-    [makeObjectType({ a: atom, b: integer }, { excess: something }), ['a']],
+    [makeObjectType({ a: atom, b: integer }), ['a']],
     stringifyTypeForEndUser(atom),
   ],
   [
-    [makeObjectType({ a: atom, b: integer }, { excess: something }), ['b']],
+    [makeObjectType({ a: atom, b: integer }), ['b']],
     stringifyTypeForEndUser(integer),
   ],
-  [[makeObjectType({ a: atom }, { excess: something }), ['z']], '(none)'],
+  [[makeObjectType({ a: atom }), ['z']], '(none)'],
   [
     [
-      makeObjectType(
-        {
-          a: makeObjectType(
-            { b: makeUnionType(['hello']) },
-            { excess: something },
-          ),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeObjectType({ b: makeUnionType(['hello']) }),
+      }),
       ['a', 'b'],
     ],
     stringifyTypeForEndUser(makeUnionType(['hello'])),
   ],
-  [[makeObjectType({ a: atom }, { excess: something }), ['a', 'b']], '(none)'],
+  [[makeObjectType({ a: atom }), ['a', 'b']], '(none)'],
 ])
 
 applyKeyPathSuite('applyKeyPathToType with non-object types', [
@@ -116,8 +110,8 @@ applyKeyPathSuite('applyKeyPathToType with union types', [
   [
     [
       makeUnionType([
-        makeObjectType({ a: makeUnionType(['x']) }, { excess: something }),
-        makeObjectType({ a: makeUnionType(['y']) }, { excess: something }),
+        makeObjectType({ a: makeUnionType(['x']) }),
+        makeObjectType({ a: makeUnionType(['y']) }),
       ]),
       ['a'],
     ],
@@ -125,10 +119,14 @@ applyKeyPathSuite('applyKeyPathToType with union types', [
   ],
   [
     [
-      makeUnionType([
-        makeObjectType({ a: makeUnionType(['x']) }, { excess: something }),
-        'some_atom',
-      ]),
+      makeUnionType([makeObjectType({ a: makeUnionType(['x']) }), 'some_atom']),
+      ['a'],
+    ],
+    '(none)',
+  ],
+  [
+    [
+      makeUnionType([makeObjectType({ b: atom }), makeObjectType({ c: atom })]),
       ['a'],
     ],
     '(none)',
@@ -136,17 +134,7 @@ applyKeyPathSuite('applyKeyPathToType with union types', [
   [
     [
       makeUnionType([
-        makeObjectType({ b: atom }, { excess: something }),
-        makeObjectType({ c: atom }, { excess: something }),
-      ]),
-      ['a'],
-    ],
-    '(none)',
-  ],
-  [
-    [
-      makeUnionType([
-        makeObjectType({ a: integer }, { excess: something }),
+        makeObjectType({ a: integer }),
         makeFunctionType({ parameter: atom, return: atom }),
       ]),
       ['a'],
@@ -156,20 +144,14 @@ applyKeyPathSuite('applyKeyPathToType with union types', [
 ])
 
 applyKeyPathSuite('applyKeyPathToType with bottom types', [
-  [
-    [makeObjectType({ a: nothing }, { excess: something }), ['a']],
-    stringifyTypeForEndUser(nothing),
-  ],
-  [
-    [makeObjectType({ a: nothing }, { excess: something }), ['a', 'b']],
-    '(none)',
-  ],
+  [[makeObjectType({ a: nothing }), ['a']], stringifyTypeForEndUser(nothing)],
+  [[makeObjectType({ a: nothing }), ['a', 'b']], '(none)'],
   [[nothing, ['a']], '(none)'],
   [
     [
       makeUnionType([
-        makeObjectType({ a: nothing }, { excess: something }),
-        makeObjectType({ a: atom }, { excess: something }),
+        makeObjectType({ a: nothing }),
+        makeObjectType({ a: atom }),
       ]),
       ['a'],
     ],
@@ -181,13 +163,10 @@ const keyAssignableToAOrB = makeTypeParameter('key', {
   assignableTo: makeUnionType(['a', 'b']),
 })
 const stuckAccessWithCommonXProperty = makeIndexedAccessType(
-  makeObjectType(
-    {
-      a: makeObjectType({ x: atom }, { excess: something }),
-      b: makeObjectType({ x: integer }, { excess: something }),
-    },
-    { excess: something },
-  ),
+  makeObjectType({
+    a: makeObjectType({ x: atom }),
+    b: makeObjectType({ x: integer }),
+  }),
   keyAssignableToAOrB,
 )
 
@@ -202,13 +181,10 @@ applyKeyPathSuite('applyKeyPathToType with indexed access types', [
   [
     [
       makeIndexedAccessType(
-        makeObjectType(
-          {
-            a: makeObjectType({ x: atom }, { excess: something }),
-            b: makeObjectType({}, { excess: something }),
-          },
-          { excess: something },
-        ),
+        makeObjectType({
+          a: makeObjectType({ x: atom }),
+          b: makeObjectType({}),
+        }),
         keyAssignableToAOrB,
       ),
       ['x'],
@@ -218,7 +194,7 @@ applyKeyPathSuite('applyKeyPathToType with indexed access types', [
   [
     [
       makeIndexedAccessType(
-        makeObjectType({ x: atom, a: atom, b: atom }, { excess: something }),
+        makeObjectType({ x: atom, a: atom, b: atom }),
         keyAssignableToAOrB,
       ),
       ['x'],
@@ -229,16 +205,7 @@ applyKeyPathSuite('applyKeyPathToType with indexed access types', [
 
 applyKeyPathSuite('applyKeyPathToType with degenerate stuck types', [
   [[makeApplicationType(atom, atom, new Set()), ['x']], '(none)'],
-  [
-    [
-      makeIndexedAccessType(
-        makeObjectType({ x: atom }, { excess: something }),
-        atom,
-      ),
-      ['x'],
-    ],
-    '(none)',
-  ],
+  [[makeIndexedAccessType(makeObjectType({ x: atom }), atom), ['x']], '(none)'],
 ])
 
 const getTypesForTypeParametersSuite = testCases(
@@ -266,13 +233,10 @@ getTypesForTypeParametersSuite('getTypesForTypeParameters', [
 
   [[something, atom], new Map()],
 
-  [[makeObjectType({ a: A }, { excess: something }), atom], new Map()],
+  [[makeObjectType({ a: A }), atom], new Map()],
 
   [
-    [
-      makeObjectType({ a: A, b: B }, { excess: something }),
-      makeObjectType({ a: atom, b: integer }, { excess: something }),
-    ],
+    [makeObjectType({ a: A, b: B }), makeObjectType({ a: atom, b: integer })],
     new Map([
       [A, atom],
       [B, integer],
@@ -301,10 +265,7 @@ getTypesForTypeParametersSuite('getTypesForTypeParameters', [
   ],
 
   [
-    [
-      makeObjectType({ a: A, b: A }, { excess: something }),
-      makeObjectType({ a: atom, b: integer }, { excess: something }),
-    ],
+    [makeObjectType({ a: A, b: A }), makeObjectType({ a: atom, b: integer })],
     // The first occurrence should be used in situations like this. In real code
     // this will likely result in a type error later.
     new Map([[A, atom]]),
@@ -351,21 +312,27 @@ getTypesForTypeParametersSuite('getTypesForTypeParameters', [
 
   [
     [
-      makeObjectType({}, { excess: A }),
+      makeObjectType({}, [{ keys: atom, values: A }]),
       makeObjectType(
-        { a: makeUnionType(['1']), b: makeUnionType(['2']) },
-        { excess: nothing },
+        {
+          a: makeUnionType(['1']),
+          b: makeUnionType(['2']),
+        },
+        [{ keys: atom, values: nothing }],
       ),
     ],
     new Map([[A, makeUnionType(['1', '2'])]]),
   ],
 
-  [[makeObjectType({}, { excess: A }), object], new Map([[A, something]])],
+  [
+    [makeObjectType({}, [{ keys: atom, values: A }]), object],
+    new Map([[A, something]]),
+  ],
 
   [
     [
-      makeObjectType({}, { excess: A }),
-      makeObjectType({}, { excess: nothing }),
+      makeObjectType({}, [{ keys: atom, values: A }]),
+      makeObjectType({}, [{ keys: atom, values: nothing }]),
     ],
     new Map([[A, nothing]]),
   ],
@@ -373,8 +340,10 @@ getTypesForTypeParametersSuite('getTypesForTypeParameters', [
   [
     // Bindings from required properties take precedence over excess bindings.
     [
-      makeObjectType({ a: A }, { excess: A }),
-      makeObjectType({ a: atom, b: integer }, { excess: nothing }),
+      makeObjectType({ a: A }, [{ keys: atom, values: A }]),
+      makeObjectType({ a: atom, b: integer }, [
+        { keys: atom, values: nothing },
+      ]),
     ],
     new Map([[A, atom]]),
   ],
@@ -406,25 +375,34 @@ enumerateInhabitantsSuite('enumerateInhabitants', [
   [object, optionAdt.none],
 
   [
-    makeObjectType({}, { excess: nothing }),
+    makeObjectType({}, [{ keys: atom, values: nothing }]),
     optionAdt.makeSome([objectNodeFromOrderedEntries([])]),
   ],
 
   [
-    makeObjectType({ a: makeUnionType(['1']) }, { excess: nothing }),
+    makeObjectType({ a: makeUnionType(['1']) }, [
+      { keys: atom, values: nothing },
+    ]),
     optionAdt.makeSome([objectNodeFromOrderedEntries([['a', '1']])]),
   ],
 
   // An open object type admits unlisted properties, so it is not enumerable.
+  [makeObjectType({ a: makeUnionType(['1']) }), optionAdt.none],
+
+  // An all-bottom clause list which doesn't cover every key still leaves the
+  // uncovered keys open.
   [
-    makeObjectType({ a: makeUnionType(['1']) }, { excess: something }),
+    makeObjectType({}, [{ keys: makeUnionType(['a', 'b']), values: nothing }]),
     optionAdt.none,
   ],
 
   [
     makeObjectType(
-      { a: makeUnionType(['1', '2']), b: makeUnionType(['x']) },
-      { excess: nothing },
+      {
+        a: makeUnionType(['1', '2']),
+        b: makeUnionType(['x']),
+      },
+      [{ keys: atom, values: nothing }],
     ),
     optionAdt.makeSome([
       objectNodeFromOrderedEntries([
@@ -438,12 +416,19 @@ enumerateInhabitantsSuite('enumerateInhabitants', [
     ]),
   ],
 
-  [makeObjectType({ a: atom }, { excess: nothing }), optionAdt.none],
+  [
+    makeObjectType({ a: atom }, [{ keys: atom, values: nothing }]),
+    optionAdt.none,
+  ],
 
   [
     makeObjectType(
-      { a: makeObjectType({ b: makeUnionType(['1']) }, { excess: nothing }) },
-      { excess: nothing },
+      {
+        a: makeObjectType({ b: makeUnionType(['1']) }, [
+          { keys: atom, values: nothing },
+        ]),
+      },
+      [{ keys: atom, values: nothing }],
     ),
     optionAdt.makeSome([
       objectNodeFromOrderedEntries([
@@ -454,15 +439,19 @@ enumerateInhabitantsSuite('enumerateInhabitants', [
 
   [
     makeObjectType(
-      { a: makeObjectType({ b: makeUnionType(['1']) }, { excess: something }) },
-      { excess: nothing },
+      {
+        a: makeObjectType({ b: makeUnionType(['1']) }),
+      },
+      [{ keys: atom, values: nothing }],
     ),
     optionAdt.none,
   ],
 
   [
     makeUnionType([
-      makeObjectType({ a: makeUnionType(['1']) }, { excess: nothing }),
+      makeObjectType({ a: makeUnionType(['1']) }, [
+        { keys: atom, values: nothing },
+      ]),
       'z',
     ]),
     optionAdt.makeSome([objectNodeFromOrderedEntries([['a', '1']]), 'z']),
@@ -493,7 +482,12 @@ const intrinsicReductionSuite = testCases(
   (typeArgument: Type) =>
     supplyTypeArgument(
       makeIntrinsicApplicationType(
-        [A, makeObjectType({ b: makeUnionType(['2']) }, { excess: nothing })],
+        [
+          A,
+          makeObjectType({ b: makeUnionType(['2']) }, [
+            { keys: atom, values: nothing },
+          ]),
+        ],
         describeReducedArguments,
         computeUpperBound,
       ),
@@ -506,7 +500,9 @@ const intrinsicReductionSuite = testCases(
 
 intrinsicReductionSuite('intrinsic application reduction over object types', [
   [
-    makeObjectType({ a: makeUnionType(['1']) }, { excess: nothing }),
+    makeObjectType({ a: makeUnionType(['1']) }, [
+      { keys: atom, values: nothing },
+    ]),
     makeUnionType(['{ { a: 1 }, { b: 2 } }']),
   ],
 
@@ -514,19 +510,25 @@ intrinsicReductionSuite('intrinsic application reduction over object types', [
 
   [
     makeUnionType([
-      makeObjectType({ a: makeUnionType(['1']) }, { excess: nothing }),
-      makeObjectType({ a: makeUnionType(['2']) }, { excess: nothing }),
+      makeObjectType({ a: makeUnionType(['1']) }, [
+        { keys: atom, values: nothing },
+      ]),
+      makeObjectType({ a: makeUnionType(['2']) }, [
+        { keys: atom, values: nothing },
+      ]),
     ]),
     makeUnionType(['{ { a: 1 }, { b: 2 } }', '{ { a: 2 }, { b: 2 } }']),
   ],
 
   // An open object type is not enumerable, so the application stays stuck.
   [
-    makeObjectType({ a: makeUnionType(['1']) }, { excess: something }),
+    makeObjectType({ a: makeUnionType(['1']) }),
     makeIntrinsicApplicationType(
       [
-        makeObjectType({ a: makeUnionType(['1']) }, { excess: something }),
-        makeObjectType({ b: makeUnionType(['2']) }, { excess: nothing }),
+        makeObjectType({ a: makeUnionType(['1']) }),
+        makeObjectType({ b: makeUnionType(['2']) }, [
+          { keys: atom, values: nothing },
+        ]),
       ],
       describeReducedArguments,
       computeUpperBound,
@@ -538,29 +540,33 @@ const genericizationConstraintSuite = testCases(
   (annotation: Type) =>
     genericizeFunctionParameterAnnotation('x', annotation).type,
   annotation =>
-    `genericizing \`x: ${stringifyTypeForEndUser(annotation)}\` opens closed objects`,
+    `genericizing \`x: ${stringifyTypeForEndUser(annotation)}\` preserves excess bounds`,
 )
 
-genericizationConstraintSuite(
-  'genericization produces open object constraints',
+genericizationConstraintSuite('genericization preserves excess bounds', [
   [
-    [
-      // The constraint is an upper bound for its instantiations (which should
-      // admit subtypes), so it must not be closed.
-      makeUnionType([
-        makeObjectType({ a: makeUnionType(['1']) }, { excess: nothing }),
+    makeUnionType([
+      makeObjectType({ a: makeUnionType(['1']) }, [
+        { keys: atom, values: nothing },
       ]),
-      parameterType => {
-        assert(parameterType.kind === 'parameter')
-        const constraint = parameterType.constraint.assignableTo
-        assert(constraint.kind === 'union')
-        const [member] = constraint.members
-        assert(typeof member === 'object' && member.kind === 'object')
-        assert.deepEqual(member.excess, something)
-      },
-    ],
+    ]),
+    parameterType => {
+      assert(parameterType.kind === 'parameter')
+      const constraint = parameterType.constraint.assignableTo
+      assert(constraint.kind === 'union')
+      const [member] = constraint.members
+      assert(typeof member === 'object' && member.kind === 'object')
+      assert.deepEqual(member.excess, [{ keys: atom, values: nothing }])
+    },
   ],
-)
+  [
+    makeObjectType({ a: makeUnionType(['1']) }, [{ keys: atom, values: atom }]),
+    parameterType => {
+      assert(parameterType.kind === 'object')
+      assert.deepEqual(parameterType.excess, [{ keys: atom, values: atom }])
+    },
+  ],
+])
 
 const genericizeParameterAnnotationSuite = testCases(
   ([parameterName, annotation]: readonly [
@@ -590,13 +596,10 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
   [
     [
       'x',
-      makeObjectType(
-        {
-          a: integer,
-          b: atom,
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: integer,
+        b: atom,
+      }),
     ],
     '{ a: (?"x.a": :integer.type), b: (?"x.b": :atom.type) }',
   ],
@@ -604,12 +607,9 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
   [
     [
       'x',
-      makeObjectType(
-        {
-          a: makeObjectType({ b: atom }, { excess: something }),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        a: makeObjectType({ b: atom }),
+      }),
     ],
     '{ a: { b: (?"x.a.b": :atom.type) } }',
   ],
@@ -617,22 +617,19 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
   [
     [
       'x',
-      makeObjectType(
-        {
-          callback: makeFunctionType({ parameter: atom, return: integer }),
-        },
-        { excess: something },
-      ),
+      makeObjectType({
+        callback: makeFunctionType({ parameter: atom, return: integer }),
+      }),
     ],
     '{ callback: (?"x.callback.#parameter": :atom.type) ~> (?"x.callback.#return": :integer.type) }',
   ],
 
-  [['empty', makeObjectType({}, { excess: something })], '(?empty: {})'],
+  [['empty', makeObjectType({})], '(?empty: {})'],
 
   [['identity', makeFunctionType({ parameter: A, return: A })], '?a ~> :a'],
 
   [
-    ['wrap', makeObjectType({ value: A }, { excess: something })],
+    ['wrap', makeObjectType({ value: A })],
     `{ value: ${stringifyTypeForEndUser(A)} }`,
   ],
 ])
@@ -698,8 +695,8 @@ const supplyTypeArgumentSuite = testCases(
 
 supplyTypeArgumentSuite('supplying type arguments within excess bounds', [
   [
-    [makeObjectType({}, { excess: A }), A, atom],
-    makeObjectType({}, { excess: atom }),
+    [makeObjectType({}, [{ keys: atom, values: A }]), A, atom],
+    makeObjectType({}, [{ keys: atom, values: atom }]),
   ],
 
   [[object, A, atom], object],
@@ -718,9 +715,9 @@ const containedTypeParametersSuite = testCases(
 )
 
 containedTypeParametersSuite('containedTypeParameters over excess bounds', [
-  [makeObjectType({}, { excess: A }), ['a']],
+  [makeObjectType({}, [{ keys: atom, values: A }]), ['a']],
 
-  [makeObjectType({ x: B }, { excess: A }), ['b', 'a']],
+  [makeObjectType({ x: B }, [{ keys: atom, values: A }]), ['b', 'a']],
 
   [object, []],
   [something, []],

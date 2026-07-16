@@ -29,6 +29,7 @@ import {
   taggedParameter,
 } from './parameters.js'
 import {
+  applyValidatingParameterType,
   emptyContextForStdlibApplications,
   preludeFunction,
 } from './stdlib-utilities.js'
@@ -153,7 +154,7 @@ export const globalFunctions = {
             }),
           some: relevantCase =>
             isFunctionNode(relevantCase) ?
-              relevantCase(argument.value, emptyContextForStdlibApplications)
+              applyValidatingParameterType(relevantCase, argument.value)
             : either.makeRight(relevantCase),
         }),
       ),
