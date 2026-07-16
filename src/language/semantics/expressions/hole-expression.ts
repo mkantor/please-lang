@@ -9,12 +9,13 @@ import {
   type ObjectNode,
 } from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { typeFromSemanticGraph, types } from '../type-system.js'
-import type { TypeParameter } from '../type-system/type-formats.js'
 import {
   isTypeParameter,
   makeTypeParameter,
-} from '../type-system/type-formats.js'
+  typeFromSemanticGraph,
+  types,
+  type TypeParameter,
+} from '../type-system.js'
 import {
   ignoredKey,
   readArgumentsFromExpression,

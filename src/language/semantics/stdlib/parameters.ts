@@ -3,12 +3,12 @@ import type { Atom } from '../../parsing.js'
 import { isFunctionNode, type FunctionNode } from '../function-node.js'
 import { isObjectNode, type ObjectNode } from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
-import { types } from '../type-system.js'
 import {
   makeObjectType,
   makeUnionType,
+  types,
   type Type,
-} from '../type-system/type-formats.js'
+} from '../type-system.js'
 
 /**
  * Describes a standard library function parameter. `Value` should be a runtime

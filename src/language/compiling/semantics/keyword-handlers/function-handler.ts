@@ -35,8 +35,7 @@ import {
   stringifySemanticGraphForEndUser,
   typeSymbolToSemanticGraph,
 } from '../../../semantics/semantic-graph.js'
-import { somethingTypeSymbol } from '../../../semantics/type-system/prelude-types.js'
-import { makeTypeParameter } from '../../../semantics/type-system/type-formats.js'
+import { makeTypeParameter } from '../../../semantics/type-system.js'
 
 export const functionKeywordHandler: KeywordHandler = (
   expression: Expression,
@@ -86,7 +85,7 @@ const checkForDuplicateHoles = (
         const holeForDiagnostic = makeHoleExpressionWithExtantTypeParameter(
           first ?? ignoredKey,
           makeObjectNode({
-            assignableTo: typeSymbolToSemanticGraph(somethingTypeSymbol),
+            assignableTo: typeSymbolToSemanticGraph(types.somethingTypeSymbol),
           }),
           makeTypeParameter('a', { assignableTo: types.something }),
         )

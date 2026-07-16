@@ -7,16 +7,17 @@ import {
   stringifySemanticGraphForEndUser,
   stringifyTypeForEndUser,
 } from '../semantic-graph.js'
-import { isAssignable, types } from '../type-system.js'
-import { typeFromSemanticGraph } from '../type-system/literal-type.js'
-import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
+  isAssignable,
   makeFunctionType,
   makeTypeParameter,
   matchTypeFormat,
+  types,
   unionOfTypes,
   type Type,
-} from '../type-system/type-formats.js'
+} from '../type-system.js'
+import { typeFromSemanticGraph } from '../type-system/literal-type.js'
+import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
   applyKeyPathToType,
   applyTypeToArgumentType,

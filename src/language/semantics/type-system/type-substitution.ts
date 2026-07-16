@@ -7,24 +7,29 @@ import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something } from './prelude-types.js'
 import { isAssignable } from './subtyping.js'
 import {
-  isNothing,
   makeApplicationType,
-  makeFunctionType,
-  makeIndexedAccessType,
-  makeIntrinsicApplicationType,
-  makeObjectType,
-  makeTypeParameter,
-  makeUnionType,
-  matchTypeFormat,
-  unionOfTypes,
   type ApplicationType,
+} from './type-formats/application-type.js'
+import {
+  makeFunctionType,
   type FunctionType,
+} from './type-formats/function-type.js'
+import {
+  makeIndexedAccessType,
   type IndexedAccessType,
+} from './type-formats/indexed-access-type.js'
+import {
+  makeIntrinsicApplicationType,
   type IntrinsicApplicationType,
-  type ObjectType,
-  type Type,
+} from './type-formats/intrinsic-application-type.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
+import { makeObjectType, type ObjectType } from './type-formats/object-type.js'
+import {
+  makeTypeParameter,
   type TypeParameter,
-} from './type-formats.js'
+} from './type-formats/type-parameter-type.js'
+import { isBottomType, isTopType, type Type } from './type-formats/type.js'
+import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
   atomKeyPathComponentFromType,
   functionParameterKey,
@@ -243,7 +248,7 @@ export const getTypesForTypeParameters = ({
   readonly argumentType: Type
 }): ReadonlyMap<TypeParameter, Type> => {
   // Avoid infinite recursion when we hit the top type.
-  if (parameterType === something) {
+  if (isTopType(parameterType)) {
     return new Map()
   } else if (argumentType.kind === 'intrinsicApplication') {
     return getTypesForTypeParameters({
@@ -289,7 +294,7 @@ export const getTypesForTypeParameters = ({
               parameterType: parameterType.excess,
               argumentType: unionOfTypes([
                 ...unmatchedArgumentChildTypes,
-                ...(isNothing(argumentType.excess) ?
+                ...(isBottomType(argumentType.excess) ?
                   []
                 : [argumentType.excess]),
               ]),
@@ -511,7 +516,7 @@ export const enumerateInhabitants = (
   type: Type,
 ): Option<readonly SemanticGraph[]> =>
   // Avoid infinite recursion when we hit the top type.
-  type === something ?
+  isTopType(type) ?
     option.none
   : matchTypeFormat(type, {
       application: _ => option.none,
@@ -521,7 +526,7 @@ export const enumerateInhabitants = (
       opaque: _ => option.none,
       parameter: _ => option.none,
       object: type =>
-        !isNothing(type.excess) ?
+        !isBottomType(type.excess) ?
           option.none
         : option.map(
             option.sequence(
@@ -601,7 +606,7 @@ export const supplyTypeArgument = (
   typeArgument: Type,
 ): Type => {
   // Avoid infinite recursion when we hit the top type.
-  if (type === something) {
+  if (isTopType(type)) {
     return type
   } else {
     return matchTypeFormat(type, {
@@ -727,7 +732,7 @@ export const supplyTypeArguments = (
  */
 export const recursivelyInexact = (type: Type): Type =>
   // Avoid infinite recursion when we hit the top type.
-  type === something ? type : (
+  isTopType(type) ? type : (
     matchTypeFormat<Type>(type, {
       application: type =>
         makeApplicationType(
@@ -760,7 +765,7 @@ export const recursivelyInexact = (type: Type): Type =>
               recursivelyInexact(child),
             ]),
           ),
-          { excess: isNothing(type.excess) ? something : type.excess },
+          { excess: isBottomType(type.excess) ? something : type.excess },
         ),
       opaque: type => type,
       parameter: type => type,

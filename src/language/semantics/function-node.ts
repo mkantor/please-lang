@@ -13,7 +13,7 @@ import type { ExpressionContext } from './expression-elaboration.js'
 import type { ObjectNode } from './object-node.js'
 import { nodeTag } from './semantic-graph-node-tag.js'
 import { serialize, type Output, type SemanticGraph } from './semantic-graph.js'
-import type { FunctionType } from './type-system/type-formats.js'
+import type { FunctionType } from './type-system.js'
 
 export type FunctionNodeCallError =
   | DependencyUnavailable

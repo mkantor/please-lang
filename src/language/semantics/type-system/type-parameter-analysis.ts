@@ -1,12 +1,8 @@
-import { something } from './prelude-types.js'
 import { simplifyUnionType } from './subtyping.js'
-import {
-  makeUnionType,
-  matchTypeFormat,
-  type Type,
-  type TypeParameter,
-  type UnionType,
-} from './type-formats.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
+import { type TypeParameter } from './type-formats/type-parameter-type.js'
+import { isTopType, type Type } from './type-formats/type.js'
+import { makeUnionType, type UnionType } from './type-formats/union-type.js'
 import {
   functionParameterKey,
   functionReturnKey,
@@ -35,7 +31,7 @@ const containedTypeParametersImplementation = (
   root: TypeKeyPath,
 ): TypeParametersByKeyPath => {
   // Avoid infinite recursion when we hit the top type.
-  if (type === something) {
+  if (isTopType(type)) {
     return new Map()
   } else {
     return matchTypeFormat<TypeParametersByKeyPath>(type, {
@@ -119,7 +115,7 @@ const findKeyPathsToTypeParameterImplementation = (
   root: TypeKeyPath,
 ): Set<TypeKeyPath> => {
   // Avoid infinite recursion when we hit the top type.
-  if (type === something) {
+  if (isTopType(type)) {
     return new Set()
   } else {
     return matchTypeFormat(type, {

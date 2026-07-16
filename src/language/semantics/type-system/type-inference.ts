@@ -38,14 +38,12 @@ import {
 import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
 import { typeFromSemanticGraph } from './literal-type.js'
 import * as types from './prelude-types.js'
-import {
-  makeApplicationType,
-  makeFunctionType,
-  makeIndexedAccessType,
-  makeObjectType,
-  unionOfTypes,
-  type Type,
-} from './type-formats.js'
+import { makeApplicationType } from './type-formats/application-type.js'
+import { makeFunctionType } from './type-formats/function-type.js'
+import { makeIndexedAccessType } from './type-formats/indexed-access-type.js'
+import { makeObjectType } from './type-formats/object-type.js'
+import type { Type } from './type-formats/type.js'
+import { unionOfTypes } from './type-formats/union-type.js'
 import {
   functionParameterKey,
   stringifyTypeKeyPathForEndUser,

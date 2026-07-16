@@ -24,7 +24,7 @@ import {
   type ObjectType,
   type OpaqueType,
   type UnionType,
-} from '../semantics/type-system/type-formats.js'
+} from '../semantics/type-system.js'
 import { prettyJson } from '../unparsing.js'
 
 const serializeFunction =

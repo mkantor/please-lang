@@ -6,15 +6,15 @@ import {
   objectNodeFromOrderedEntries,
   orderedEntriesOfObjectNode,
 } from '../object-node.js'
-import { types } from '../type-system.js'
-import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import {
-  isNothing,
+  isBottomType,
   makeObjectType,
   makeUnionType,
+  types,
   unionOfTypes,
   type Type,
-} from '../type-system/type-formats.js'
+} from '../type-system.js'
+import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
@@ -66,7 +66,7 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
                 .filter(([key]) => object2Type.children[key] === undefined)
                 .map(([key, child]) => [
                   key,
-                  isNothing(object2Type.excess) ? child
+                  isBottomType(object2Type.excess) ? child
                     // The property may exist as excess (with an unknown type).
                   : types.something,
                 ]),
@@ -75,7 +75,10 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
           },
           {
             excess:
-              isNothing(object1Type.excess) && isNothing(object2Type.excess) ?
+              (
+                isBottomType(object1Type.excess) &&
+                isBottomType(object2Type.excess)
+              ) ?
                 types.nothing
               : types.something,
           },
@@ -155,7 +158,7 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
         })
         const someKeyMayBeAbsent =
           presentValueTypes.length !== possibleKeys.size
-        return someKeyMayBeAbsent && !isNothing(objectType.excess) ?
+        return someKeyMayBeAbsent && !isBottomType(objectType.excess) ?
             // The key may exist as an excess property (with an unknown type).
             types.option(types.something)
           : lookupReturnType({
@@ -164,7 +167,7 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
             })
       },
       none: _ =>
-        isNothing(objectType.excess) ?
+        isBottomType(objectType.excess) ?
           // Whatever the key turns out to be, it can only select one of the
           // object's own property values (or nothing).
           lookupReturnType({

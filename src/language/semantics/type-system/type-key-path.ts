@@ -13,18 +13,19 @@ import {
   type SemanticGraph,
 } from '../semantic-graph.js'
 import { asUnionWithLiteralAtomMembers } from './subtyping.js'
+import { makeFunctionType } from './type-formats/function-type.js'
 import {
-  makeFunctionType,
   makeIndexedAccessType,
-  makeObjectType,
-  makeTypeParameter,
-  makeUnionType,
-  matchTypeFormat,
   type IndexedAccessType,
-  type Type,
+} from './type-formats/indexed-access-type.js'
+import { matchTypeFormat } from './type-formats/match-type-format.js'
+import { makeObjectType } from './type-formats/object-type.js'
+import {
+  makeTypeParameter,
   type TypeParameter,
-  type UnionType,
-} from './type-formats.js'
+} from './type-formats/type-parameter-type.js'
+import type { Type } from './type-formats/type.js'
+import { makeUnionType, type UnionType } from './type-formats/union-type.js'
 
 export const functionParameterKey = Symbol('functionParameter')
 export const functionReturnKey = Symbol('functionReturn')

@@ -1,18 +1,16 @@
 export { typeFromSemanticGraph } from './type-system/literal-type.js'
 export * as types from './type-system/prelude-types.js'
 export { isAssignable } from './type-system/subtyping.js'
-export {
-  isNothing,
-  makeTypeParameter,
-  type ApplicationType,
-  type FunctionType,
-  type IndexedAccessType,
-  type ObjectType,
-  type OpaqueType,
-  type Type,
-  type TypeParameter,
-  type UnionType,
-} from './type-system/type-formats.js'
+export * from './type-system/type-formats/application-type.js'
+export * from './type-system/type-formats/function-type.js'
+export * from './type-system/type-formats/indexed-access-type.js'
+export * from './type-system/type-formats/intrinsic-application-type.js'
+export * from './type-system/type-formats/match-type-format.js'
+export * from './type-system/type-formats/object-type.js'
+export * from './type-system/type-formats/opaque-type.js'
+export * from './type-system/type-formats/type-parameter-type.js'
+export * from './type-system/type-formats/type.js'
+export * from './type-system/type-formats/union-type.js'
 export {
   inferType,
   resolveParameterTypes,

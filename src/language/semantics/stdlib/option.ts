@@ -1,12 +1,12 @@
 import either from '@matt.kantor/either'
 import { makeUnionExpression } from '../expressions/union-expression.js'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
-import { types } from '../type-system.js'
 import {
   makeFunctionType,
   makeTypeParameter,
   makeUnionType,
-} from '../type-system/type-formats.js'
+  types,
+} from '../type-system.js'
 import {
   anyValue,
   functionParameter,

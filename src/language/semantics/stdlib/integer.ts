@@ -1,7 +1,6 @@
 import either from '@matt.kantor/either'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
-import { types } from '../type-system.js'
-import { makeUnionType } from '../type-system/type-formats.js'
+import { makeUnionType, types } from '../type-system.js'
 import { anyValue, integerParameter } from './parameters.js'
 import {
   closedOver,

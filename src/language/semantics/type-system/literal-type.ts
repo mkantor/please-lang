@@ -7,8 +7,9 @@ import {
 import { readUnionExpression } from '../expressions/union-expression.js'
 import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing, something, typesBySymbol } from './prelude-types.js'
-import { makeObjectType, unionOfTypes, type Type } from './type-formats.js'
-
+import { makeObjectType } from './type-formats/object-type.js'
+import type { Type } from './type-formats/type.js'
+import { unionOfTypes } from './type-formats/union-type.js'
 /**
  * Attempt to interpret `node` as a `Type` in a very basic way:
  * - `Atom`s become singleton `UnionType`s.

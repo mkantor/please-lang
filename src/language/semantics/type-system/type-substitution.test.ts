@@ -10,16 +10,6 @@ import {
   stringifyTypeForEndUser,
   type SemanticGraph,
 } from '../semantic-graph.js'
-import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
-import {
-  atom,
-  integer,
-  naturalNumber,
-  nothing,
-  object,
-  option,
-  something,
-} from './prelude-types.js'
 import {
   makeApplicationType,
   makeFunctionType,
@@ -30,7 +20,17 @@ import {
   makeUnionType,
   type Type,
   type TypeParameter,
-} from './type-formats.js'
+} from '../type-system.js'
+import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
+import {
+  atom,
+  integer,
+  naturalNumber,
+  nothing,
+  object,
+  option,
+  something,
+} from './prelude-types.js'
 import { nestedIndexedAccess } from './type-key-path.js'
 import { containedTypeParameters } from './type-parameter-analysis.js'
 import {
