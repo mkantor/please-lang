@@ -37,6 +37,12 @@ suite('compile attaches source spans to elaboration errors', () => {
 
     const source2 = '{2: {}}.(1 + 1).(1 + 1).(1 + 1)'
     assert.deepEqual(compileErrorSpan(source2), [16, 23])
+
+    const source3 = '{}.a.b.c'
+    assert.deepEqual(compileErrorSpan(source3), [3, 4])
+
+    const source4 = '{ a: {} }.a.b.c'
+    assert.deepEqual(compileErrorSpan(source4), [12, 13])
   })
 
   test('unknown keyword spans the keyword expression', () => {
