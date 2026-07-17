@@ -48,19 +48,19 @@ const endToEnd = (input: string) => {
 }
 
 const typeMismatch = (result: ProgramResult) => {
-  assert(either.isLeft(result))
+  assert(either.isLeft(result), 'expected a typeMismatch error')
   assert('kind' in result.value)
   assert.deepEqual(result.value.kind, 'typeMismatch')
 }
 
 const invalidExpression = (result: ProgramResult) => {
-  assert(either.isLeft(result))
+  assert(either.isLeft(result), 'expected an invalidExpression error')
   assert('kind' in result.value)
   assert.deepEqual(result.value.kind, 'invalidExpression')
 }
 
 const panic = (result: ProgramResult) => {
-  assert(either.isLeft(result))
+  assert(either.isLeft(result), 'expected an panic')
   assert('kind' in result.value)
   assert.deepEqual(result.value.kind, 'panic')
 }
