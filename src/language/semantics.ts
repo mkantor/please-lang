@@ -54,6 +54,11 @@ export {
   type LookupExpression,
 } from './semantics/expressions/lookup-expression.js'
 export {
+  makeObjectTypeExpression,
+  readObjectTypeExpression,
+  type ObjectTypeExpression,
+} from './semantics/expressions/object-type-expression.js'
+export {
   readPanicExpression,
   type PanicExpression,
 } from './semantics/expressions/panic-expression.js'

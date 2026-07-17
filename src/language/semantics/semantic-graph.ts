@@ -19,6 +19,7 @@ import {
 import { inlinePlz, unparse, type Notation } from '../unparsing.js'
 import { isExpression } from './expression.js'
 import { makeHoleExpressionWithExtantTypeParameter } from './expressions/hole-expression.js'
+import { makeObjectTypeExpression } from './expressions/object-type-expression.js'
 import { serializeFunctionNode, type FunctionNode } from './function-node.js'
 import { isSemanticGraph } from './is-semantic-graph.js'
 import { stringifyKeyPathForEndUser, type KeyPath } from './key-path.js'
@@ -38,6 +39,7 @@ import {
   isTopType,
   matchTypeFormat,
   typeParameterAssignableToConstraintKey,
+  types,
   type TypeKeyPath,
 } from './type-system.js'
 import {
@@ -337,13 +339,36 @@ export const typeToSemanticGraph = (
           ['0', recurseWithSameTypeParameters(type.key)],
         ]),
       }),
-    object: type =>
-      objectNodeFromOrderedEntries(
+    object: type => {
+      const properties = objectNodeFromOrderedEntries(
         Object.entries(type.children).map(([key, value]) => [
           key,
           recurseWithSameTypeParameters(value),
         ]),
-      ),
+      )
+      // An open object becomes a plain literal; any other excess bounds are
+      // spelled out with the explicit `@object` form.
+      const [firstClause, ...remainingClauses] = type.excess
+      const isOpen =
+        firstClause === undefined ||
+        (remainingClauses.length === 0 &&
+          firstClause.keys === types.atom &&
+          isTopType(firstClause.values))
+      return isOpen ? properties : (
+          makeObjectTypeExpression(
+            properties,
+            objectNodeFromOrderedEntries(
+              type.excess.map((clause, index) => [
+                String(index),
+                objectNodeFromOrderedEntries([
+                  ['0', recurseWithSameTypeParameters(clause.keys)],
+                  ['1', recurseWithSameTypeParameters(clause.values)],
+                ]),
+              ]),
+            ),
+          )
+        )
+    },
     // A stuck intrinsic application is displayed as its (concrete) upper bound,
     // which is also how it behaves for assignability.
     intrinsicApplication: type =>

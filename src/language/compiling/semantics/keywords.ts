@@ -6,6 +6,7 @@ import { holeKeywordHandler } from './keyword-handlers/hole-handler.js'
 import { ifKeywordHandler } from './keyword-handlers/if-handler.js'
 import { indexKeywordHandler } from './keyword-handlers/index-handler.js'
 import { lookupKeywordHandler } from './keyword-handlers/lookup-handler.js'
+import { objectTypeKeywordHandler } from './keyword-handlers/object-type-handler.js'
 import { panicKeywordHandler } from './keyword-handlers/panic-handler.js'
 import { runtimeKeywordHandler } from './keyword-handlers/runtime-handler.js'
 import { todoKeywordHandler } from './keyword-handlers/todo-handler.js'
@@ -46,6 +47,11 @@ export const keywordHandlers: KeywordHandlers = {
    * Gets the value of a property with the given key (using lexical scoping).
    */
   '@lookup': lookupKeywordHandler,
+
+  /**
+   * Creates an object type with excess property bounds.
+   */
+  '@object': objectTypeKeywordHandler,
 
   /**
    * Immediately terminates the process when evaluated.

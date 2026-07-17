@@ -9,7 +9,6 @@ import {
   isAssignable,
   isExpression,
   isFunctionNode,
-  isObjectNode,
   lookup,
   readApplyExpression,
   readFunctionExpression,
@@ -36,6 +35,11 @@ import {
   getHoleTypeParameter,
   readHoleExpression,
 } from '../expressions/hole-expression.js'
+import {
+  readExcessClauses,
+  readObjectTypeExpression,
+} from '../expressions/object-type-expression.js'
+import { isObjectNode } from '../object-node.js'
 import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
 import { typeFromSemanticGraph } from './literal-type.js'
 import * as types from './prelude-types.js'
@@ -116,13 +120,15 @@ export const inferType = (
  * Like `inferType`, but for a `node` occurring in a type annotation (e.g. a
  * function parameter type or `@check` type). The denoted type is interpreted as
  * an open upper bound:
+ * - An explicit `@object` expression is interpreted exactly as written.
  * - Each `@union` member is interpreted as if it were written bare in the
  *   same position (`inferTypeOfTypeAnnotation` distributes over union members).
  * - A plain object literal is open (allowing arbitrary excess properties), in
  *   contrast to value positions where inference gives closed object types.
  * - Anything indirect (lookups, indexed accesses, applications, …) is
  *   interpreted as its inferred type with every closed object widened to an
- *   open one.
+ *   open one; in particular an alias to an explicitly-closed `@object` is
+ *   interpreted as open.
  */
 export const inferTypeOfTypeAnnotation = (
   node: SemanticGraph,
@@ -547,6 +553,80 @@ const inferTypeImplementation = (
     )
   }
 
+  // @object: an explicit object type.
+  const objectTypeExpressionResult = readObjectTypeExpression(node)
+  if (either.isRight(objectTypeExpressionResult)) {
+    const objectTypeExpression = objectTypeExpressionResult.value
+    const { properties } = objectTypeExpression[1]
+    const inferExcessClauseKeys = (keys: SemanticGraph, index: number) =>
+      either.flatMap(
+        inferTypeOfTypeAnnotationImplementation(
+          keys,
+          parameterTypes,
+          lookingUpKeys,
+          descendantContext(['1', 'excess', String(index), '0']),
+        ),
+        (keysType): Either<ElaborationError, Type> =>
+          // Keys must be concrete atom subtypes.
+          containedTypeParameters(keysType).size > 0 ?
+            either.makeLeft({
+              kind: 'invalidExpression',
+              message:
+                '`@object` excess clause keys must not reference type parameters',
+            })
+          : !isAssignable({ source: keysType, target: types.atom }) ?
+            either.makeLeft({
+              kind: 'typeMismatch',
+              message: `\`@object\` excess clause keys must be an atom subtype, but \`${stringifyTypeForEndUser(
+                keysType,
+              )}\` is not assignable to \`${stringifyTypeForEndUser(
+                types.atom,
+              )}\``,
+            })
+          : either.makeRight(keysType),
+      )
+    return cacheOnSuccess(
+      either.flatMap(readExcessClauses(objectTypeExpression), clauses =>
+        either.flatMap(
+          either.sequence(
+            Object.entries(properties).map(([key, propertyValue]) =>
+              either.map(
+                inferTypeOfTypeAnnotationImplementation(
+                  propertyValue,
+                  parameterTypes,
+                  lookingUpKeys,
+                  descendantContext(['1', 'properties', key]),
+                ),
+                propertyType => [key, propertyType],
+              ),
+            ),
+          ),
+          children =>
+            either.map(
+              either.sequence(
+                clauses.map((clause, index) =>
+                  either.map(
+                    either.sequence([
+                      inferExcessClauseKeys(clause[0], index),
+                      inferTypeOfTypeAnnotationImplementation(
+                        clause[1],
+                        parameterTypes,
+                        lookingUpKeys,
+                        descendantContext(['1', 'excess', String(index), '1']),
+                      ),
+                    ]),
+                    ([keys, values]) => ({ keys, values }),
+                  ),
+                ),
+              ),
+              refinementClauses =>
+                makeObjectType(Object.fromEntries(children), refinementClauses),
+            ),
+        ),
+      ),
+    )
+  }
+
   // @hole: a hole denotes its type parameter. Unless its constraint is already
   // sourced from the carried type parameter, resolve it here.
   const holeExpressionResult = readHoleExpression(node)
@@ -624,7 +704,11 @@ const inferTypeOfTypeAnnotationImplementation = (
       : [...context.cacheKeyPrefixOverride, ...subPath],
   })
   const unionExpressionResult = readUnionExpression(node)
-  if (either.isRight(unionExpressionResult)) {
+  if (either.isRight(readObjectTypeExpression(node))) {
+    // `@object` operands are type positions; `inferTypeImplementation`
+    // interprets the whole subtree as written.
+    return inferTypeImplementation(node, parameterTypes, lookingUpKeys, context)
+  } else if (either.isRight(unionExpressionResult)) {
     // Distribute over union members.
     return either.map(
       either.sequence(
