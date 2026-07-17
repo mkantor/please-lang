@@ -716,7 +716,11 @@ const isTightlyBoundNonCompactExpression = (
 
 const isNonCompactExpression = (expression: SemanticGraph | Molecule) =>
   isTightlyBoundNonCompactExpression(expression) ||
-  either.isRight(readUnionExpression(asSemanticGraph(expression))) ||
+  either.match(readUnionExpression(asSemanticGraph(expression)), {
+    // Empty unions render as `:nothing.type`.
+    right: unionExpression => Object.values(unionExpression[1]).length !== 0,
+    left: _ => false,
+  }) ||
   either.isRight(
     either.flatMap(
       readApplyExpression(asSemanticGraph(expression)),
