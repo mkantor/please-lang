@@ -41,7 +41,7 @@ const unparseAtomOrMolecule: UnparseAtomOrMolecule =
     : unparseMolecule(semanticContext)(value)
 
 const unparseMolecule = (semanticContext: SemanticContext) =>
-  moleculeUnparser(semanticContext)(
+  moleculeUnparser('multiline', semanticContext)(
     unparseAtomOrMolecule,
     unparseSugarFreeMolecule,
   )

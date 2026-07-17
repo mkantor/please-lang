@@ -760,7 +760,7 @@ testCases(unparsers, input => `unparsing \`${JSON.stringify(input)}\``)(
         inlinePlz: '{ [:atom.type]: d, a, b, name: c }',
         sugarFreeInlinePlz:
           '{ 0: "@object", 1: { properties: { 0: a, 1: b, name: c }, excess: { 0: { 0: { 0: "@index", 1: { object: { 0: "@lookup", 1: { key: atom } }, query: { 0: type } } }, 1: d } } } }',
-        prettyPlz: '{ [:atom.type]: d, a, b, name: c }\n',
+        prettyPlz: '{\n  [:atom.type]: d\n  a\n  b\n  name: c\n}\n',
         sugarFreePrettyPlz:
           '{\n  0: "@object"\n  1: {\n    properties: {\n      0: a\n      1: b\n      name: c\n    }\n    excess: {\n      0: {\n        0: {\n          0: "@index"\n          1: {\n            object: {\n              0: "@lookup"\n              1: {\n                key: atom\n              }\n            }\n            query: {\n              0: type\n            }\n          }\n        }\n        1: d\n      }\n    }\n  }\n}\n',
         prettyJson:
@@ -792,7 +792,7 @@ testCases(unparsers, input => `unparsing \`${JSON.stringify(input)}\``)(
         inlinePlz: '{ [:atom.type]: d, [k]: v }',
         sugarFreeInlinePlz:
           '{ 0: "@object", 1: { properties: {}, excess: { 0: { 0: { 0: "@index", 1: { object: { 0: "@lookup", 1: { key: atom } }, query: { 0: type } } }, 1: d }, 1: { 0: k, 1: v } } } }',
-        prettyPlz: '{ [:atom.type]: d, [k]: v }\n',
+        prettyPlz: '{\n  [:atom.type]: d\n  [k]: v\n}\n',
         sugarFreePrettyPlz:
           '{\n  0: "@object"\n  1: {\n    properties: {}\n    excess: {\n      0: {\n        0: {\n          0: "@index"\n          1: {\n            object: {\n              0: "@lookup"\n              1: {\n                key: atom\n              }\n            }\n            query: {\n              0: type\n            }\n          }\n        }\n        1: d\n      }\n      1: {\n        0: k\n        1: v\n      }\n    }\n  }\n}\n',
         prettyJson:
@@ -824,7 +824,7 @@ testCases(unparsers, input => `unparsing \`${JSON.stringify(input)}\``)(
         inlinePlz: '{ [k]: v, [:atom.type]: d }',
         sugarFreeInlinePlz:
           '{ 0: "@object", 1: { properties: {}, excess: { 0: { 0: k, 1: v }, 1: { 0: { 0: "@index", 1: { object: { 0: "@lookup", 1: { key: atom } }, query: { 0: type } } }, 1: d } } } }',
-        prettyPlz: '{ [k]: v, [:atom.type]: d }\n',
+        prettyPlz: '{\n  [k]: v\n  [:atom.type]: d\n}\n',
         sugarFreePrettyPlz:
           '{\n  0: "@object"\n  1: {\n    properties: {}\n    excess: {\n      0: {\n        0: k\n        1: v\n      }\n      1: {\n        0: {\n          0: "@index"\n          1: {\n            object: {\n              0: "@lookup"\n              1: {\n                key: atom\n              }\n            }\n            query: {\n              0: type\n            }\n          }\n        }\n        1: d\n      }\n    }\n  }\n}\n',
         prettyJson:

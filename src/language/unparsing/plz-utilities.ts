@@ -44,7 +44,12 @@ import {
   type ExcessClause,
   type ObjectTypeExpression,
 } from '../semantics/expressions/object-type-expression.js'
-import { applyColor, keyColor, punctuation } from './unparsing-utilities.js'
+import {
+  applyColor,
+  indent,
+  keyColor,
+  punctuation,
+} from './unparsing-utilities.js'
 
 export type SemanticContext = 'apply' | 'default'
 
@@ -58,7 +63,7 @@ export type UnparseAtomOrMolecule = (
 ) => (value: Atom | Molecule) => Either<UnserializableValueError, string>
 
 export const moleculeUnparser =
-  (semanticContext: SemanticContext) =>
+  (formatting: 'inline' | 'multiline', semanticContext: SemanticContext) =>
   (
     unparseAtomOrMolecule: UnparseAtomOrMolecule,
     unparseSugarFreeMolecule: (
@@ -90,7 +95,7 @@ export const moleculeUnparser =
           return sugar(
             value,
             readObjectTypeExpression,
-            unparseSugaredObjectType,
+            unparseSugaredObjectType(formatting),
           )
         case '@union':
           return sugar(value, readUnionExpression, unparseSugaredUnion)
@@ -618,53 +623,69 @@ const unparseExcessPropertyClause =
     )
   }
 
-const unparseSugaredObjectType = (
-  expression: ObjectTypeExpression,
-  context: Context,
-) => {
-  const { openBrace, closeBrace, comma } = punctuation(styleText)
-  return either.flatMap(
-    either.flatMapLeft(
-      readExcessClauses(expression),
-      (error): Either<UnserializableValueError, never> =>
-        either.makeLeft({
-          kind: 'unserializableValue',
-          message: error.message,
-        }),
-    ),
-    clauses =>
-      either.flatMap(
-        serializeIfNeeded(expression[1].properties),
-        serializedProperties =>
-          typeof serializedProperties === 'string' ?
-            either.makeLeft({
-              kind: 'unserializableValue',
-              message: '`@object` properties were unexpectedly an atom',
-            })
-          : either.flatMap(
-              moleculeAsKeyValuePairStrings(serializedProperties, context, {
-                ordinalKeys: 'omit',
-              }),
-              propertyPairsAsStrings =>
-                either.map(
-                  either.sequence(
-                    clauses.map(unparseExcessPropertyClause(context)),
-                  ),
-                  refinementClausesAsStrings =>
-                    openBrace.concat(
-                      ' ',
-                      [
-                        ...refinementClausesAsStrings,
-                        ...propertyPairsAsStrings,
-                      ].join(comma.concat(' ')),
-                      ' ',
-                      closeBrace,
-                    ),
-                ),
-            ),
+const unparseSugaredObjectType =
+  (formatting: 'inline' | 'multiline') =>
+  (expression: ObjectTypeExpression, context: Context) => {
+    const { openBrace, closeBrace, comma } = punctuation(styleText)
+    return either.flatMap(
+      either.flatMapLeft(
+        readExcessClauses(expression),
+        (error): Either<UnserializableValueError, never> =>
+          either.makeLeft({
+            kind: 'unserializableValue',
+            message: error.message,
+          }),
       ),
-  )
-}
+      clauses =>
+        either.flatMap(
+          serializeIfNeeded(expression[1].properties),
+          serializedProperties =>
+            typeof serializedProperties === 'string' ?
+              either.makeLeft({
+                kind: 'unserializableValue',
+                message: '`@object` properties were unexpectedly an atom',
+              })
+            : either.flatMap(
+                moleculeAsKeyValuePairStrings(serializedProperties, context, {
+                  ordinalKeys: 'omit',
+                }),
+                propertyPairsAsStrings =>
+                  either.map(
+                    either.sequence(
+                      clauses.map(unparseExcessPropertyClause(context)),
+                    ),
+                    refinementClausesAsStrings => {
+                      switch (formatting) {
+                        case 'inline':
+                          return openBrace.concat(
+                            ' ',
+                            [
+                              ...refinementClausesAsStrings,
+                              ...propertyPairsAsStrings,
+                            ].join(comma.concat(' ')),
+                            ' ',
+                            closeBrace,
+                          )
+                        case 'multiline':
+                          return openBrace.concat(
+                            '\n',
+                            indent(
+                              2,
+                              [
+                                ...refinementClausesAsStrings,
+                                ...propertyPairsAsStrings,
+                              ].join('\n'),
+                            ),
+                            '\n',
+                            closeBrace,
+                          )
+                      }
+                    },
+                  ),
+              ),
+        ),
+    )
+  }
 
 const unparseSugaredUnion = (
   expression: UnionExpression,
