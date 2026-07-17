@@ -470,16 +470,16 @@ const unparseSugaredFunctionParameter =
               unparseAtomOrMolecule('default')(serializedTypeAnnotation),
               typeAnnotationAsString => {
                 const {
-                  openGroupingParenthesis,
-                  closeGroupingParenthesis,
+                  openApplyParenthesis,
+                  closeApplyParenthesis,
                   typeAnnotationColon,
                 } = punctuation(styleText)
-                return openGroupingParenthesis.concat(
+                return openApplyParenthesis.concat(
                   parameterName,
                   typeAnnotationColon,
                   ' ',
                   typeAnnotationAsString,
-                  closeGroupingParenthesis,
+                  closeApplyParenthesis,
                 )
               },
             ),
