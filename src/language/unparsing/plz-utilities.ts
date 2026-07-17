@@ -38,6 +38,12 @@ import {
   readCheckExpression,
   type CheckExpression,
 } from '../semantics/expressions/check-expression.js'
+import {
+  readExcessClauses,
+  readObjectTypeExpression,
+  type ExcessClause,
+  type ObjectTypeExpression,
+} from '../semantics/expressions/object-type-expression.js'
 import { applyColor, keyColor, punctuation } from './unparsing-utilities.js'
 
 export type SemanticContext = 'apply' | 'default'
@@ -80,6 +86,12 @@ export const moleculeUnparser =
           return sugar(value, readIndexExpression, unparseSugaredIndex)
         case '@lookup':
           return sugar(value, readLookupExpression, unparseSugaredLookup)
+        case '@object':
+          return sugar(
+            value,
+            readObjectTypeExpression,
+            unparseSugaredObjectType,
+          )
         case '@union':
           return sugar(value, readUnionExpression, unparseSugaredUnion)
         default: {
@@ -580,6 +592,76 @@ const unparseSugaredCheck = (
             : typeAsString
           return [valueAsString, tilde, possiblyParenthesizedType].join(' ')
         },
+      ),
+  )
+}
+
+const unparseExcessPropertyClause =
+  (context: Context) => (clause: ExcessClause) => {
+    const { colon, openExcessBoundBracket, closeExcessBoundBracket } =
+      punctuation(styleText)
+    const unparseOperand = (operand: SemanticGraph) =>
+      either.flatMap(
+        serializeIfNeeded(operand),
+        context.unparseAtomOrMolecule('default'),
+      )
+    return either.map(
+      either.sequence([unparseOperand(clause[0]), unparseOperand(clause[1])]),
+      ([keysAsString, valuesAsString]) =>
+        openExcessBoundBracket.concat(
+          keysAsString,
+          closeExcessBoundBracket,
+          styleText(keyColor, colon),
+          ' ',
+          valuesAsString,
+        ),
+    )
+  }
+
+const unparseSugaredObjectType = (
+  expression: ObjectTypeExpression,
+  context: Context,
+) => {
+  const { openBrace, closeBrace, comma } = punctuation(styleText)
+  return either.flatMap(
+    either.flatMapLeft(
+      readExcessClauses(expression),
+      (error): Either<UnserializableValueError, never> =>
+        either.makeLeft({
+          kind: 'unserializableValue',
+          message: error.message,
+        }),
+    ),
+    clauses =>
+      either.flatMap(
+        serializeIfNeeded(expression[1].properties),
+        serializedProperties =>
+          typeof serializedProperties === 'string' ?
+            either.makeLeft({
+              kind: 'unserializableValue',
+              message: '`@object` properties were unexpectedly an atom',
+            })
+          : either.flatMap(
+              moleculeAsKeyValuePairStrings(serializedProperties, context, {
+                ordinalKeys: 'omit',
+              }),
+              propertyPairsAsStrings =>
+                either.map(
+                  either.sequence(
+                    clauses.map(unparseExcessPropertyClause(context)),
+                  ),
+                  refinementClausesAsStrings =>
+                    openBrace.concat(
+                      ' ',
+                      [
+                        ...refinementClausesAsStrings,
+                        ...propertyPairsAsStrings,
+                      ].join(comma.concat(' ')),
+                      ' ',
+                      closeBrace,
+                    ),
+                ),
+            ),
       ),
   )
 }

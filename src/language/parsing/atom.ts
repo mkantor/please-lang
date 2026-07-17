@@ -15,6 +15,7 @@ import {
   backslash,
   closingBlockCommentDelimiter,
   closingBrace,
+  closingBracket,
   closingParenthesis,
   colon,
   comma,
@@ -23,6 +24,7 @@ import {
   functionArrow,
   openingBlockCommentDelimiter,
   openingBrace,
+  openingBracket,
   openingParenthesis,
   questionMark,
   quote,
@@ -43,11 +45,13 @@ const atomComponentsRequiringQuotation = [
   backslash,
   closingBlockCommentDelimiter,
   closingBrace,
+  closingBracket,
   closingParenthesis,
   colon,
   comma,
   openingBlockCommentDelimiter,
   openingBrace,
+  openingBracket,
   openingParenthesis,
   questionMark,
   quote,
@@ -58,8 +62,6 @@ const atomComponentsRequiringQuotation = [
 
   // Reserved for future use:
   literal('='),
-  literal('['),
-  literal(']'),
   literal('#'),
   literal(';'),
 ] as const

@@ -970,4 +970,53 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     `:match({ a: (v: :integer.type) => :v + 1 })({ tag: a, value: 41 })`,
     success('42'),
   ],
+  [
+    `((x: { [:atom.type]: :integer.type }) => :x)({ a: 1, b: 2 })`,
+    success({ a: '1', b: '2' }),
+  ],
+  [`((x: { [:atom.type]: :integer.type }) => :x)({ a: hello })`, typeMismatch],
+  [
+    `((x: { [:atom.type]: :nothing.type, a: :integer.type }) => :x)({ a: 1, b: 2 })`,
+    typeMismatch,
+  ],
+  [
+    `((x: { [:atom.type]: :nothing.type, a: :integer.type }) => :x)({ a: 1 })`,
+    success({ a: '1' }),
+  ],
+  [`{ a: 1 } ~ { [:atom.type]: :atom.type }`, success({ a: '1' })],
+  [`{ a: {} } ~ { [:atom.type]: :atom.type }`, typeMismatch],
+  [
+    `{ 1: hello, name: x } ~ { [:natural_number.type]: :atom.type }`,
+    success({ 1: 'hello', name: 'x' }),
+  ],
+  [`{ 1: {}, name: x } ~ { [:natural_number.type]: :atom.type }`, typeMismatch],
+  [
+    `{ 1: hello, name: x } ~ { [:atom.type]: :nothing.type, [:natural_number.type]: :atom.type }`,
+    typeMismatch,
+  ],
+  [
+    `{ 1: hello } ~ { [:atom.type]: :atom.type, [:natural_number.type]: :integer.type }`,
+    typeMismatch,
+  ],
+  [
+    `{ x: hello } ~ { [:atom.type]: :atom.type, [:natural_number.type]: :integer.type }`,
+    success({ x: 'hello' }),
+  ],
+  [
+    `{ a: hello } ~ { [a]: :nothing.type, a: :atom.type }`,
+    success({ a: 'hello' }),
+  ],
+  [
+    `{ a: hello, b: x } ~ { a: :atom.type, [@union { a, b }]: :nothing.type }`,
+    typeMismatch,
+  ],
+  [
+    `{} ~ { [:atom.type]: :atom.type, [:atom.type]: :nothing.type }`,
+    success({}),
+  ],
+  [`{} ~ { [:atom.type]: a, [:atom.type]: b }`, success({})],
+  [
+    `{ a: 1, b: 2 } ~ @union { 0: { [:atom.type]: :nothing.type, a: :integer.type } }`,
+    typeMismatch,
+  ],
 ])
