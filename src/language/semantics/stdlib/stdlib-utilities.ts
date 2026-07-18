@@ -98,6 +98,7 @@ export const emptyContextForStdlibApplications: ExpressionContext = {
     '@if': either.makeRight,
     '@index': either.makeRight,
     '@lookup': either.makeRight,
+    '@object': either.makeRight,
     '@panic': either.makeRight,
     '@runtime': either.makeRight,
     '@todo': either.makeRight,

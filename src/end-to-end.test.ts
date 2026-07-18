@@ -646,6 +646,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     )(es)`,
     success('Hola'),
   ],
+  [`((x: { a: :integer.type }) => :x.a)({ a: 42, b: extra })`, success('42')],
+  [`((x: :object.type) => :x)({ a: 1, b: {} })`, success({ a: '1', b: {} })],
   [
     // Lookups should never target keyword expression properties.
     `{
@@ -902,6 +904,63 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       {a:{b:{1:{2:{true:{false:{🎉:"it works"}}}}}}}.a.:key1.(1).(1 + 1).(:boolean.not(false)).(:get_key2(_)).(@runtime { _ => 🎉 })
     }.0`,
     success('it works'),
+  ],
+  [
+    `(x: @object {
+      properties: {}
+      excess: {
+        { :atom.type, :nothing.type }
+        { :natural_number.type, :atom.type }
+      }
+    }) =>
+      (:x ~ @object {
+        properties: {}
+        excess: {
+          { :atom.type, :atom.type }
+        }
+      })`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+  [
+    `(x: @object {
+      properties: {}
+      excess: {
+        { :atom.type, :atom.type }
+      }
+    }) =>
+      (:x ~ @object {
+        properties: {}
+        excess: {
+          { :atom.type, :atom.type }
+          { :natural_number.type, :integer.type }
+        }
+      })`,
+    typeMismatch,
+  ],
+  [
+    `(x: @object {
+      properties: { a: :integer.type }
+      excess: {
+        { :atom.type, :atom.type }
+        { :natural_number.type, :integer.type }
+      }
+    }) =>
+      (:object.lookup(5)(:x) ~ :option.type(:integer.type))`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+  [
+    `(x: { a: :atom.type }) => (y: { b: :atom.type }) =>
+      (:object.overlay(:x)(:y) ~ @object {
+        properties: { a: :atom.type, b: :something.type }
+        excess: {
+          { :atom.type, :nothing.type }
+        }
+      })`,
+    typeMismatch,
   ],
   [
     `:match({ a: (v: :integer.type) => :v })({ tag: a, value: hello })`,

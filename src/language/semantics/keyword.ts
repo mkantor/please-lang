@@ -1,5 +1,5 @@
 export const isExemptFromElaboration = (input: Keyword) =>
-  input === '@hole' || input === '@union'
+  input === '@hole' || input === '@object' || input === '@union'
 
 export const isKeyword = (input: string) =>
   input === '@apply' ||
@@ -9,6 +9,7 @@ export const isKeyword = (input: string) =>
   input === '@if' ||
   input === '@index' ||
   input === '@lookup' ||
+  input === '@object' ||
   input === '@panic' ||
   input === '@runtime' ||
   input === '@todo' ||

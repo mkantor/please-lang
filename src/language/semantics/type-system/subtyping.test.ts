@@ -130,7 +130,7 @@ testCases(
       ]),
       makeObjectType({ a: makeUnionType(['c']) }),
     ]),
-    '{ a: a | b } | { a: c }',
+    '@object { properties: { a: a | b }, excess: { { :atom.type, :nothing.type } } } | { a: c }',
   ],
 ])
 typeAssignabilitySuite('prelude types (assignable)', [

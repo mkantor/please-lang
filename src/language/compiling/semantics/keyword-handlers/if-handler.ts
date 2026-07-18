@@ -101,6 +101,7 @@ export const ifKeywordHandler: KeywordHandler = (
                     '@function': doNotElaborate,
                     '@hole': doNotElaborate,
                     '@if': doNotElaborate,
+                    '@object': doNotElaborate,
                     '@panic': doNotElaborate,
                     '@runtime': doNotElaborate,
                     '@todo': doNotElaborate,
