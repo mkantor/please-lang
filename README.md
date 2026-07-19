@@ -18,14 +18,12 @@ There are more example programs in [`./examples`](./examples).
 
 **This implementation of Please is a proof of concept**. There are bugs and
 missing pieces, and language syntax/semantics may change backwards-incompatibly
-on the way to an official release. TypeScript was chosen for this implementation
-because it's pretty good for rapid prototyping, but different languages may be
-used in non-prototype versions.
+on the way to an official release.
 
 ### Current State
 
-Enough pieces exist to write basic runnable programs, but the standard library
-is anemic and documentation is lacking.
+Enough pieces exist to write runnable programs, but the standard library is
+anemic, documentation is lacking, and editor tooling is nonexistent.
 
 The current runtime is an interpreter, but the plan is to eventually add one or
 more backends to allow building native executables.
@@ -194,8 +192,8 @@ in the standard library are the functions`|>` (pipe) and `>>` (flow):
 }
 ```
 
-All binary operations are currently left-associative and there is no operator
-precedence. Use of parentheses is encouraged.
+All binary operations are left-associative and there is no operator precedence.
+Use of parentheses is encouraged.
 
 #### Keywords
 
@@ -208,7 +206,8 @@ desugars to `{ 0: "@lookup", 1: { key: foo } }`. All such expressions have a
 property named `0` referring to a value that is an `@`-prefixed atom (the
 keyword). Most keyword expressions also require a property named `1` to pass an
 argument to the expression. Keywords include `@apply`, `@check`, `@function`,
-`@hole`, `@if`, `@index`, `@lookup`, `@panic`, `@runtime`, and `@union`.
+`@hole`, `@if`, `@index`, `@lookup`, `@object`, `@panic`, `@runtime`, and
+`@union`.
 
 In addition to the specific syntax sugars shown above, any keyword expression
 can be written using a generalized sugar:
@@ -253,8 +252,8 @@ computation will occur at runtime):
 1 + 1
 ```
 
-There's currently no module system and all Please programs are single files, but
-that's only because this is a prototype.
+There's no module system yet (all Please programs are single files), but that
+will change.
 
 ### Type System
 
@@ -390,8 +389,9 @@ languages:
   typically use to write programs.
 - Layer 1 (`plo`) is a desugared/normalized representation of the syntax tree.
 - Layer 2 (`plt`) is the result of applying semantic analysis, compile-time
-  evaluation, and other reductions to the `plo` tree. The prototype
-  implementation of the language runtime is a `plt` interpreter.
+  evaluation, and other reductions to the `plo` tree. For now the language
+  runtime is a `plt` interpreter, but eventually there will be compiler backends
+  to lower `plt` to machine code and/or other targets.
 
 `plz` has a specific textual representation, but `plo` & `plt` could be encoded
 in any format in which hierarchical key/value pairs of strings are representable
@@ -549,7 +549,7 @@ It strives to:
 - make it easy to pay off technical debt
 - emit programs that you have confidence in
 
-The prototype implementation doesn't live up to these aspirations, but hopefully
+The current implementation doesn't live up to these aspirations, but hopefully
 it approaches them over time.
 
 [^1]:
