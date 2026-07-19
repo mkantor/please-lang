@@ -950,6 +950,34 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     assertSuccess,
   ],
   [
+    `(o: :object.type) => {
+      first: :o object.lookup 0
+      return: :identity(:first.value)
+    }.return`,
+    assertSuccess,
+  ],
+  [
+    `{
+      deferred: @runtime { _context => { value: 1 } }
+      out: :deferred.value
+    }`,
+    success({ deferred: { value: '1' }, out: '1' }),
+  ],
+  [
+    `(o: :object.type) => {
+      first: :o object.lookup 0
+      return: :first.value + 1
+    }.return`,
+    typeMismatch,
+  ],
+  [
+    `(o: :object.type) => {
+      first: :o object.lookup 0
+      return: :first.value(1)
+    }.return`,
+    invalidExpression,
+  ],
+  [
     `(x: { a: :atom.type }) => (y: { b: :atom.type }) =>
       (:object.overlay(:x)(:y) ~ @object {
         properties: { a: :atom.type, b: :something.type }

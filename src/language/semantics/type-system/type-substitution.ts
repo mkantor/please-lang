@@ -218,16 +218,42 @@ export const replaceAllTypeParametersWithTheirConstraints = (
         type,
       )
 
-const upperBoundOfStuckApplication = (application: ApplicationType): Type =>
-  application.function.kind === 'function' ?
-    supplyTypeArguments(
-      application.function.signature.return,
-      getTypesForTypeParameters({
-        parameterType: application.function.signature.parameter,
-        argumentType: application.argument,
-      }),
-    )
-  : replaceAllTypeParametersWithTheirConstraints(application)
+/**
+ * The most specific resolvable upper bound of a stuck type, or `none` when
+ * nothing further can be resolved.
+ */
+export const upperBoundOfStuckType = (
+  stuckType: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
+): Option<Type> => {
+  const substituted = replaceAllTypeParametersWithTheirConstraints(stuckType)
+  if (substituted !== stuckType) {
+    return option.makeSome(substituted)
+  } else {
+    switch (stuckType.kind) {
+      case 'application':
+        return applyTypeToArgumentType(stuckType.function, stuckType.argument)
+      case 'indexedAccess':
+        return option.flatMap(
+          either.match(atomKeyPathComponentFromType(stuckType.key), {
+            left: _ => option.none,
+            right: option.makeSome,
+          }),
+          key =>
+            applyKeyPathToType(
+              replaceAllTypeParametersWithTheirConstraints(stuckType.object),
+              [key],
+            ),
+        )
+      case 'intrinsicApplication':
+        // TODO: Feels like this case should look like the following, but `none`
+        // seems to work (I'm not sure execution can ever make it here):
+        // return option.makeSome(
+        //   stuckType.computeUpperBound(stuckType.parameterTypes),
+        // )
+        return option.none
+    }
+  }
+}
 
 /**
  * Finds concrete types for the `TypeParameter`s in `parameter` by locating the
@@ -253,10 +279,25 @@ export const getTypesForTypeParameters = ({
       argumentType: replaceAllTypeParametersWithTheirConstraints(argumentType),
     })
   } else if (argumentType.kind === 'application') {
-    return getTypesForTypeParameters({
-      parameterType,
-      argumentType: upperBoundOfStuckApplication(argumentType),
-    })
+    const argumentUpperBound =
+      argumentType.function.kind === 'function' ?
+        supplyTypeArguments(
+          argumentType.function.signature.return,
+          getTypesForTypeParameters({
+            parameterType: argumentType.function.signature.parameter,
+            argumentType: argumentType.argument,
+          }),
+        )
+      : replaceAllTypeParametersWithTheirConstraints(argumentType)
+
+    // When the stuck application's bound can't be resolved any further, no
+    // type arguments are derivable from it (and recursing would loop forever).
+    return argumentUpperBound === argumentType ?
+        new Map()
+      : getTypesForTypeParameters({
+          parameterType,
+          argumentType: argumentUpperBound,
+        })
   } else {
     return matchTypeFormat(parameterType, {
       function: parameterType =>
@@ -411,8 +452,10 @@ export const applicableFunctionSignatures = (
 ): Option<readonly FunctionType['signature'][]> =>
   matchTypeFormat(type, {
     function: type => option.makeSome([type.signature]),
+
     parameter: type =>
       applicableFunctionSignatures(type.constraint.assignableTo),
+
     union: type =>
       type.members.size === 0 ?
         option.none
@@ -434,19 +477,15 @@ export const applicableFunctionSignatures = (
             ),
           option.makeSome([]),
         ),
+
     // A stuck application/indexed access is applicable when its upper bound is.
     application: type =>
-      applicableFunctionSignatures(
-        replaceAllTypeParametersWithTheirConstraints(type),
-      ),
+      option.flatMap(upperBoundOfStuckType(type), applicableFunctionSignatures),
     indexedAccess: type =>
-      applicableFunctionSignatures(
-        replaceAllTypeParametersWithTheirConstraints(type),
-      ),
+      option.flatMap(upperBoundOfStuckType(type), applicableFunctionSignatures),
     intrinsicApplication: type =>
-      applicableFunctionSignatures(
-        replaceAllTypeParametersWithTheirConstraints(type),
-      ),
+      option.flatMap(upperBoundOfStuckType(type), applicableFunctionSignatures),
+
     object: _ => option.none,
     opaque: _ => option.none,
   })

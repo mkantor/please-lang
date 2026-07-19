@@ -1,9 +1,11 @@
+import either from '@matt.kantor/either'
 import { testCases } from '../../../test-utilities.test.js'
 import { stringifyTypeForEndUser } from '../semantic-graph.js'
 import {
   makeApplicationType,
   makeFunctionType,
   makeIndexedAccessType,
+  makeIntrinsicApplicationType,
   makeObjectType,
   makeTypeParameter,
   makeUnionType,
@@ -86,7 +88,6 @@ const applicationBoolean = makeApplicationType(
     applicationReturnParameter.identity,
   ]),
 )
-// Same as above:
 const applicationBoolean2 = makeApplicationType(
   makeFunctionType({
     parameter: applicationFunctionParameter,
@@ -97,6 +98,41 @@ const applicationBoolean2 = makeApplicationType(
     applicationFunctionParameter.identity,
     applicationReturnParameter.identity,
   ]),
+)
+
+const parameterFreeStuckApplication = makeApplicationType(
+  something,
+  something,
+  new Set(),
+)
+const parameterFreeStuckIntrinsicApplication = makeIntrinsicApplicationType(
+  [makeUnionType(['0']), object],
+  _argumentValues => either.makeRight(something),
+  _parameterTypes =>
+    makeUnionType([
+      makeObjectType({ value: integer }),
+      makeObjectType({ value: exactEmptyObject }),
+    ]),
+)
+const parameterFreeStuckIndexedAccess = makeIndexedAccessType(
+  parameterFreeStuckIntrinsicApplication,
+  makeUnionType(['value']),
+)
+const integerBoundStuckIndexedAccess = makeIndexedAccessType(
+  makeIntrinsicApplicationType(
+    [makeUnionType(['0']), object],
+    _argumentValues => either.makeRight(something),
+    _parameterTypes => makeObjectType({ value: integer }),
+  ),
+  makeUnionType(['value']),
+)
+const parameterFreeStuckApplicationOfFunctionUnion = makeApplicationType(
+  makeUnionType([
+    makeFunctionType({ parameter: something, return: makeUnionType(['a']) }),
+    makeFunctionType({ parameter: something, return: makeUnionType(['b']) }),
+  ]),
+  something,
+  new Set(),
 )
 
 testCases(
@@ -204,6 +240,35 @@ typeAssignabilitySuite('application types (not assignable)', [
   // As with stuck indexed accesses, `boolean` can't be assigned to a stuck
   // application even though the application's upper bound is `boolean`.
   [[boolean, applicationBoolean], false],
+])
+
+typeAssignabilitySuite('parameter-free stuck types', [
+  [[parameterFreeStuckIndexedAccess, parameterFreeStuckIndexedAccess], true],
+  [[parameterFreeStuckIndexedAccess, something], true],
+  [
+    [
+      parameterFreeStuckIndexedAccess,
+      makeUnionType([integer, exactEmptyObject]),
+    ],
+    true,
+  ],
+  [
+    [
+      parameterFreeStuckIntrinsicApplication,
+      makeUnionType([
+        makeObjectType({ value: integer }),
+        makeObjectType({ value: exactEmptyObject }),
+      ]),
+    ],
+    true,
+  ],
+  [[makeUnionType([integerBoundStuckIndexedAccess]), integer], true],
+  [[parameterFreeStuckApplicationOfFunctionUnion, atom], true],
+  [[makeUnionType([parameterFreeStuckApplicationOfFunctionUnion]), atom], true],
+  [[parameterFreeStuckIndexedAccess, integer], false],
+  [[makeUnionType([parameterFreeStuckIndexedAccess]), integer], false],
+  [[makeUnionType([parameterFreeStuckApplication]), atom], false],
+  [[parameterFreeStuckApplicationOfFunctionUnion, makeUnionType(['a'])], false],
 ])
 
 typeAssignabilitySuite('stuck application in a contravariant position', [
