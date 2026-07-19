@@ -20,12 +20,14 @@ import {
 import {
   atSign,
   closingBrace,
+  closingBracket,
   colon,
   comma,
   dot,
   functionArrow,
   newline,
   openingBrace,
+  openingBracket,
   questionMark,
   signatureArrow,
   tilde,
@@ -268,6 +270,24 @@ const propertyDelimiter = oneOf([
   sequence([optional(triviaExceptNewlines), newline, optionalTrivia]),
 ])
 
+type ExcessClause = readonly [keys: SpannedTree, values: SpannedTree]
+
+// [a]: b
+const excessClause: Parser<ExcessClause> = map(
+  sequence([
+    openingBracket,
+    lazy(() => expression),
+    closingBracket,
+    colon,
+    optionalTrivia,
+    lazy(() => expression),
+  ]),
+  ([_openingBracket, keys, _closingBracket, _colon, _trivia, values]) => [
+    keys,
+    values,
+  ],
+)
+
 const argument = surroundedByParentheses(lazy(() => expression))
 
 const dottedKeyPathKey = recordSpan(
@@ -302,20 +322,64 @@ const dottedKeyPathComponent = map(
   ([_trivia1, _dot, _trivia2, key]) => key,
 )
 
+type MoleculeContents = {
+  readonly properties: readonly (readonly [Atom | undefined, SpannedTree])[]
+  readonly excessClauses: readonly ExcessClause[]
+}
+
+type MoleculeEntry =
+  | {
+      readonly kind: 'property'
+      readonly property: readonly [Atom | undefined, SpannedTree]
+    }
+  | {
+      readonly kind: 'excessClause'
+      readonly clause: ExcessClause
+    }
+
+const moleculeEntry: Parser<MoleculeEntry> = oneOf([
+  map(excessClause, clause => ({
+    kind: 'excessClause' as const,
+    clause,
+  })),
+  map(propertyWithOptionalKey, property => ({
+    kind: 'property' as const,
+    property,
+  })),
+])
+
+const moleculeContents: Parser<MoleculeContents> = map(
+  sequence([
+    // Allow initial entry not preceded by a delimiter (e.g. `{a, b}`).
+    optional(moleculeEntry),
+    zeroOrMore(
+      map(
+        sequence([propertyDelimiter, moleculeEntry]),
+        ([_delimiter, entry]) => entry,
+      ),
+    ),
+  ]),
+  ([optionalInitialEntry, remainingEntries]) => {
+    const entries =
+      optionalInitialEntry === undefined ? remainingEntries : (
+        [optionalInitialEntry, ...remainingEntries]
+      )
+    return {
+      properties: entries.flatMap(entry =>
+        entry.kind === 'property' ? [entry.property] : [],
+      ),
+      excessClauses: entries.flatMap(entry =>
+        entry.kind === 'excessClause' ? [entry.clause] : [],
+      ),
+    }
+  },
+)
+
 const sugarFreeMolecule: Parser<SpannedMolecule> = map(
   sequence([
     openingBrace,
     optionalTrivia,
-    sequence([
-      // Allow initial property not preceded by a delimiter (e.g. `{a, b}`).
-      optional(propertyWithOptionalKey),
-      zeroOrMore(
-        map(
-          sequence([propertyDelimiter, propertyWithOptionalKey]),
-          ([_delimiter, property]) => property,
-        ),
-      ),
-    ]),
+    moleculeContents,
     optional(propertyDelimiter),
     optionalTrivia,
     closingBrace,
@@ -323,23 +387,41 @@ const sugarFreeMolecule: Parser<SpannedMolecule> = map(
   ([
     _openingBrace,
     _trivia1,
-    [optionalInitialProperty, remainingProperties],
+    { properties, excessClauses },
     _trailingDelimiter,
     _trivia2,
     _closingBrace,
   ]) => {
-    const properties =
-      optionalInitialProperty === undefined ? remainingProperties : (
-        [optionalInitialProperty, ...remainingProperties]
-      )
     const enumerate = makeIncrementingIndexer()
-    return syntheticMolecule(
+    const propertiesAsMolecule = syntheticMolecule(
       properties.map(([key, value]) =>
         // Note that `enumerate()` increments its internal counter as a side
         // effect.
         [key ?? enumerate(), value],
       ),
     )
+    return excessClauses.length === 0 ?
+        propertiesAsMolecule
+      : syntheticMolecule([
+          ['0', syntheticAtom('@object')],
+          [
+            '1',
+            syntheticMolecule([
+              ['properties', propertiesAsMolecule],
+              [
+                'excess',
+                syntheticMolecule(
+                  excessClauses.map((clause, index) => [
+                    String(index),
+                    syntheticMolecule(
+                      clause.map((value, index) => [String(index), value]),
+                    ),
+                  ]),
+                ),
+              ],
+            ]),
+          ],
+        ])
   },
 )
 

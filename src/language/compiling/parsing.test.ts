@@ -459,6 +459,73 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
     ),
   ],
 
+  [
+    '{ [:atom.type]: :atom.type }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse(
+          '@object { properties: {}, excess: { 0: { :atom.type, :atom.type } } }',
+        ),
+      )
+    },
+  ],
+  [
+    '{ [:atom.type]: :atom.type, a: 1 }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse(
+          '@object { properties: { a: 1 }, excess: { 0: { :atom.type, :atom.type } } }',
+        ),
+      )
+    },
+  ],
+  [
+    '{ [:atom.type]: :something.type, [:natural_number.type]: :atom.type }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse(
+          '@object { properties: {}, excess: { 0: { :atom.type, :something.type }, 1: { :natural_number.type, :atom.type } } }',
+        ),
+      )
+    },
+  ],
+  [
+    '{ a, [:atom.type]: :atom.type, b }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse(
+          '@object { properties: { a, b }, excess: { 0: { :atom.type, :atom.type } } }',
+        ),
+      )
+    },
+  ],
+  [
+    '@if { [:atom.type]: x }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse(
+          '@if (@object { properties: {}, excess: { 0: { :atom.type, x } } })',
+        ),
+      )
+    },
+  ],
+  [
+    '{ [:atom.type]: a, [:atom.type]: b }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse(
+          '@object { properties: {}, excess: { 0: { :atom.type, a }, 1: { :atom.type, b } } }',
+        ),
+      )
+    },
+  ],
+
   // `|`s in atoms must generally be quoted, with a few exceptions.
   [
     '|',

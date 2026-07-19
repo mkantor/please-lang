@@ -34,7 +34,7 @@ export type ObjectTypeExpression = ObjectNode & {
   }
 }
 
-type ExcessClause = readonly [keys: SemanticGraph, values: SemanticGraph]
+export type ExcessClause = readonly [keys: SemanticGraph, values: SemanticGraph]
 
 export const readObjectTypeExpression = (
   node: SemanticGraph,

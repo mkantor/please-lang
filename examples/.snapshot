@@ -151,7 +151,7 @@ exports[`examples > fizzbuzz.plz > roundtripped syntax tree 1`] = `
   fizzbuzz: (limit: :natural_number.type) => {
     fizzbuzz_internal: (state: {
       current: :natural_number.type
-      output: :object.type
+      output: { [:atom.type]: :natural_number.type | Fizz | Buzz | FizzBuzz }
     }) => @if {
       (:state.current > :limit)
       then: :state.output

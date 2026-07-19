@@ -69,7 +69,7 @@ suite('please CLI error reporting', () => {
     assert.equal(stdout, '')
     assert.ok(
       stderr.startsWith(
-        'Error: argument with type `@object { properties: {}, excess: { { :atom.type, :nothing.type } } }`',
+        'Error: argument with type `{ [:atom.type]: :nothing.type }`',
       ),
     )
     assert.ok(stderr.includes('\n<stdin>:1:14\n'))
