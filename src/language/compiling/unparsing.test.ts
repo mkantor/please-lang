@@ -315,6 +315,90 @@ testCases(unparsers, input => `unparsing \`${JSON.stringify(input)}\``)(
 
     [
       {
+        '0': '@index',
+        '1': {
+          object: {
+            '0': '@apply',
+            '1': {
+              function: {
+                '0': '@apply',
+                '1': {
+                  function: { '0': '@lookup', '1': { key: '|>' } },
+                  argument: { '0': '@lookup', '1': { key: 'identity' } },
+                },
+              },
+              argument: { value: '1' },
+            },
+          },
+          query: { '0': 'value' },
+        },
+      },
+      {
+        inlinePlz: '({ value: 1 } |> :identity).value',
+        sugarFreeInlinePlz:
+          '{ 0: "@index", 1: { object: { 0: "@apply", 1: { function: { 0: "@apply", 1: { function: { 0: "@lookup", 1: { key: "|>" } }, argument: { 0: "@lookup", 1: { key: identity } } } }, argument: { value: 1 } } }, query: { 0: value } } }',
+        prettyPlz: '({\n  value: 1\n} |> :identity).value\n',
+        sugarFreePrettyPlz:
+          '{\n  0: "@index"\n  1: {\n    object: {\n      0: "@apply"\n      1: {\n        function: {\n          0: "@apply"\n          1: {\n            function: {\n              0: "@lookup"\n              1: {\n                key: "|>"\n              }\n            }\n            argument: {\n              0: "@lookup"\n              1: {\n                key: identity\n              }\n            }\n          }\n        }\n        argument: {\n          value: 1\n        }\n      }\n    }\n    query: {\n      0: value\n    }\n  }\n}\n',
+        prettyJson:
+          '{\n  "0": "@index",\n  "1": {\n    "object": {\n      "0": "@apply",\n      "1": {\n        "function": {\n          "0": "@apply",\n          "1": {\n            "function": {\n              "0": "@lookup",\n              "1": {\n                "key": "|>"\n              }\n            },\n            "argument": {\n              "0": "@lookup",\n              "1": {\n                "key": "identity"\n              }\n            }\n          }\n        },\n        "argument": {\n          "value": "1"\n        }\n      }\n    },\n    "query": {\n      "0": "value"\n    }\n  }\n}\n',
+      },
+    ],
+
+    [
+      {
+        '0': '@index',
+        '1': {
+          object: {
+            '0': '@index',
+            '1': { object: { b: { c: '1' } }, query: { '0': 'b' } },
+          },
+          query: { '0': 'c' },
+        },
+      },
+      {
+        inlinePlz: '({ b: { c: 1 } }.b).c',
+        sugarFreeInlinePlz:
+          '{ 0: "@index", 1: { object: { 0: "@index", 1: { object: { b: { c: 1 } }, query: { 0: b } } }, query: { 0: c } } }',
+        prettyPlz: '({\n  b: {\n    c: 1\n  }\n}.b).c\n',
+        sugarFreePrettyPlz:
+          '{\n  0: "@index"\n  1: {\n    object: {\n      0: "@index"\n      1: {\n        object: {\n          b: {\n            c: 1\n          }\n        }\n        query: {\n          0: b\n        }\n      }\n    }\n    query: {\n      0: c\n    }\n  }\n}\n',
+        prettyJson:
+          '{\n  "0": "@index",\n  "1": {\n    "object": {\n      "0": "@index",\n      "1": {\n        "object": {\n          "b": {\n            "c": "1"\n          }\n        },\n        "query": {\n          "0": "b"\n        }\n      }\n    },\n    "query": {\n      "0": "c"\n    }\n  }\n}\n',
+      },
+    ],
+
+    [
+      {
+        '0': '@index',
+        '1': {
+          object: {
+            '0': '@runtime',
+            '1': {
+              '0': {
+                '0': '@function',
+                '1': { parameter: '_context', body: { value: '1' } },
+              },
+            },
+          },
+          query: { '0': 'value' },
+        },
+      },
+      {
+        inlinePlz: '(@runtime { _context => { value: 1 } }).value',
+        sugarFreeInlinePlz:
+          '{ 0: "@index", 1: { object: { 0: "@runtime", 1: { 0: { 0: "@function", 1: { parameter: _context, body: { value: 1 } } } } }, query: { 0: value } } }',
+        prettyPlz:
+          '(@runtime {\n  _context => {\n    value: 1\n  }\n}).value\n',
+        sugarFreePrettyPlz:
+          '{\n  0: "@index"\n  1: {\n    object: {\n      0: "@runtime"\n      1: {\n        0: {\n          0: "@function"\n          1: {\n            parameter: _context\n            body: {\n              value: 1\n            }\n          }\n        }\n      }\n    }\n    query: {\n      0: value\n    }\n  }\n}\n',
+        prettyJson:
+          '{\n  "0": "@index",\n  "1": {\n    "object": {\n      "0": "@runtime",\n      "1": {\n        "0": {\n          "0": "@function",\n          "1": {\n            "parameter": "_context",\n            "body": {\n              "value": "1"\n            }\n          }\n        }\n      }\n    },\n    "query": {\n      "0": "value"\n    }\n  }\n}\n',
+      },
+    ],
+
+    [
+      {
         '0': '@apply',
         '1': {
           function: {
