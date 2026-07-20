@@ -10,7 +10,9 @@ import {
   getTypesForTypeParameters,
   inferType,
   isAssignable,
+  isExpression,
   isFunctionNode,
+  makeApplyExpression,
   readApplyExpression,
   rigidTypeParameterIdentities,
   stringifyTypeForEndUser,
@@ -190,15 +192,39 @@ export const applyKeywordHandler = (
       const functionToApply = applyExpression[1].function
       const argument = applyExpression[1].argument
 
+      // The residual form for stuck/deferred applications. Elaborated arguments
+      // are kept, but if the function was a `@lookup` in the source it stays
+      // that way when residualizing.
+      const residualFunction: SemanticGraph | undefined =
+        context.unelaboratedExpression === undefined ?
+          undefined
+        : either.match(readApplyExpression(context.unelaboratedExpression), {
+            right: unelaboratedApplyExpression => {
+              const unelaboratedFunctionToApply =
+                unelaboratedApplyExpression[1].function
+              return (
+                  isExpression(unelaboratedFunctionToApply) &&
+                    unelaboratedFunctionToApply['0'] === '@lookup'
+                ) ?
+                  unelaboratedFunctionToApply
+                : undefined
+            },
+            left: _ => undefined,
+          })
+      const residualApplyExpression =
+        residualFunction === undefined ? applyExpression : (
+          makeApplyExpression({ function: residualFunction, argument })
+        )
+
       if (containsAnyUnelaboratedNodes(argument)) {
         // The argument isn't ready, so keep the @apply unelaborated.
-        return either.makeRight(applyExpression)
+        return either.makeRight(residualApplyExpression)
       } else if (isFunctionNode(functionToApply)) {
         const result = functionToApply(argument, context)
         if (either.isLeft(result)) {
           if (result.value.kind === 'dependencyUnavailable') {
             // Keep the @apply unelaborated.
-            return either.makeRight(applyExpression)
+            return either.makeRight(residualApplyExpression)
           } else {
             return either.makeLeft(result.value)
           }
@@ -207,7 +233,7 @@ export const applyKeywordHandler = (
         }
       } else if (containsAnyUnelaboratedNodes(functionToApply)) {
         // The function isn't ready, so keep the @apply unelaborated.
-        return either.makeRight(applyExpression)
+        return either.makeRight(residualApplyExpression)
       } else {
         return either.makeLeft({
           kind: 'invalidExpression',

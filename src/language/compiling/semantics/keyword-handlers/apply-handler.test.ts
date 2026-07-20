@@ -1,5 +1,15 @@
 import either from '@matt.kantor/either'
+import option from '@matt.kantor/option'
 import assert from 'node:assert'
+import * as orderedRecord from '../../../../ordered-record.js'
+import {
+  compileWithoutSpans,
+  parseAndCompileAndRun,
+  testCases,
+  toSyntaxTree,
+} from '../../../../test-utilities.test.js'
+import type { Atom, Molecule } from '../../../parsing.js'
+import { parse } from '../../../parsing/parser.js'
 import { elaborationSuite, success } from '../test-utilities.test.js'
 
 elaborationSuite('@apply', [
@@ -371,3 +381,50 @@ elaborationSuite('@apply', [
     }),
   ],
 ])
+
+const stuckApplication =
+  '{ f: (n: :integer.type) => :n, x: @runtime { _context => 1 }, main: :f(:x) }'
+
+const valueAtKeyPath = (
+  value: Atom | Molecule,
+  keyPath: readonly string[],
+): Atom | Molecule | undefined =>
+  keyPath.reduce<Atom | Molecule | undefined>(
+    (valueSoFar, key) =>
+      valueSoFar === undefined || typeof valueSoFar === 'string' ?
+        undefined
+      : option.match(orderedRecord.get(valueSoFar, key), {
+          none: () => undefined,
+          some: propertyValue => propertyValue,
+        }),
+    value,
+  )
+
+testCases(
+  (input: string) => either.flatMap(parse(input), compileWithoutSpans),
+  input => `compiling \`${input}\``,
+)('residual form of stuck applications', [
+  [
+    stuckApplication,
+    output => {
+      assert(either.isRight(output))
+      assert.deepEqual(
+        valueAtKeyPath(output.value, ['main', '1', 'function', '0']),
+        '@lookup',
+      )
+    },
+  ],
+])
+
+testCases(parseAndCompileAndRun, input => `running \`${input}\``)(
+  'evaluation of stuck applications',
+  [
+    [
+      `${stuckApplication}.main`,
+      output => {
+        assert(either.isRight(output))
+        assert.deepEqual(output.value, toSyntaxTree('1'))
+      },
+    ],
+  ],
+)
