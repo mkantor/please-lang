@@ -326,27 +326,24 @@ two functions mean the same thing:
 }
 ```
 
-#### Value-Level Reasoning
+#### Type Inference
 
-Type inference isn't limited to classifying values into broad buckets. It
-follows specific values through the program and understands how runtime
+Type inference follows values through the program and understands how runtime
 operations transform them. For example, Please knows that the natural numbers
-are closed under addition, so the result below is statically known to be a
-natural number (without requiring a runtime check):
+are closed under addition, so the return value of the below function is
+statically known to be a natural number:
 
 ```plz
 (a: :natural_number.type) => (:a + 1) ~ :natural_number.type
 ```
 
-There is no overloading; this is the same `+` function that's used for integers.
+Subtraction can underflow, so it _isn't_ closed over the natural numbers like
+addition. An analogous program using `:a - 1` is rejected at compile time
+because the inferred type is only `:integer.type` (`:a` could be `0`, then
+`:a - 1` would be `-1` which isn't a natural number).
 
-Subtraction can underflow, so it _isn't_ closed over the natural numbers; an
-analogous program using `:a - 1` is rejected at compile time because the
-inferred type is only `:integer.type` (`:a` could be `0`, then `:a - 1` would be
-`-1` which isn't a natural number).
-
-The same precision applies to objects, e.g. indexing an object by a union-typed
-key yields a union of exactly the values that key could select:
+Please also understands that indexing an object will yield one of the values
+that specific key could select:
 
 ```plz
 {
@@ -355,9 +352,8 @@ key yields a union of exactly the values that key could select:
 }
 ```
 
-`@if` expressions benefit from similar analysis. When a condition is statically
-decidable the untaken branch is pruned, so a function's return type can depend
-on its argument's _value_:
+`@if` expressions are similarly analyzed. When it's possible to statically
+reason about the condition, Please knows which branch will be executed:
 
 ```plz
 {
@@ -374,13 +370,8 @@ on its argument's _value_:
 }
 ```
 
-The result would only be widened to `negative | non_negative` when the
-argument's sign can't be known until runtime.
-
-This value-aware analysis is reminiscent of
-[dependent types](https://en.wikipedia.org/wiki/Dependent_type), but it falls
-out of ordinary inference instead of requiring elaborate type
-annotations/proofs.
+The result would only be `negative | non_negative` if the argument's sign can't
+be known until runtime.
 
 ### Layering
 
