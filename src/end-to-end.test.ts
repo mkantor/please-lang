@@ -1,6 +1,7 @@
 import either from '@matt.kantor/either'
 import option from '@matt.kantor/option'
 import assert from 'node:assert'
+import { formatError } from './language/cli/error-formatting.js'
 import { parse } from './language/parsing/parser.js'
 import { evaluate } from './language/runtime.js'
 import * as orderedRecord from './ordered-record.js'
@@ -13,6 +14,13 @@ import {
   type ProgramResult,
 } from './test-utilities.test.js'
 import type { JsonValue } from './utility-types.js'
+
+const assertSuccess = (result: ProgramResult) => {
+  if (either.isLeft(result)) {
+    assert.fail(formatError(result.value, { filename: '<test>' }))
+  }
+  assert(either.isRight(result))
+}
 
 const success = (value: JsonValue) => either.makeRight(toSyntaxTree(value))
 
@@ -167,12 +175,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       ]),
     ),
   ],
-  [
-    `_ => @panic`,
-    result => {
-      assert(either.isRight(result))
-    },
-  ],
+  [`_ => @panic`, assertSuccess],
   ['@runtime {_ => @panic}', panic],
   [
     'a => :a',
@@ -801,9 +804,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       {} ~ :something.type
       (a => :a) ~ :something.type
     }`,
-    result => {
-      assert(either.isRight(result))
-    },
+    assertSuccess,
   ],
   [`"arbitrary value" ~ :nothing.type`, typeMismatch],
   [
@@ -919,9 +920,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
           { :atom.type, :atom.type }
         }
       })`,
-    result => {
-      assert(either.isRight(result))
-    },
+    assertSuccess,
   ],
   [
     `(x: @object {
@@ -948,9 +947,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       }
     }) =>
       (:object.lookup(5)(:x) ~ :option.type(:integer.type))`,
-    result => {
-      assert(either.isRight(result))
-    },
+    assertSuccess,
   ],
   [
     `(x: { a: :atom.type }) => (y: { b: :atom.type }) =>
