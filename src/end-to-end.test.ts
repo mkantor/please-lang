@@ -1150,4 +1150,62 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   // Excess clause key types much be a subtype of `atom`.
   [`(a: { [:something.type]: a }) => _`, typeMismatch],
   [`(a: { [{}]: b }) => _`, typeMismatch],
+  [
+    `{
+      sum: (start_key: :natural_number.type) =>
+        (sequence: { [:natural_number.type]: :integer.type }) =>
+          :sequence object.lookup :start_key option.map (
+            (value1: :integer.type) =>
+              :sequence sum (:start_key + 1) match {
+                some: (value2: :integer.type) => :value1 + :value2
+                none: _ => :value1
+              }
+          )
+      results: {
+        from_start: :sum(0)({ 10, 20, 30 })
+        from_middle: :sum(1)({ 10, 20, 30 })
+        past_end: :sum(3)({ 10, 20, 30 })
+        empty: :sum(0)({})
+      }
+    }.results`,
+    success({
+      from_start: { tag: 'some', value: '60' },
+      from_middle: { tag: 'some', value: '50' },
+      past_end: { tag: 'none', value: {} },
+      empty: { tag: 'none', value: {} },
+    }),
+  ],
+  [
+    `{
+      sum: (start_key: :natural_number.type) =>
+        (sequence: { [:natural_number.type]: :integer.type }) =>
+          :sequence object.lookup :start_key option.map (
+            (value1: :integer.type) =>
+              :sequence sum (:start_key + 1) match {
+                some: (value2: :integer.type) => :value1 + :value2
+                none: _ => :value1
+              }
+          )
+      numbers: @runtime { _context => { 10, 20, 30 } }
+      start: @runtime { _context => 0 }
+      output: :numbers sum :start
+    }.output`,
+    success({ tag: 'some', value: '60' }),
+  ],
+  [
+    `{
+      even: (n: :integer.type) => @if { :n < 1, true, else: :odd(:n - 1) }
+      odd: (n: :integer.type) => @if { :n < 1, false, else: :even(:n - 1) }
+      results: {
+        six: :even(6)
+        seven: :even(7)
+        mapped: :option.make_some(6) option.map :even
+      }
+    }.results`,
+    success({
+      six: 'true',
+      seven: 'false',
+      mapped: { tag: 'some', value: 'true' },
+    }),
+  ],
 ])
