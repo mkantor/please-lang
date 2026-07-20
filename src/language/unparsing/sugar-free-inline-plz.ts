@@ -9,30 +9,28 @@ import {
 } from './plz-utilities.js'
 import { punctuation, type Notation } from './unparsing-utilities.js'
 
-const unparseMolecule =
-  (semanticContext: SemanticContext) => (value: Molecule) => {
+const unparseMolecule = (semanticContext: SemanticContext) => {
+  const keyValuePairStrings = moleculeAsKeyValuePairStrings({
+    flow: 'inline',
+    ordinalKeys: 'preserve',
+  })({ unparseAtomOrMolecule, semanticContext })
+
+  return (value: Molecule) => {
     const { closeBrace, openBrace, comma } = punctuation(styleText)
     if (value.entries.length === 0) {
       return either.makeRight(openBrace + closeBrace)
     } else {
-      return either.map(
-        moleculeAsKeyValuePairStrings(
-          value,
-          { unparseAtomOrMolecule, semanticContext },
-          {
-            ordinalKeys: 'preserve',
-          },
+      return either.map(keyValuePairStrings(value), keyValuePairsAsStrings =>
+        openBrace.concat(
+          ' ',
+          keyValuePairsAsStrings.join(comma.concat(' ')),
+          ' ',
+          closeBrace,
         ),
-        keyValuePairsAsStrings =>
-          openBrace.concat(
-            ' ',
-            keyValuePairsAsStrings.join(comma.concat(' ')),
-            ' ',
-            closeBrace,
-          ),
       )
     }
   }
+}
 
 const unparseAtomOrMolecule: UnparseAtomOrMolecule =
   semanticContext => value =>
