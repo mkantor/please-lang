@@ -292,37 +292,39 @@ parameter, but this is merely syntax sugar. `a ~> b` is exactly equivalent to
 
 #### Generic Programming
 
-Please functions are generally generic, even when the parameter is explicitly
-annotated. Each part of the annotation becomes an implicit type parameter
-constrained by it, so the specific argument's type flows through to the return
-value:
+Please functions are generic, even when the parameter type is annotated. For
+example:
 
 ```plz
 {
-  identity_for_integers: (n: :integer.type) => :n
-  answer: :identity_for_integers(42) ~ 42 // return type is `42`, not `:integer.type`
+  integer_identity: (n: :integer.type) => :n
+  answer: :integer_identity(42) ~ 42 // return type is `42`, not `:integer.type`
 }
 ```
 
-Un-annotated functions are generic with the top type (`:something.type`) as the
-implied constraint.
-
-When you need to refer to a type parameter explicitly (for example to share its
-identity across multiple expressions) introduce a "hole" with `?`:
+When you need to refer to a type parameter explicitly (e.g. to share it across
+multiple expressions) introduce a "hole" with `?`:
 
 ```plz
 {
   apply2: a =>
     (f: :a ~> ?b) =>
-    //   ^ refers to the implicit type parameter from the outermost function
+    //   ^ refers to the implicit type parameter from `a =>`
     (g: :b ~> ?c) =>
     //   ^ refers to the type parameter introduced by `?b`
       :g(:f(:a))
 }
 ```
 
-A lone `?` is an anonymous hole, and `(?a: type)` introduces a hole with a
-constraint.
+To constrain a hole, write `(?a: type)` when introducing it. For example, these
+two functions mean the same thing:
+
+```plz
+{
+  integer_identity_1: (n: (?n: :integer.type)) => :n
+  integer_identity_2: (n: :integer.type) => :n
+}
+```
 
 #### Value-Level Reasoning
 
