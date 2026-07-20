@@ -67,6 +67,7 @@ import {
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForTypeParameters,
+  replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArguments,
 } from './type-substitution.js'
 
@@ -230,9 +231,9 @@ const inferTypeImplementation = (
     if (paramType !== undefined) {
       return cacheOnSuccess(either.makeRight(paramType))
     } else if (!lookingUpKeys.has(key)) {
-      const lookupResult = lookup({ key, context })
+      const lookupResult = lookup({ key, context, inlineSelfReferences: true })
       if (either.isRight(lookupResult) && option.isSome(lookupResult.value)) {
-        const { foundValue, foundLocation, foundHole } =
+        const { foundValue, foundLocation, foundHole, foundIsSelfReference } =
           lookupResult.value.value
         const innerResult = option.match(foundHole, {
           // The hole lives in an enclosing parameter annotation. Infer it here
@@ -266,7 +267,14 @@ const inferTypeImplementation = (
                 },
             ),
         })
-        return cacheOnSuccess(innerResult)
+        const resultWithMonomorphicSelfReference = either.map(
+          innerResult,
+          inferredType =>
+            foundIsSelfReference ?
+              replaceAllTypeParametersWithTheirConstraints(inferredType)
+            : inferredType,
+        )
+        return cacheOnSuccess(resultWithMonomorphicSelfReference)
       } else {
         // Fall back to the top type.
         return either.makeRight(types.something)

@@ -3,6 +3,10 @@ import option from '@matt.kantor/option'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
 import {
+  parseAndCompileAndRun,
+  testCases,
+} from '../../../test-utilities.test.js'
+import {
   isFunctionNode,
   makeFunctionExpression,
   makeFunctionNode,
@@ -99,3 +103,50 @@ suite('evaluation state across host-driven applications', _ => {
     assert.deepEqual(contextSeenByCase?.applicationsAreSpeculative, true)
   })
 })
+
+const compileAndRun = testCases(
+  parseAndCompileAndRun,
+  input => `running \`${input}\``,
+)
+
+compileAndRun('recursion through host-implemented functions', [
+  [
+    `{
+      f: (n: :integer.type) =>
+        :option.make_some(42) option.map ((m: :integer.type) => :f(:m))
+      main: :f(0)
+    }.main`,
+    output => {
+      assert(either.isLeft(output))
+      assert('kind' in output.value)
+      assert.deepEqual(output.value.kind, 'panic')
+      assert.match(output.value.message, /evaluation did not terminate/)
+    },
+  ],
+
+  [
+    `{
+      f: (n: :integer.type) => :option.make_some(42) match {
+        some: (m: :integer.type) => :f(:m)
+        none: _ => 0
+      }
+      main: :f(0)
+    }.main`,
+    output => {
+      assert(either.isLeft(output))
+      assert('kind' in output.value)
+      assert.deepEqual(output.value.kind, 'panic')
+      assert.match(output.value.message, /evaluation did not terminate/)
+    },
+  ],
+
+  [
+    `{
+      f: (n: :integer.type) =>
+        :option.make_some(42) option.map ((m: :integer.type) => :f(:m))
+    }`,
+    output => {
+      assert(either.isRight(output))
+    },
+  ],
+])

@@ -86,17 +86,41 @@ export const keyPathToLookupExpression = (keyPath: NonEmptyKeyPath) => {
 export const lookup = ({
   context,
   key,
+  inlineSelfReferences,
+  useSite,
 }: {
   readonly context: ExpressionContext
   readonly key: Atom
+  /**
+   * Return the actual value even when the lookup is a recursive self-reference.
+   * Type inference needs this to be `true` (for example).
+   */
+  readonly inlineSelfReferences?: true | undefined
+  /**
+   * State accumulated by the lexical walk, used to detect whether the lookup is
+   * self-referential.
+   */
+  readonly useSite?: {
+    readonly location: KeyPath
+    readonly crossedFunctionBoundary: boolean
+  }
 }): Either<
   ElaborationError,
   Option<{
     readonly foundLocation: 'prelude' | KeyPath
     readonly foundValue: SemanticGraph
     readonly foundHole: Option<HoleExpression>
+    /**
+     * Whether the binding's value contains the `@function` the lookup occurs
+     * within (i.e. the lookup is a recursive self-reference).
+     */
+    readonly foundIsSelfReference: boolean
   }>
 > => {
+  const useSiteState = useSite ?? {
+    location: context.location,
+    crossedFunctionBoundary: false,
+  }
   if (key === ignoredKey) {
     return either.makeLeft({
       kind: 'invalidExpression',
@@ -112,6 +136,7 @@ export const lookup = ({
             foundLocation: 'prelude',
             foundValue: valueFromPrelude,
             foundHole: option.none,
+            foundIsSelfReference: false,
           }),
         )
   } else {
@@ -149,10 +174,12 @@ export const lookup = ({
           readonly foundValue: SemanticGraph
           readonly foundLocation: KeyPath
           readonly foundHole: Option<HoleExpression>
+          readonly foundIsSelfReference: boolean
         }
       | {
           readonly kind: 'notFound'
           readonly nextLocationToCheckFrom: KeyPath
+          readonly exitedFunctionScope: boolean
         }
 
     const result: LookupResult = option.match(
@@ -189,6 +216,7 @@ export const lookup = ({
               foundValue: makeLookupExpression(key),
               foundLocation: [...pathToCurrentScope, key],
               foundHole: matchedHole,
+              foundIsSelfReference: false,
             }
           } else {
             return {
@@ -196,6 +224,7 @@ export const lookup = ({
               // Skip a level; don't consider expression properties as potential
               // `@lookup` targets.
               nextLocationToCheckFrom: pathToParentScope,
+              exitedFunctionScope: either.isRight(parentFunctionResult),
             }
           }
         },
@@ -206,15 +235,37 @@ export const lookup = ({
               currentScope => applyKeyPathToSemanticGraph(currentScope, [key]),
             ),
             {
-              some: foundValue => ({
-                kind: 'found',
-                foundValue,
-                foundLocation: [...pathToCurrentScope, key],
-                foundHole: option.none,
-              }),
+              some: (foundValue): LookupResult => {
+                const foundLocation = [...pathToCurrentScope, key]
+                const foundIsSelfReference =
+                  useSiteState.crossedFunctionBoundary &&
+                  isProperPrefixOf({
+                    potentialPrefix: foundLocation,
+                    path: useSiteState.location,
+                  })
+                return foundIsSelfReference && inlineSelfReferences !== true ?
+                    // The looked-up value is self-referential, so keep it
+                    // unelaborated. This won't trip during application because
+                    // `apply` splices in a separate binding for the function.
+                    {
+                      kind: 'found',
+                      foundValue: makeLookupExpression(key),
+                      foundLocation,
+                      foundHole: option.none,
+                      foundIsSelfReference,
+                    }
+                  : {
+                      kind: 'found',
+                      foundValue,
+                      foundLocation,
+                      foundHole: option.none,
+                      foundIsSelfReference,
+                    }
+              },
               none: _ => ({
                 kind: 'notFound',
                 nextLocationToCheckFrom: pathToCurrentScope,
+                exitedFunctionScope: false,
               }),
             },
           ),
@@ -227,6 +278,7 @@ export const lookup = ({
           foundValue: result.foundValue,
           foundLocation: result.foundLocation,
           foundHole: result.foundHole,
+          foundIsSelfReference: result.foundIsSelfReference,
         }),
       )
     } else {
@@ -242,7 +294,23 @@ export const lookup = ({
           mutableFunctionParameterCache: context.mutableFunctionParameterCache,
           applicationChain: context.applicationChain,
         },
+        inlineSelfReferences,
+        useSite: {
+          location: useSiteState.location,
+          crossedFunctionBoundary:
+            useSiteState.crossedFunctionBoundary || result.exitedFunctionScope,
+        },
       })
     }
   }
 }
+
+const isProperPrefixOf = ({
+  potentialPrefix,
+  path,
+}: {
+  readonly potentialPrefix: KeyPath
+  readonly path: KeyPath
+}) =>
+  potentialPrefix.length < path.length &&
+  potentialPrefix.every((prefixKey, index) => prefixKey === path[index])
