@@ -10,16 +10,16 @@
   name: @runtime { context => :context.arguments.lookup(name) }
     option.get_or_else user
 
-  sentence: (opening: :atom.type) => (closing: :atom.type) =>
-    :opening atom.append :name atom.append :closing
+  sentence: (parts: { :atom.type, :atom.type }) =>
+    :parts.0 atom.append :name atom.append :parts.1
 
   greetings: {
-    de: :sentence("Hallo, ")("!")
-    en: :sentence("Hello, ")("!")
-    es: :sentence("¡Hola, ")("!")
-    fr: :sentence("Bonjour, ")(" !")
-    ja: :sentence("こんにちは、")("！")
-    pt: :sentence("Olá, ")("!")
+    de: :sentence({ "Hallo, ", "!" })
+    en: :sentence({ "Hello, ", "!" })
+    es: :sentence({ "¡Hola, ", "!" })
+    fr: :sentence({ "Bonjour, ", " !" })
+    ja: :sentence({ "こんにちは、", "！" })
+    pt: :sentence({ "Olá, ", "!" })
   }
 
   output: @runtime { context => :context.arguments.lookup(language) }
