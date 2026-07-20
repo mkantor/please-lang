@@ -18,7 +18,8 @@ import {
 } from '../semantics.js'
 import type { Span } from '../source-location.js'
 import { isExpression, type Expression } from './expression.js'
-import type { KeyPath } from './key-path.js'
+import type { FunctionExpression } from './expressions/function-expression.js'
+import type { KeyPath, KeyPathStringifiedForInternalUse } from './key-path.js'
 import { isKeyword, type Keyword } from './keyword.js'
 import {
   objectNodeFromMolecule,
@@ -99,7 +100,47 @@ export type ExpressionContext = {
    * aborting.
    */
   readonly panicsAreDeferred?: true | undefined
+  // The remaining properties are dynamic evaluation state (see
+  // `withDynamicEvaluationState`).
+  /**
+   * Set while elaborating the body of a not-yet-applied `@function`. Function
+   * applications occurring in such positions are speculative: their results
+   * may never be demanded, so reduction must be bounded.
+   */
+  readonly applicationsAreSpeculative?: true | undefined
+  /**
+   * The dynamic chain of in-flight function applications (innermost last),
+   * consulted by re-entrancy deferral, speculation fuel, and the demanded
+   * budget (see `configuration.ts`).
+   */
+  readonly applicationChain: readonly ApplicationChainEntry[]
 }
+
+export type ApplicationChainEntry = {
+  /** The applied function's definition location, stringified. */
+  readonly locationKey: KeyPathStringifiedForInternalUse
+  /** The applied function's expression, compared by reference. */
+  readonly expression: FunctionExpression
+  /** Whether the application began in a speculative position. */
+  readonly speculative: boolean
+}
+
+/**
+ * Carry over what a from-scratch base context cannot know: `source`'s
+ * configuration and its dynamic evaluation state (the state describing the
+ * in-progress evaluation rather than the program being elaborated). The result
+ * is otherwise `base`. Use this whenever an application's static context comes
+ * from somewhere other than its call site.
+ */
+export const withDynamicEvaluationState = (
+  base: ExpressionContext,
+  source: ExpressionContext,
+): ExpressionContext => ({
+  ...base,
+  configuration: source.configuration,
+  applicationsAreSpeculative: source.applicationsAreSpeculative,
+  applicationChain: source.applicationChain,
+})
 
 export type KeywordElaborationResult = Either<ElaborationError, SemanticGraph>
 
@@ -117,16 +158,35 @@ export const elaborate =
     keywordHandlers: KeywordHandlers,
     spans?: ExpressionSpansByLocation,
   ): Either<ElaborationError, ElaboratedSemanticGraph> =>
-    elaborateWithContext(program, {
-      configuration,
-      keywordHandlers,
-      location: [],
-      mutableInferenceCache: new Map(),
-      mutableFunctionParameterCache: new Map(),
-      program:
-        typeof program === 'string' ? program : objectNodeFromMolecule(program),
-      sourceSpans: spans,
-    })
+    elaborateWithContext(
+      program,
+      makeInitialElaborationContext(
+        configuration,
+        program,
+        keywordHandlers,
+        spans,
+      ),
+    )
+
+/**
+ * The context in which elaboration of a whole program begins.
+ */
+export const makeInitialElaborationContext = (
+  configuration: Configuration,
+  program: SyntaxTree,
+  keywordHandlers: KeywordHandlers,
+  spans?: ExpressionSpansByLocation,
+): ExpressionContext => ({
+  configuration,
+  keywordHandlers,
+  location: [],
+  mutableInferenceCache: new Map(),
+  mutableFunctionParameterCache: new Map(),
+  program:
+    typeof program === 'string' ? program : objectNodeFromMolecule(program),
+  sourceSpans: spans,
+  applicationChain: [],
+})
 
 export const elaborateWithContext = (
   program: SyntaxTree,

@@ -240,6 +240,7 @@ export const lookup = ({
           program: context.program,
           mutableInferenceCache: context.mutableInferenceCache,
           mutableFunctionParameterCache: context.mutableFunctionParameterCache,
+          applicationChain: context.applicationChain,
         },
       })
     }

@@ -862,6 +862,7 @@ const getFunctionParameterType = (
                   mutableFunctionParameterCache:
                     contextOfFunction.mutableFunctionParameterCache,
                   isExternalToProgram: contextOfFunction.isExternalToProgram,
+                  applicationChain: contextOfFunction.applicationChain,
                 }
                 const contextuallyAppliedFunctionType = inferType(
                   applyExpressionResult.value[1].function,
@@ -1016,6 +1017,7 @@ const resolveEnclosingFunctionParameters = (
                 mutableInferenceCache: context.mutableInferenceCache,
                 mutableFunctionParameterCache:
                   context.mutableFunctionParameterCache,
+                applicationChain: context.applicationChain,
               },
             )
 

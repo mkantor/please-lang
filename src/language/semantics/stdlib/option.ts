@@ -1,4 +1,5 @@
 import either from '@matt.kantor/either'
+import { withDynamicEvaluationState } from '../expression-elaboration.js'
 import { makeUnionExpression } from '../expressions/union-expression.js'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
 import {
@@ -76,11 +77,17 @@ export const option = {
     ],
     types.option(B),
     transform =>
-      either.makeRight(optionValue =>
+      either.makeRight((optionValue, contextOfApplication) =>
         optionValue.tag === 'none' ?
           either.makeRight(optionValue)
         : either.map(
-            transform(optionValue.value, emptyContextForStdlibApplications),
+            transform(
+              optionValue.value,
+              withDynamicEvaluationState(
+                emptyContextForStdlibApplications,
+                contextOfApplication,
+              ),
+            ),
             transformedValue =>
               objectNodeFromOrderedEntries([
                 ['tag', 'some'],
@@ -101,11 +108,17 @@ export const option = {
     ],
     types.option(B),
     transform =>
-      either.makeRight(optionValue =>
+      either.makeRight((optionValue, contextOfApplication) =>
         optionValue.tag === 'none' ?
           either.makeRight(optionValue)
         : either.flatMap(
-            transform(optionValue.value, emptyContextForStdlibApplications),
+            transform(
+              optionValue.value,
+              withDynamicEvaluationState(
+                emptyContextForStdlibApplications,
+                contextOfApplication,
+              ),
+            ),
             transformedValue =>
               nodeIsOptionLike(transformedValue) ?
                 either.makeRight(transformedValue)
