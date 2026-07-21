@@ -18,14 +18,12 @@ There are more example programs in [`./examples`](./examples).
 
 **This implementation of Please is a proof of concept**. There are bugs and
 missing pieces, and language syntax/semantics may change backwards-incompatibly
-on the way to an official release. TypeScript was chosen for this implementation
-because it's pretty good for rapid prototyping, but different languages may be
-used in non-prototype versions.
+on the way to an official release.
 
 ### Current State
 
-Enough pieces exist to write basic runnable programs, but the standard library
-is anemic and documentation is lacking.
+Enough pieces exist to write runnable programs, but the standard library is
+anemic, documentation is lacking, and editor tooling is nonexistent.
 
 The current runtime is an interpreter, but the plan is to eventually add one or
 more backends to allow building native executables.
@@ -194,8 +192,8 @@ in the standard library are the functions`|>` (pipe) and `>>` (flow):
 }
 ```
 
-All binary operations are currently left-associative and there is no operator
-precedence. Use of parentheses is encouraged.
+All binary operations are left-associative and there is no operator precedence.
+Use of parentheses is encouraged.
 
 #### Keywords
 
@@ -208,7 +206,8 @@ desugars to `{ 0: "@lookup", 1: { key: foo } }`. All such expressions have a
 property named `0` referring to a value that is an `@`-prefixed atom (the
 keyword). Most keyword expressions also require a property named `1` to pass an
 argument to the expression. Keywords include `@apply`, `@check`, `@function`,
-`@hole`, `@if`, `@index`, `@lookup`, `@panic`, `@runtime`, and `@union`.
+`@hole`, `@if`, `@index`, `@lookup`, `@object`, `@panic`, `@runtime`, and
+`@union`.
 
 In addition to the specific syntax sugars shown above, any keyword expression
 can be written using a generalized sugar:
@@ -253,8 +252,8 @@ computation will occur at runtime):
 1 + 1
 ```
 
-There's currently no module system and all Please programs are single files, but
-that's only because this is a prototype.
+There's no module system yet (all Please programs are single files), but that
+will change.
 
 ### Type System
 
@@ -293,59 +292,58 @@ parameter, but this is merely syntax sugar. `a ~> b` is exactly equivalent to
 
 #### Generic Programming
 
-Please functions are generally generic, even when the parameter is explicitly
-annotated. Each part of the annotation becomes an implicit type parameter
-constrained by it, so the specific argument's type flows through to the return
-value:
+Please functions are generic, even when the parameter type is annotated. For
+example:
 
 ```plz
 {
-  identity_for_integers: (n: :integer.type) => :n
-  answer: :identity_for_integers(42) ~ 42 // return type is `42`, not `:integer.type`
+  integer_identity: (n: :integer.type) => :n
+  answer: :integer_identity(42) ~ 42 // return type is `42`, not `:integer.type`
 }
 ```
 
-Un-annotated functions are generic with the top type (`:something.type`) as the
-implied constraint.
-
-When you need to refer to a type parameter explicitly (for example to share its
-identity across multiple expressions) introduce a "hole" with `?`:
+When you need to refer to a type parameter explicitly (e.g. to share it across
+multiple expressions) introduce a "hole" with `?`:
 
 ```plz
 {
   apply2: a =>
     (f: :a ~> ?b) =>
-    //   ^ refers to the implicit type parameter from the outermost function
+    //   ^ refers to the implicit type parameter from `a =>`
     (g: :b ~> ?c) =>
     //   ^ refers to the type parameter introduced by `?b`
       :g(:f(:a))
 }
 ```
 
-A lone `?` is an anonymous hole, and `(?a: type)` introduces a hole with a
-constraint.
+To constrain a hole, write `(?a: type)` when introducing it. For example, these
+two functions mean the same thing:
 
-#### Value-Level Reasoning
+```plz
+{
+  integer_identity_1: (n: (?n: :integer.type)) => :n
+  integer_identity_2: (n: :integer.type) => :n
+}
+```
 
-Type inference isn't limited to classifying values into broad buckets. It
-follows specific values through the program and understands how runtime
+#### Type Inference
+
+Type inference follows values through the program and understands how runtime
 operations transform them. For example, Please knows that the natural numbers
-are closed under addition, so the result below is statically known to be a
-natural number (without requiring a runtime check):
+are closed under addition, so the return value of the below function is
+statically known to be a natural number:
 
 ```plz
 (a: :natural_number.type) => (:a + 1) ~ :natural_number.type
 ```
 
-There is no overloading; this is the same `+` function that's used for integers.
+Subtraction can underflow, so it _isn't_ closed over the natural numbers like
+addition. An analogous program using `:a - 1` is rejected at compile time
+because the inferred type is only `:integer.type` (`:a` could be `0`, then
+`:a - 1` would be `-1` which isn't a natural number).
 
-Subtraction can underflow, so it _isn't_ closed over the natural numbers; an
-analogous program using `:a - 1` is rejected at compile time because the
-inferred type is only `:integer.type` (`:a` could be `0`, then `:a - 1` would be
-`-1` which isn't a natural number).
-
-The same precision applies to objects, e.g. indexing an object by a union-typed
-key yields a union of exactly the values that key could select:
+Please also understands that indexing an object will yield one of the values
+that specific key could select:
 
 ```plz
 {
@@ -354,9 +352,8 @@ key yields a union of exactly the values that key could select:
 }
 ```
 
-`@if` expressions benefit from similar analysis. When a condition is statically
-decidable the untaken branch is pruned, so a function's return type can depend
-on its argument's _value_:
+`@if` expressions are similarly analyzed. When it's possible to statically
+reason about the condition, Please knows which branch will be executed:
 
 ```plz
 {
@@ -373,13 +370,8 @@ on its argument's _value_:
 }
 ```
 
-The result would only be widened to `negative | non_negative` when the
-argument's sign can't be known until runtime.
-
-This value-aware analysis is reminiscent of
-[dependent types](https://en.wikipedia.org/wiki/Dependent_type), but it falls
-out of ordinary inference instead of requiring elaborate type
-annotations/proofs.
+The result would only be `negative | non_negative` if the argument's sign can't
+be known until runtime.
 
 ### Layering
 
@@ -390,8 +382,9 @@ languages:
   typically use to write programs.
 - Layer 1 (`plo`) is a desugared/normalized representation of the syntax tree.
 - Layer 2 (`plt`) is the result of applying semantic analysis, compile-time
-  evaluation, and other reductions to the `plo` tree. The prototype
-  implementation of the language runtime is a `plt` interpreter.
+  evaluation, and other reductions to the `plo` tree. For now the language
+  runtime is a `plt` interpreter, but eventually there will be compiler backends
+  to lower `plt` to machine code and/or other targets.
 
 `plz` has a specific textual representation, but `plo` & `plt` could be encoded
 in any format in which hierarchical key/value pairs of strings are representable
@@ -549,7 +542,7 @@ It strives to:
 - make it easy to pay off technical debt
 - emit programs that you have confidence in
 
-The prototype implementation doesn't live up to these aspirations, but hopefully
+The current implementation doesn't live up to these aspirations, but hopefully
 it approaches them over time.
 
 [^1]:
