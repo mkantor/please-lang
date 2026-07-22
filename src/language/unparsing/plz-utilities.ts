@@ -490,9 +490,20 @@ const unparseSugaredFunctionParameter =
 const unparseSugaredIndex =
   ({ unparseAtomOrMolecule, semanticContext }: Context) =>
   (expression: IndexExpression) => {
-    const objectUnparseResult = either.flatMap(
-      serializeIfNeeded(expression[1].object),
-      unparseAtomOrMolecule(semanticContext),
+    const { openGroupingParenthesis, closeGroupingParenthesis } =
+      punctuation(styleText)
+    const objectUnparseResult = either.map(
+      either.flatMap(
+        serializeIfNeeded(expression[1].object),
+        unparseAtomOrMolecule(semanticContext),
+      ),
+      unparsedObject =>
+        indexedObjectRequiresGroupingParentheses(expression[1].object) ?
+          openGroupingParenthesis.concat(
+            unparsedObject,
+            closeGroupingParenthesis,
+          )
+        : unparsedObject,
     )
     return either.flatMap(objectUnparseResult, unparsedObject =>
       either.map(
@@ -504,6 +515,19 @@ const unparseSugaredIndex =
       ),
     )
   }
+
+const indexedObjectRequiresGroupingParentheses = (
+  object: SemanticGraph,
+): boolean =>
+  isNonCompactExpression(object) ||
+  either.isRight(readIndexExpression(object)) ||
+  (isExpression(object) && !rendersAsCompactOperand(object))
+
+const rendersAsCompactOperand = (expression: SemanticGraph): boolean =>
+  either.isRight(readLookupExpression(expression)) ||
+  either.isRight(readApplyExpression(expression)) ||
+  either.isRight(readHoleExpression(expression)) ||
+  either.isRight(readObjectTypeExpression(expression))
 
 const unparseKeyPathOfSugaredIndex =
   ({ unparseAtomOrMolecule, semanticContext }: Context) =>
