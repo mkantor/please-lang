@@ -4,6 +4,7 @@ import type { ElaborationError } from '../../../errors.js'
 import type { Atom } from '../../../parsing.js'
 import {
   asSemanticGraph,
+  elaborateOperands,
   elaborateWithContext,
   getParameterName,
   getParameterTypeAnnotation,
@@ -20,9 +21,9 @@ import {
   updateValueAtKeyPathInSemanticGraph,
   type Expression,
   type ExpressionContext,
+  type ExpressionWithElaboratedOperands,
   type FunctionExpression,
   type FunctionNode,
-  type KeywordHandler,
   type SemanticGraph,
   type Type,
 } from '../../../semantics.js'
@@ -37,8 +38,28 @@ import {
 } from '../../../semantics/semantic-graph.js'
 import { makeTypeParameter } from '../../../semantics/type-system.js'
 
-export const functionKeywordHandler: KeywordHandler = (
+export const functionKeywordHandler = (
   expression: Expression,
+  context: ExpressionContext,
+): Either<ElaborationError, FunctionNode> =>
+  either.flatMap(
+    elaborateOperands(expression, {
+      ...context,
+      // `@panic`s inside functions shouldn't fire while elaborating the body,
+      // only when the function is eventually called.
+      panicsAreDeferred: true,
+    }),
+    ({ expression, context: operandContext }) =>
+      makeFunctionFromElaboratedExpression(expression, {
+        // The original `context` is used here; `panicsAreDeferred` applies only
+        // to the operands.
+        ...context,
+        program: operandContext.program,
+      }),
+  )
+
+const makeFunctionFromElaboratedExpression = (
+  expression: ExpressionWithElaboratedOperands,
   context: ExpressionContext,
 ): Either<ElaborationError, FunctionNode> =>
   either.flatMap(readFunctionExpression(expression), functionExpression =>

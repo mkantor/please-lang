@@ -16,11 +16,7 @@ import {
   type Type,
 } from '../semantics.js'
 import type { Span } from '../source-location.js'
-import {
-  isExpression,
-  isKeywordExpressionWithArgument,
-  type Expression,
-} from './expression.js'
+import { isExpression, type Expression } from './expression.js'
 import type { KeyPath } from './key-path.js'
 import { isKeyword, type Keyword } from './keyword.js'
 import {
@@ -43,6 +39,13 @@ import type { TypeKeyPathStringifiedForInternalUse } from './type-system.js'
 declare const _elaborated: unique symbol
 type Elaborated = { readonly [_elaborated]: true }
 export type ElaboratedSemanticGraph = WithPhantomData<SemanticGraph, Elaborated>
+
+declare const _operandsElaborated: unique symbol
+type OperandsElaborated = { readonly [_operandsElaborated]: true }
+export type ExpressionWithElaboratedOperands = WithPhantomData<
+  Expression,
+  OperandsElaborated
+>
 
 /**
  * The (possibly genericized) type of a function's parameter, plus the
@@ -131,47 +134,109 @@ export const elaborateWithContext = (
     withPhantomData<Elaborated>(),
   )
 
+/**
+ * Elaborate a keyword expression's operands (the sub-properties within its `1`
+ * property), returning the expression with its operands elaborated together
+ * with a context whose `program` reflects those elaborations.
+ *
+ * Most keyword handlers are expected to call this (though some like `@if`
+ * handle subexpression elaboration more granularly) before reading/using the
+ * operands. Handlers must proceed with the returned context (the original
+ * context doesn't capture the operands' elaborated values, so lookups made
+ * against it would resolve to stale forms).
+ */
+export const elaborateOperands = (
+  expression: Expression,
+  context: ExpressionContext,
+): Either<
+  ElaborationError,
+  {
+    readonly expression: ExpressionWithElaboratedOperands
+    readonly context: ExpressionContext
+  }
+> => {
+  const operands = expression[1]
+  if (operands === undefined) {
+    return either.makeRight({
+      expression: withPhantomData<OperandsElaborated>()(expression),
+      context,
+    })
+  } else if (typeof operands === 'string') {
+    return either.map(
+      handleAtomWhichMayNotBeAKeyword(operands),
+      unescapedOperands => ({
+        expression: withPhantomData<OperandsElaborated>()(
+          withProperty(
+            withProperty(expression, '1', unescapedOperands),
+            '0',
+            expression[0],
+          ),
+        ),
+        context,
+      }),
+    )
+  } else if (typeof operands === 'symbol' || typeof operands === 'function') {
+    // The operands are already elaborated.
+    return either.makeRight({
+      expression: withPhantomData<OperandsElaborated>()(expression),
+      context,
+    })
+  } else {
+    return either.map(
+      elaborateProperties(orderedEntriesOfObjectNode(operands), context, {
+        keyPathPrefix: ['1'],
+        skipReelaboration: true,
+        propertyZeroMayBeAKeyword: false,
+      }),
+      ({ properties: elaboratedOperands, program }) => ({
+        expression: withPhantomData<OperandsElaborated>()(
+          withProperty(
+            withProperty(expression, '1', elaboratedOperands),
+            '0',
+            expression[0],
+          ),
+        ),
+        context: {
+          ...context,
+          program: programWithValueAtKeyPath(
+            program,
+            [...context.location, '1'],
+            elaboratedOperands,
+          ),
+        },
+      }),
+    )
+  }
+}
+
 const elaborateWithinMolecule = (
   molecule: Molecule | ObjectNode,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> => {
   const moleculeAsSemanticGraph = asSemanticGraph(molecule)
 
-  // `@if` needs to be eagerly expanded to avoid evaluating the falsy branch.
-  // TODO: Handle keywords in a generalized way, without hardcoding specific
-  // keywords here.
   if (
     isExpression(moleculeAsSemanticGraph) &&
-    moleculeAsSemanticGraph['0'] === '@if'
+    isKeyword(moleculeAsSemanticGraph['0'])
   ) {
-    const expandedResult = either.flatMap(
-      handleObjectNodeWhichMayBeAExpression(moleculeAsSemanticGraph, context),
-      serialize,
+    // Keyword handlers are passed the raw expression; each handler explicitly
+    // elaborates its own operands (typically via `elaborateOperands`).
+    return handleObjectNodeWhichMayBeAExpression(
+      moleculeAsSemanticGraph,
+      context,
     )
-    return either.map(expandedResult, asSemanticGraph)
   } else {
-    const childrenContext: ExpressionContext =
-      isKeywordExpressionWithArgument('@function', moleculeAsSemanticGraph) ?
-        {
-          ...context,
-          // `@panic`s inside functions shouldn't fire while elaborating the
-          // body, only when the function is eventually called.
-          panicsAreDeferred: true,
-        }
-      : context
-
     const propertiesResult = elaborateProperties(
       isSemanticGraph(molecule) ?
         orderedEntriesOfObjectNode(molecule)
       : molecule.entries,
-      childrenContext,
+      context,
       {
         keyPathPrefix: [],
         skipReelaboration: context.skipReelaboration,
         propertyZeroMayBeAKeyword: true,
       },
     )
-
     if (either.isLeft(propertiesResult)) {
       // Immediately bail on error.
       return propertiesResult
@@ -200,10 +265,7 @@ const elaborateWithinMolecule = (
       //
       // TODO: Consider less-imperative/more-functional approaches for this (and
       // also for elaboration as a whole).
-      if (
-        !context.skipReelaboration &&
-        !propertiesResult.value.propertiesFormAKeywordExpression
-      ) {
+      if (!context.skipReelaboration) {
         let madeProgress = true
         while (madeProgress && keysNeedingReelaboration.size > 0) {
           madeProgress = false
@@ -218,7 +280,7 @@ const elaborateWithinMolecule = (
               continue
             }
             const reelaborationResult = elaborateWithContext(serialized.value, {
-              ...childrenContext,
+              ...context,
               location: [...context.location, key],
               program: updatedProgram,
               skipReelaboration: true,
@@ -260,7 +322,7 @@ const elaborateWithinMolecule = (
                 0: possibleKeywordAsString,
               },
               {
-                ...childrenContext,
+                ...context,
                 program: updatedProgram,
                 location: context.location,
               },
@@ -319,7 +381,6 @@ const elaborateProperties = (
     readonly properties: Writable<ObjectNode>
     readonly program: SemanticGraph
     readonly keysNeedingReelaboration: Set<Atom>
-    readonly propertiesFormAKeywordExpression: boolean
   }
 > => {
   const properties: Writable<ObjectNode> = objectNodeFromOrderedEntries([])
@@ -329,11 +390,6 @@ const elaborateProperties = (
 
   let updatedProgram = context.program
   const keysNeedingReelaboration = new Set<Atom>()
-
-  // Set once a keyword has been seen at `0`, which makes the properties
-  // following it that keyword's operands. Neither they nor the expression they
-  // belong to may run re-elaboration loops.
-  let propertiesFormAKeywordExpression = false
 
   for (const [key, value] of propertiesToElaborate) {
     const keyUpdateResult = handleAtomWhichMayNotBeAKeyword(key)
@@ -352,24 +408,13 @@ const elaborateProperties = (
           orderedKeysAccumulator.push(updatedKey)
         }
         properties[updatedKey] = value
-        if (
-          options.propertyZeroMayBeAKeyword &&
-          key === '0' &&
-          typeof value === 'string' &&
-          isKeyword(value)
-        ) {
-          propertiesFormAKeywordExpression = true
-        }
       } else {
         const location = [...context.location, ...options.keyPathPrefix, key]
         const elaborationResult = elaborateWithinMolecule(value, {
           ...context,
           location,
           program: updatedProgram,
-          skipReelaboration:
-            options.skipReelaboration || propertiesFormAKeywordExpression ?
-              true
-            : undefined,
+          skipReelaboration: options.skipReelaboration,
         })
         if (either.isLeft(elaborationResult)) {
           // Immediately bail on error.
@@ -386,7 +431,6 @@ const elaborateProperties = (
           properties[updatedKey] = elaborationResult.value
           if (
             options.skipReelaboration === undefined &&
-            !propertiesFormAKeywordExpression &&
             typeof elaborationResult.value !== 'string' &&
             containsAnyUnelaboratedNodes(elaborationResult.value)
           ) {
@@ -416,7 +460,6 @@ const elaborateProperties = (
     properties,
     program: updatedProgram,
     keysNeedingReelaboration,
-    propertiesFormAKeywordExpression,
   })
 }
 

@@ -105,4 +105,10 @@ elaborationSuite('@if', [
     },
     success({ a: 'it works!', b: 'true' }),
   ],
+  [{ 0: '@if', 1: { 0: 'true', 1: 'yes', 2: 'no' } }, success('yes')],
+  [
+    { 0: '@if', 1: { 0: 'false', 1: { 0: '@panic' }, 2: 'it works!' } },
+    success('it works!'),
+  ],
+  [{ 0: '@if', 1: { 0: 'true', 1: '@@lookup', 2: 'no' } }, success('@lookup')],
 ])

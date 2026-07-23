@@ -5,12 +5,12 @@ import {
   applyKeyPathToType,
   attachSpanIfAbsent,
   containsAnyUnelaboratedNodes,
+  elaborateOperands,
   inferType,
   readIndexExpression,
   stringifyTypeForEndUser,
   type Expression,
   type ExpressionContext,
-  type KeywordHandler,
   type SemanticGraph,
 } from '../../../semantics.js'
 import { applyTypeKeyPathToSemanticGraph } from '../../../semantics/semantic-graph.js'
@@ -59,52 +59,56 @@ const checkKeyPathExistsInType = (
     },
   )
 
-export const indexKeywordHandler: KeywordHandler = (
+export const indexKeywordHandler = (
   expression: Expression,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> =>
-  either.flatMap(readIndexExpression(expression), indexExpression => {
-    const {
-      1: { object, query },
-    } = indexExpression
-    return either.flatMap(
-      typeKeyPathFromObjectNode(
-        query,
-        { ...context, location: [...context.location, '1', 'query'] },
-        inferType,
-      ),
-      typeKeyPath => {
+  either.flatMap(
+    elaborateOperands(expression, context),
+    ({ expression, context }) =>
+      either.flatMap(readIndexExpression(expression), indexExpression => {
+        const {
+          1: { object, query },
+        } = indexExpression
         return either.flatMap(
-          checkKeyPathExistsInType(object, typeKeyPath, context),
-          _ =>
-            (
-              containsAnyUnelaboratedNodes(object) ||
-              containsAnyUnelaboratedNodes(query)
-            ) ?
-              // The object isn't ready, so keep the @index unelaborated.
-              either.makeRight(indexExpression)
-            : option.match(
-                applyTypeKeyPathToSemanticGraph(object, typeKeyPath),
-                {
-                  none: _ =>
-                    // This error is less specific than the one from
-                    // `checkKeyPathExistsInType`, but since that's used for
-                    // static analysis this isn't expected to ever surface.
-                    either.makeLeft(
-                      attachSpanIfAbsent({
-                        ...context,
-                        location: [...context.location, '1', 'query'],
-                      })({
-                        kind: 'typeMismatch',
-                        message: `property \`${stringifyTypeKeyPathForEndUser(
-                          typeKeyPath,
-                        )}\` not found`,
-                      }),
-                    ),
-                  some: either.makeRight,
-                },
-              ),
+          typeKeyPathFromObjectNode(
+            query,
+            { ...context, location: [...context.location, '1', 'query'] },
+            inferType,
+          ),
+          typeKeyPath => {
+            return either.flatMap(
+              checkKeyPathExistsInType(object, typeKeyPath, context),
+              _ =>
+                (
+                  containsAnyUnelaboratedNodes(object) ||
+                  containsAnyUnelaboratedNodes(query)
+                ) ?
+                  // The object isn't ready, so keep the @index unelaborated.
+                  either.makeRight(indexExpression)
+                : option.match(
+                    applyTypeKeyPathToSemanticGraph(object, typeKeyPath),
+                    {
+                      none: _ =>
+                        // This error is less specific than the one from
+                        // `checkKeyPathExistsInType`, but since that's used for
+                        // static analysis this isn't expected to ever surface.
+                        either.makeLeft(
+                          attachSpanIfAbsent({
+                            ...context,
+                            location: [...context.location, '1', 'query'],
+                          })({
+                            kind: 'typeMismatch',
+                            message: `property \`${stringifyTypeKeyPathForEndUser(
+                              typeKeyPath,
+                            )}\` not found`,
+                          }),
+                        ),
+                      some: either.makeRight,
+                    },
+                  ),
+            )
+          },
         )
-      },
-    )
-  })
+      }),
+  )

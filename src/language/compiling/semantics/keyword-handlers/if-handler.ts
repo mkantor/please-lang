@@ -3,6 +3,7 @@ import type { ElaborationError } from '../../../errors.js'
 import {
   asSemanticGraph,
   containsAnyUnelaboratedNodes,
+  elaborateOperands,
   elaborateWithContext,
   inferType,
   isAssignable,
@@ -21,8 +22,9 @@ import {
   type KeywordHandler,
   type SemanticGraph,
 } from '../../../semantics.js'
+import { readAndAnalyzeApplyExpression } from './apply-handler.js'
 
-export const ifKeywordHandler: KeywordHandler = (
+export const ifKeywordHandler = (
   expression: Expression,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> =>
@@ -88,24 +90,24 @@ export const ifKeywordHandler: KeywordHandler = (
                 // where referenced properties that are higher up in the program
                 // get erased before the `@if` can be fully elaborated.
 
-                const doNotElaborate = either.makeRight
                 const partiallyElaboratingContext: ExpressionContext = {
                   ...context,
                   keywordHandlers: {
                     '@lookup': context.keywordHandlers['@lookup'],
                     '@index': context.keywordHandlers['@index'],
                     '@check': context.keywordHandlers['@check'],
-                    '@apply': analyzeButPreserveExpression(
-                      context.keywordHandlers['@apply'],
-                    ),
-                    '@function': doNotElaborate,
-                    '@hole': doNotElaborate,
-                    '@if': doNotElaborate,
-                    '@object': doNotElaborate,
-                    '@panic': doNotElaborate,
-                    '@runtime': doNotElaborate,
-                    '@todo': doNotElaborate,
-                    '@union': doNotElaborate,
+                    '@apply': readAndAnalyzeApplyExpression,
+
+                    // For nested `@if`s, not even the operands get elaborated.
+                    '@if': either.makeRight,
+
+                    '@function': elaborateOperandsOnly,
+                    '@hole': elaborateOperandsOnly,
+                    '@object': elaborateOperandsOnly,
+                    '@panic': elaborateOperandsOnly,
+                    '@runtime': elaborateOperandsOnly,
+                    '@todo': elaborateOperandsOnly,
+                    '@union': elaborateOperandsOnly,
                   },
                 }
 
@@ -194,15 +196,12 @@ const evaluateSubexpression = (
     }),
   )
 
-// Run a keyword handler for its static analysis, but preserve the original
-// expression.
-const analyzeButPreserveExpression =
-  (handler: KeywordHandler): KeywordHandler =>
-  (expression, context) =>
-    either.match(handler(expression, context), {
-      right: _ => either.makeRight(expression),
-      left: error =>
-        error.kind === 'typeMismatch' ?
-          either.makeLeft(error)
-        : either.makeRight(expression),
-    })
+/**
+ * Elaborate the expression's operands, but don't apply keyword-specific
+ * handling.
+ */
+const elaborateOperandsOnly: KeywordHandler = (expression, context) =>
+  either.map(
+    elaborateOperands(expression, context),
+    ({ expression }) => expression,
+  )

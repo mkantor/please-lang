@@ -1,9 +1,11 @@
 export {
   attachSpanIfAbsent,
   elaborate,
+  elaborateOperands,
   elaborateWithContext,
   type ElaboratedSemanticGraph,
   type ExpressionContext,
+  type ExpressionWithElaboratedOperands,
   type FunctionParameterTypeInfo,
   type KeywordElaborationResult,
   type KeywordHandler,
