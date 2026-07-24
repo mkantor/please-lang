@@ -1,6 +1,6 @@
 import optionAdt from '@matt.kantor/option'
 import { makeOpaqueType } from '../type-formats/opaque-type.js'
-import { replaceAllTypeParametersWithTheirConstraints } from '../type-substitution.js'
+import { upperBoundOfStuckType } from '../type-substitution.js'
 import {
   atomTypeSymbol,
   integerTypeSymbol,
@@ -14,7 +14,7 @@ import {
 
 export const atom = makeOpaqueType(atomTypeSymbol, {
   isAssignableFromLiteralType: (_literalType: string) => true,
-  upperBoundOfStuckType: replaceAllTypeParametersWithTheirConstraints,
+  upperBoundOfStuckType,
   nearestOpaqueAssignableFrom: () => optionAdt.makeSome(integer),
   nearestOpaqueAssignableTo: () => optionAdt.none,
 })
@@ -22,7 +22,7 @@ export const atom = makeOpaqueType(atomTypeSymbol, {
 export const integer = makeOpaqueType(integerTypeSymbol, {
   isAssignableFromLiteralType: literalType =>
     /^(?:0|-?[1-9][0-9]*)$/.test(literalType),
-  upperBoundOfStuckType: replaceAllTypeParametersWithTheirConstraints,
+  upperBoundOfStuckType,
   nearestOpaqueAssignableFrom: () => optionAdt.makeSome(naturalNumber),
   nearestOpaqueAssignableTo: () => optionAdt.makeSome(atom),
 })
@@ -30,7 +30,7 @@ export const integer = makeOpaqueType(integerTypeSymbol, {
 export const naturalNumber = makeOpaqueType(naturalNumberTypeSymbol, {
   isAssignableFromLiteralType: literalType =>
     /^(?:0|[1-9][0-9]*)$/.test(literalType),
-  upperBoundOfStuckType: replaceAllTypeParametersWithTheirConstraints,
+  upperBoundOfStuckType,
   nearestOpaqueAssignableFrom: () => optionAdt.none,
   nearestOpaqueAssignableTo: () => optionAdt.makeSome(integer),
 })

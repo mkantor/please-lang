@@ -34,6 +34,7 @@ import {
 import { nestedIndexedAccess } from './type-key-path.js'
 import { containedTypeParameters } from './type-parameter-analysis.js'
 import {
+  applicableFunctionSignatures,
   applyKeyPathToType,
   applyTypeToArgumentType,
   enumerateInhabitants,
@@ -347,6 +348,8 @@ getTypesForTypeParametersSuite('getTypesForTypeParameters', [
     ],
     new Map([[A, atom]]),
   ],
+
+  [[A, makeApplicationType(atom, atom, new Set())], new Map()],
 ])
 
 const enumerateInhabitantsSuite = testCases(
@@ -634,6 +637,50 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
   ],
 ])
 
+const atomToAtom = makeFunctionType({ parameter: atom, return: atom })
+const keyAssignableToF = makeTypeParameter('key', {
+  assignableTo: makeUnionType(['f']),
+})
+
+const applicableFunctionSignaturesSuite = testCases(
+  applicableFunctionSignatures,
+  type =>
+    `finding applicable function signatures of \`${stringifyTypeForEndUser(type)}\``,
+)
+
+applicableFunctionSignaturesSuite('applicableFunctionSignatures', [
+  [atomToAtom, optionAdt.makeSome([atomToAtom.signature])],
+  [
+    makeIndexedAccessType(makeObjectType({ f: atomToAtom }), keyAssignableToF),
+    optionAdt.makeSome([atomToAtom.signature]),
+  ],
+  [
+    makeIndexedAccessType(
+      makeObjectType({ f: atomToAtom }),
+      makeUnionType(['f']),
+    ),
+    optionAdt.makeSome([atomToAtom.signature]),
+  ],
+  [
+    makeApplicationType(
+      makeFunctionType({ parameter: something, return: atomToAtom }),
+      something,
+      new Set(),
+    ),
+    optionAdt.makeSome([atomToAtom.signature]),
+  ],
+  [
+    makeIntrinsicApplicationType(
+      [atom],
+      _ => either.makeLeft({ kind: 'panic', message: 'unexpected error' }),
+      _ => atomToAtom,
+    ),
+    optionAdt.makeSome([atomToAtom.signature]),
+  ],
+  [makeIndexedAccessType(makeObjectType({ x: atom }), atom), optionAdt.none],
+  [makeApplicationType(atom, atom, new Set()), optionAdt.none],
+])
+
 const applyTypeToArgumentTypeSuite = testCases(
   ([functionLikeType, argumentType]: readonly [
     functionLikeType: Type,
@@ -679,8 +726,21 @@ applyTypeToArgumentTypeSuite('applyTypeToArgumentType', [
     stringifyTypeForEndUser(makeUnionType([integer, atom])),
   ],
 
+  [
+    [
+      makeApplicationType(
+        makeFunctionType({ parameter: something, return: atomToAtom }),
+        something,
+        new Set(),
+      ),
+      atom,
+    ],
+    stringifyTypeForEndUser(atom),
+  ],
+
   [[object, integer], 'none'],
   [[integer, atom], 'none'],
+  [[makeApplicationType(atom, atom, new Set()), atom], 'none'],
 ])
 
 const supplyTypeArgumentSuite = testCases(

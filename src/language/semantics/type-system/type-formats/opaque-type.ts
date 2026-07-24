@@ -1,4 +1,4 @@
-import option, { type None, type Some } from '@matt.kantor/option'
+import option, { type None, type Option, type Some } from '@matt.kantor/option'
 import type { TypeSymbol } from '../../semantic-graph.js'
 import type { ApplicationType } from './application-type.js'
 import type { IndexedAccessType } from './indexed-access-type.js'
@@ -21,7 +21,7 @@ export const makeOpaqueType = (
     // types.
     readonly upperBoundOfStuckType: (
       type: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
-    ) => Type
+    ) => Option<Type>
   } & (
     | {
         readonly nearestOpaqueAssignableFrom: () => None
@@ -43,11 +43,12 @@ export const makeOpaqueType = (
     isAssignableFrom: source => {
       switch (source.kind) {
         case 'application':
-          return self.isAssignableFrom(subtyping.upperBoundOfStuckType(source))
         case 'indexedAccess':
-          return self.isAssignableFrom(subtyping.upperBoundOfStuckType(source))
         case 'intrinsicApplication':
-          return self.isAssignableFrom(subtyping.upperBoundOfStuckType(source))
+          return option.match(subtyping.upperBoundOfStuckType(source), {
+            none: _ => false,
+            some: upperBound => self.isAssignableFrom(upperBound),
+          })
         case 'function':
           return false
         case 'object':
@@ -56,7 +57,7 @@ export const makeOpaqueType = (
           return (
             source === self ||
             option.match(subtyping.nearestOpaqueAssignableFrom(), {
-              none: () => false,
+              none: _ => false,
               some: nearestOpaqueAssignableFrom =>
                 nearestOpaqueAssignableFrom.isAssignableFrom(source),
             })
@@ -92,7 +93,7 @@ export const makeOpaqueType = (
           return (
             target === self ||
             option.match(subtyping.nearestOpaqueAssignableTo(), {
-              none: () => false,
+              none: _ => false,
               some: nearestOpaqueAssignableTo =>
                 nearestOpaqueAssignableTo.isAssignableTo(target),
             })

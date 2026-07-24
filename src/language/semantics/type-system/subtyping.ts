@@ -24,6 +24,7 @@ import {
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArgument,
   supplyTypeArguments,
+  upperBoundOfStuckType,
 } from './type-substitution.js'
 
 export const isAssignable = ({
@@ -89,9 +90,9 @@ export const isAssignable = ({
             })
           ) ?
             true
-          : isAssignable({
-              source: replaceAllTypeParametersWithTheirConstraints(source),
-              target,
+          : option.match(upperBoundOfStuckType(source), {
+              none: _ => false,
+              some: upperBound => isAssignable({ source: upperBound, target }),
             }),
         function: source =>
           matchTypeFormat(target, {
@@ -215,14 +216,14 @@ export const isAssignable = ({
             union: target => isNonUnionAssignableToUnion({ source, target }),
           }),
         indexedAccess: source =>
-          isAssignable({
-            source: replaceAllTypeParametersWithTheirConstraints(source),
-            target,
+          option.match(upperBoundOfStuckType(source), {
+            none: _ => false,
+            some: upperBound => isAssignable({ source: upperBound, target }),
           }),
         intrinsicApplication: source =>
-          isAssignable({
-            source: replaceAllTypeParametersWithTheirConstraints(source),
-            target,
+          option.match(upperBoundOfStuckType(source), {
+            none: _ => false,
+            some: upperBound => isAssignable({ source: upperBound, target }),
           }),
         object: source =>
           matchTypeFormat(target, {
