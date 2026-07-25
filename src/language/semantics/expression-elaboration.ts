@@ -11,6 +11,7 @@ import type {
 } from '../parsing.js'
 import {
   asSemanticGraph,
+  isSemanticGraph,
   stringifyKeyPathForInternalUse,
   type Type,
 } from '../semantics.js'
@@ -25,6 +26,7 @@ import { isKeyword, type Keyword } from './keyword.js'
 import {
   objectNodeFromMolecule,
   objectNodeFromOrderedEntries,
+  orderedEntriesOfObjectNode,
   orderedKeys,
   withProperty,
   type ObjectNode,
@@ -130,7 +132,7 @@ export const elaborateWithContext = (
   )
 
 const elaborateWithinMolecule = (
-  molecule: Molecule,
+  molecule: Molecule | ObjectNode,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> => {
   const moleculeAsSemanticGraph = asSemanticGraph(molecule)
@@ -157,176 +159,114 @@ const elaborateWithinMolecule = (
           panicsAreDeferred: true,
         }
       : context
-    const possibleExpressionAsObjectNode: Writable<ObjectNode> =
-      objectNodeFromOrderedEntries([])
 
-    // Used to initialize the resulting `ObjectNode`'s `orderedKeys` sidecar.
-    const orderedKeysAccumulator: Atom[] = []
+    const propertiesResult = elaborateProperties(
+      isSemanticGraph(molecule) ?
+        orderedEntriesOfObjectNode(molecule)
+      : molecule.entries,
+      childrenContext,
+      {
+        keyPathPrefix: [],
+        skipReelaboration: context.skipReelaboration,
+        propertyZeroMayBeAKeyword: true,
+      },
+    )
 
-    let updatedProgram = context.program
-    const keysNeedingReelaboration = new Set<Atom>()
-    let moleculeIsKeywordExpression = false
-
-    for (const [key, value] of molecule.entries) {
-      const keyUpdateResult = handleAtomWhichMayNotBeAKeyword(key)
-      if (either.isLeft(keyUpdateResult)) {
-        // Immediately bail on error.
-        return keyUpdateResult
-      } else {
-        const updatedKey = keyUpdateResult.value
-        if (typeof value === 'string') {
-          if (!(updatedKey in possibleExpressionAsObjectNode)) {
-            orderedKeysAccumulator.push(updatedKey)
-          }
-          possibleExpressionAsObjectNode[updatedKey] = value
-          if (key === '0' && isKeyword(value)) {
-            moleculeIsKeywordExpression = true
-          }
-        } else {
-          const elaborationResult = elaborateWithinMolecule(value, {
-            ...childrenContext,
-            location: [...context.location, key],
-            program: updatedProgram,
-            skipReelaboration:
-              context.skipReelaboration || moleculeIsKeywordExpression ?
-                true
-              : undefined,
-          })
-          if (either.isLeft(elaborationResult)) {
-            // Immediately bail on error.
-            return elaborationResult
-          }
-
-          const programUpdateResult = updateValueAtKeyPathInSemanticGraph(
-            updatedProgram,
-            [...context.location, key],
-            _ => elaborationResult.value,
-          )
-          if (either.isRight(programUpdateResult)) {
-            updatedProgram = programUpdateResult.value
-          }
-          if (!(updatedKey in possibleExpressionAsObjectNode)) {
-            orderedKeysAccumulator.push(updatedKey)
-          }
-          possibleExpressionAsObjectNode[updatedKey] = elaborationResult.value
-          if (
-            typeof elaborationResult.value !== 'string' &&
-            containsAnyUnelaboratedNodes(elaborationResult.value)
-          ) {
-            keysNeedingReelaboration.add(updatedKey)
-          }
-        }
-      }
-    }
-    possibleExpressionAsObjectNode[orderedKeys] = orderedKeysAccumulator
-
-    const {
-      0: _possibleKeywordAsNode,
-      ...propertiesInNeedOfFinalizationAsNodes
-    } = possibleExpressionAsObjectNode
-
-    // At this point `possibleExpressionAsObjectNode` may still have raw escape
-    // sequences at the top level (whether it is an expression or not).
-    for (const [key, value] of Object.entries(
-      propertiesInNeedOfFinalizationAsNodes,
-    )) {
-      const cannotBeKeyword = extractStringValueIfPossible(value)
-      if (!option.isNone(cannotBeKeyword)) {
-        const valueUpdateResult = handleAtomWhichMayNotBeAKeyword(
-          cannotBeKeyword.value,
-        )
-        if (either.isLeft(valueUpdateResult)) {
-          // Immediately bail on error.
-          return valueUpdateResult
-        } else {
-          const updatedValue = valueUpdateResult.value
-          possibleExpressionAsObjectNode[key] = updatedValue
-        }
-      }
-    }
-
-    // Re-elaborate nodes which are still not fully-elaborated now that sibling
-    // properties have been processed. This resolves forward references where a
-    // `@lookup` is elaborated before its target (e.g. in a program like
-    // `{ a: :b, b: :identity(42) }`, the `:b` lookup originally resolved to the
-    // raw `:identity` application rather than its return value.
-    //
-    // Re-elaboration repeats until a fixed point is reached where no progress
-    // is made (a chain of forward references may require multiple passes, and
-    // cycles like `{ a: :a }` simply don't make progress). Only properties
-    // whose elaboration produced unelaborated nodes are re-elaborated.
-    //
-    // The nested `elaborateWithContext` call uses `skipReelaboration` to
-    // prevent cascading: without it, each re-elaborated subtree would run
-    // its own re-elaboration loops, causing exponential blowup in recursive
-    // programs.
-    //
-    // TODO: Consider less-imperative/more-functional approaches for this (and
-    // also for elaboration as a whole).
-    if (!context.skipReelaboration && !moleculeIsKeywordExpression) {
-      let madeProgress = true
-      while (madeProgress && keysNeedingReelaboration.size > 0) {
-        madeProgress = false
-        for (const key of keysNeedingReelaboration) {
-          const value = possibleExpressionAsObjectNode[key]
-          if (value === undefined) {
-            keysNeedingReelaboration.delete(key)
-            continue
-          }
-          const serialized = serialize(value)
-          if (either.isLeft(serialized)) {
-            continue
-          }
-          const reelaborationResult = elaborateWithContext(serialized.value, {
-            ...childrenContext,
-            location: [...context.location, key],
-            program: updatedProgram,
-            skipReelaboration: true,
-          })
-          if (
-            either.isLeft(reelaborationResult) ||
-            containsAnyUnelaboratedNodes(reelaborationResult.value)
-          ) {
-            continue
-          }
-          possibleExpressionAsObjectNode[key] = reelaborationResult.value
-          const programUpdateResult = updateValueAtKeyPathInSemanticGraph(
-            updatedProgram,
-            [...context.location, key],
-            _ => reelaborationResult.value,
-          )
-          if (either.isRight(programUpdateResult)) {
-            updatedProgram = programUpdateResult.value
-          }
-          keysNeedingReelaboration.delete(key)
-          madeProgress = true
-        }
-      }
-    }
-
-    const possibleKeyword = possibleExpressionAsObjectNode['0']
-    if (possibleKeyword === undefined) {
-      // The input didn't have a `0` property, so it's not an expression.
-      return either.makeRight(possibleExpressionAsObjectNode)
+    if (either.isLeft(propertiesResult)) {
+      // Immediately bail on error.
+      return propertiesResult
     } else {
-      return option.match(extractStringValueIfPossible(possibleKeyword), {
-        none: () => {
-          // The `0` property was not a string, so it's not an expression.
-          return either.makeRight(possibleExpressionAsObjectNode)
-        },
-        some: possibleKeywordAsString =>
-          handleObjectNodeWhichMayBeAExpression(
-            {
-              ...possibleExpressionAsObjectNode,
-              0: possibleKeywordAsString,
-            },
-            {
+      const possibleExpressionAsObjectNode = propertiesResult.value.properties
+      const keysNeedingReelaboration =
+        propertiesResult.value.keysNeedingReelaboration
+      let updatedProgram = propertiesResult.value.program
+
+      // Re-elaborate nodes which are still not fully-elaborated now that
+      // sibling properties have been processed. This resolves forward
+      // references where a `@lookup` is elaborated before its target (e.g. in a
+      // program like `{ a: :b, b: :identity(42) }`, the `:b` lookup originally
+      // resolved to the raw `:identity` application rather than its return
+      // value.
+      //
+      // Re-elaboration repeats until a fixed point is reached where no progress
+      // is made (a chain of forward references may require multiple passes, and
+      // cycles like `{ a: :a }` simply don't make progress). Only properties
+      // whose elaboration produced unelaborated nodes are re-elaborated.
+      //
+      // The nested `elaborateWithContext` call uses `skipReelaboration` to
+      // prevent cascading: without it, each re-elaborated subtree would run
+      // its own re-elaboration loops, causing exponential blowup in recursive
+      // programs.
+      //
+      // TODO: Consider less-imperative/more-functional approaches for this (and
+      // also for elaboration as a whole).
+      if (
+        !context.skipReelaboration &&
+        !propertiesResult.value.propertiesFormAKeywordExpression
+      ) {
+        let madeProgress = true
+        while (madeProgress && keysNeedingReelaboration.size > 0) {
+          madeProgress = false
+          for (const key of keysNeedingReelaboration) {
+            const value = possibleExpressionAsObjectNode[key]
+            if (value === undefined) {
+              keysNeedingReelaboration.delete(key)
+              continue
+            }
+            const serialized = serialize(value)
+            if (either.isLeft(serialized)) {
+              continue
+            }
+            const reelaborationResult = elaborateWithContext(serialized.value, {
               ...childrenContext,
+              location: [...context.location, key],
               program: updatedProgram,
-              location: context.location,
-            },
-          ),
-      })
+              skipReelaboration: true,
+            })
+            if (
+              either.isLeft(reelaborationResult) ||
+              containsAnyUnelaboratedNodes(reelaborationResult.value)
+            ) {
+              continue
+            }
+            possibleExpressionAsObjectNode[key] = reelaborationResult.value
+            updatedProgram = programWithValueAtKeyPath(
+              updatedProgram,
+              [...context.location, key],
+              reelaborationResult.value,
+            )
+            keysNeedingReelaboration.delete(key)
+            madeProgress = true
+          }
+        }
+      }
+
+      // Directly-written keyword expressions were already handled above, but a
+      // `0` property which elaborated to a string may be a computed keyword.
+      const possibleKeyword = possibleExpressionAsObjectNode['0']
+      if (possibleKeyword === undefined) {
+        // The input didn't have a `0` property, so it's not an expression.
+        return either.makeRight(possibleExpressionAsObjectNode)
+      } else {
+        return option.match(extractStringValueIfPossible(possibleKeyword), {
+          none: () => {
+            // The `0` property was not a string, so it's not an expression.
+            return either.makeRight(possibleExpressionAsObjectNode)
+          },
+          some: possibleKeywordAsString =>
+            handleObjectNodeWhichMayBeAExpression(
+              {
+                ...possibleExpressionAsObjectNode,
+                0: possibleKeywordAsString,
+              },
+              {
+                ...childrenContext,
+                program: updatedProgram,
+                location: context.location,
+              },
+            ),
+        })
+      }
     }
   }
 }
@@ -352,6 +292,132 @@ const handleObjectNodeWhichMayBeAExpression = (
       )
 
   return either.mapLeft(result, attachSpanIfAbsent(context))
+}
+
+/**
+ * Elaborate each of the given properties, updating the program.
+ *
+ * The returned `properties` and `keysNeedingReelaboration` are freshly-created
+ * and may be safely mutated at return sites.
+ */
+const elaborateProperties = (
+  propertiesToElaborate: readonly (readonly [Atom, SemanticGraph | Molecule])[],
+  context: ExpressionContext,
+  options: {
+    /** Appended to `context.location` to locate the properties themselves. */
+    readonly keyPathPrefix: KeyPath
+    readonly skipReelaboration: true | undefined
+    /**
+     * When `true`, property `0` is left escaped (it may be a keyword, in which
+     * case `handleObjectNodeWhichMayBeAExpression` unescapes it instead).
+     */
+    readonly propertyZeroMayBeAKeyword: boolean
+  },
+): Either<
+  ElaborationError,
+  {
+    readonly properties: Writable<ObjectNode>
+    readonly program: SemanticGraph
+    readonly keysNeedingReelaboration: Set<Atom>
+    readonly propertiesFormAKeywordExpression: boolean
+  }
+> => {
+  const properties: Writable<ObjectNode> = objectNodeFromOrderedEntries([])
+
+  // Used to initialize the resulting `ObjectNode`'s `orderedKeys` sidecar.
+  const orderedKeysAccumulator: Atom[] = []
+
+  let updatedProgram = context.program
+  const keysNeedingReelaboration = new Set<Atom>()
+
+  // Set once a keyword has been seen at `0`, which makes the properties
+  // following it that keyword's operands. Neither they nor the expression they
+  // belong to may run re-elaboration loops.
+  let propertiesFormAKeywordExpression = false
+
+  for (const [key, value] of propertiesToElaborate) {
+    const keyUpdateResult = handleAtomWhichMayNotBeAKeyword(key)
+    if (either.isLeft(keyUpdateResult)) {
+      // Immediately bail on error.
+      return keyUpdateResult
+    } else {
+      const updatedKey = keyUpdateResult.value
+      if (
+        typeof value === 'string' ||
+        typeof value === 'symbol' ||
+        typeof value === 'function'
+      ) {
+        // No elaboration is required.
+        if (!(updatedKey in properties)) {
+          orderedKeysAccumulator.push(updatedKey)
+        }
+        properties[updatedKey] = value
+        if (
+          options.propertyZeroMayBeAKeyword &&
+          key === '0' &&
+          typeof value === 'string' &&
+          isKeyword(value)
+        ) {
+          propertiesFormAKeywordExpression = true
+        }
+      } else {
+        const location = [...context.location, ...options.keyPathPrefix, key]
+        const elaborationResult = elaborateWithinMolecule(value, {
+          ...context,
+          location,
+          program: updatedProgram,
+          skipReelaboration:
+            options.skipReelaboration || propertiesFormAKeywordExpression ?
+              true
+            : undefined,
+        })
+        if (either.isLeft(elaborationResult)) {
+          // Immediately bail on error.
+          return elaborationResult
+        } else {
+          updatedProgram = programWithValueAtKeyPath(
+            updatedProgram,
+            location,
+            elaborationResult.value,
+          )
+          if (!(updatedKey in properties)) {
+            orderedKeysAccumulator.push(updatedKey)
+          }
+          properties[updatedKey] = elaborationResult.value
+          if (
+            options.skipReelaboration === undefined &&
+            !propertiesFormAKeywordExpression &&
+            typeof elaborationResult.value !== 'string' &&
+            containsAnyUnelaboratedNodes(elaborationResult.value)
+          ) {
+            keysNeedingReelaboration.add(updatedKey)
+          }
+        }
+      }
+    }
+  }
+  properties[orderedKeys] = orderedKeysAccumulator
+
+  // At this point `properties` may still have raw escape sequences.
+  for (const [key, value] of Object.entries(properties)) {
+    const valueUpdateResult =
+      options.propertyZeroMayBeAKeyword && key === '0' ?
+        either.makeRight(value)
+      : unescapeIfAtom(value)
+    if (either.isLeft(valueUpdateResult)) {
+      // Immediately bail on error.
+      return valueUpdateResult
+    } else {
+      properties[key] = valueUpdateResult.value
+    }
+  }
+
+  return either.makeRight({
+    properties,
+    program: updatedProgram,
+    keysNeedingReelaboration,
+    propertiesFormAKeywordExpression,
+  })
 }
 
 /**
@@ -388,6 +454,29 @@ const spanForLocation = (
       undefined
     : spanForLocation(spans, location.slice(0, -1))))
   )
+
+/**
+ * Write `value` into `program` at `keyPath`, leaving the program unchanged if
+ * the path doesn't resolve (elaboration also runs on expressions which aren't
+ * located in `program`, e.g. user functions called from the standard library).
+ */
+const programWithValueAtKeyPath = (
+  program: SemanticGraph,
+  keyPath: KeyPath,
+  value: SemanticGraph,
+): SemanticGraph =>
+  either.unwrapOrElse(
+    updateValueAtKeyPathInSemanticGraph(program, keyPath, _ => value),
+    _ => program,
+  )
+
+const unescapeIfAtom = (
+  value: SemanticGraph,
+): Either<InvalidSyntaxTreeError, SemanticGraph> =>
+  option.match(extractStringValueIfPossible(value), {
+    none: _ => either.makeRight(value),
+    some: handleAtomWhichMayNotBeAKeyword,
+  })
 
 const handleAtomWhichMayNotBeAKeyword = (
   atom: Atom,
