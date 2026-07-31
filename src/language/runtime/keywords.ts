@@ -5,6 +5,7 @@ import type { RemoveIndexSignatures } from '../../utility-types.js'
 import { writeOutput } from '../cli/output.js'
 import { keywordHandlers as compilerKeywordHandlers } from '../compiling.js'
 import {
+  elaborateOperands,
   isFunctionNode,
   keyPathToLookupExpression,
   makeFunctionNode,
@@ -159,29 +160,33 @@ export const keywordHandlers: KeywordHandlers = {
   /**
    * Evaluates the given function, passing runtime context captured in `world`.
    */
-  '@runtime': (expression, expressionContext) =>
+  '@runtime': (expression, dispatchContext) =>
     either.flatMap(
-      readRuntimeExpression(expression),
-      ({ 1: { function: runtimeFunction } }) => {
-        if (!isFunctionNode(runtimeFunction)) {
-          return either.makeLeft({
-            kind: 'panic',
-            message:
-              'a function must be provided via the property `function` or `0`',
-          })
-        } else {
-          const result = runtimeFunction(
-            runtimeContext(runtimeFunction.parameterName),
-            expressionContext,
-          )
-          return either.mapLeft(result, error => ({
-            // The runtime function panicked or had an unavailable dependency
-            // (which results in a panic anyway in this context).
-            kind: 'panic',
-            message: error.message,
-          }))
-        }
-      },
+      elaborateOperands(expression, dispatchContext),
+      ({ expression, context: expressionContext }) =>
+        either.flatMap(
+          readRuntimeExpression(expression),
+          ({ 1: { function: runtimeFunction } }) => {
+            if (!isFunctionNode(runtimeFunction)) {
+              return either.makeLeft({
+                kind: 'panic',
+                message:
+                  'a function must be provided via the property `function` or `0`',
+              })
+            } else {
+              const result = runtimeFunction(
+                runtimeContext(runtimeFunction.parameterName),
+                expressionContext,
+              )
+              return either.mapLeft(result, error => ({
+                // The runtime function panicked or had an unavailable
+                // dependency (which results in a panic anyway in this context).
+                kind: 'panic',
+                message: error.message,
+              }))
+            }
+          },
+        ),
     ),
 }
 

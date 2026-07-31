@@ -2,13 +2,13 @@ import either, { type Either } from '@matt.kantor/either'
 import type { ElaborationError } from '../../../errors.js'
 import {
   attachSpanIfAbsent,
+  elaborateOperands,
   isAssignable,
   readCheckExpression,
   stringifySemanticGraphForEndUser,
   stringifyTypeForEndUser,
   type Expression,
   type ExpressionContext,
-  type KeywordHandler,
   type SemanticGraph,
 } from '../../../semantics.js'
 import {
@@ -61,10 +61,15 @@ const check = ({
   )
 }
 
-export const checkKeywordHandler: KeywordHandler = (
+export const checkKeywordHandler = (
   expression: Expression,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> =>
-  either.flatMap(readCheckExpression(expression), ({ 1: { value, type } }) =>
-    check({ value, type, context }),
+  either.flatMap(
+    elaborateOperands(expression, context),
+    ({ expression, context }) =>
+      either.flatMap(
+        readCheckExpression(expression),
+        ({ 1: { value, type } }) => check({ value, type, context }),
+      ),
   )

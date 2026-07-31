@@ -6,6 +6,7 @@ import {
   attachSpanIfAbsent,
   containedTypeParameters,
   containsAnyUnelaboratedNodes,
+  elaborateOperands,
   getTypesForTypeParameters,
   inferType,
   isAssignable,
@@ -17,9 +18,9 @@ import {
   supplyTypeArguments,
   typeParameterAssignableToConstraintKey,
   typeParameterIdentitiesWithinType,
+  type ApplyExpression,
   type Expression,
   type ExpressionContext,
-  type KeywordHandler,
   type SemanticGraph,
   type Type,
   type TypeParameter,
@@ -179,82 +180,91 @@ const checkApplication = (
     },
   })
 
-export const applyKeywordHandler: KeywordHandler = (
+export const applyKeywordHandler = (
   expression: Expression,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> =>
   either.flatMap(
-    readApplyExpression(expression),
+    readAndAnalyzeApplyExpression(expression, context),
     (applyExpression): Either<ElaborationError, SemanticGraph> => {
       const functionToApply = applyExpression[1].function
       const argument = applyExpression[1].argument
 
-      const subContextForFunction = {
-        ...context,
-        location: [...context.location, '1', 'function'],
+      if (containsAnyUnelaboratedNodes(argument)) {
+        // The argument isn't ready, so keep the @apply unelaborated.
+        return either.makeRight(applyExpression)
+      } else if (isFunctionNode(functionToApply)) {
+        const result = functionToApply(argument, context)
+        if (either.isLeft(result)) {
+          if (result.value.kind === 'dependencyUnavailable') {
+            // Keep the @apply unelaborated.
+            return either.makeRight(applyExpression)
+          } else {
+            return either.makeLeft(result.value)
+          }
+        } else {
+          return result
+        }
+      } else if (containsAnyUnelaboratedNodes(functionToApply)) {
+        // The function isn't ready, so keep the @apply unelaborated.
+        return either.makeRight(applyExpression)
+      } else {
+        return either.makeLeft({
+          kind: 'invalidExpression',
+          message: 'only functions can be applied',
+        })
       }
-      const subContextForArgument = {
-        ...context,
-        location: [...context.location, '1', 'argument'],
-      }
+    },
+  )
 
-      const argumentTypeCheck = either.flatMap(
-        either.mapLeft(
-          inferType(functionToApply, subContextForFunction),
-          attachSpanIfAbsent(subContextForFunction),
-        ),
-        functionType =>
-          either.flatMap(
+export const readAndAnalyzeApplyExpression = (
+  expression: Expression,
+  context: ExpressionContext,
+): Either<ElaborationError, ApplyExpression> =>
+  either.flatMap(
+    elaborateOperands(expression, context),
+    ({ expression, context }) =>
+      either.flatMap(readApplyExpression(expression), applyExpression => {
+        const functionToApply = applyExpression[1].function
+        const argument = applyExpression[1].argument
+
+        const subContextForFunction = {
+          ...context,
+          location: [...context.location, '1', 'function'],
+        }
+        const subContextForArgument = {
+          ...context,
+          location: [...context.location, '1', 'argument'],
+        }
+
+        const argumentTypeCheck = either.flatMap(
+          either.sequence([
+            either.mapLeft(
+              inferType(functionToApply, subContextForFunction),
+              attachSpanIfAbsent(subContextForFunction),
+            ),
             either.mapLeft(
               inferType(argument, subContextForArgument),
               attachSpanIfAbsent(subContextForArgument),
             ),
-            argumentType =>
-              either.mapLeft(
-                checkApplication(
-                  argument,
-                  functionType,
-                  argumentType,
-                  rigidTypeParameterIdentities(context),
-                ),
-                error =>
-                  // A `typeMismatch` here means the argument didn't fit the
-                  // parameter, so blame the argument specifically.
-                  error.kind === 'typeMismatch' ?
-                    attachSpanIfAbsent(subContextForArgument)(error)
-                  : error,
+          ]),
+          ([functionType, argumentType]) =>
+            either.mapLeft(
+              checkApplication(
+                argument,
+                functionType,
+                argumentType,
+                rigidTypeParameterIdentities(context),
               ),
-          ),
-      )
+              error =>
+                // A `typeMismatch` here means the argument didn't fit the
+                // parameter, so blame the argument specifically.
+                error.kind === 'typeMismatch' ?
+                  attachSpanIfAbsent(subContextForArgument)(error)
+                : error,
+            ),
+        )
 
-      return either.flatMap(
-        argumentTypeCheck,
-        (): Either<ElaborationError, SemanticGraph> => {
-          if (containsAnyUnelaboratedNodes(argument)) {
-            // The argument isn't ready, so keep the @apply unelaborated.
-            return either.makeRight(applyExpression)
-          } else if (isFunctionNode(functionToApply)) {
-            const result = functionToApply(argument, context)
-            if (either.isLeft(result)) {
-              if (result.value.kind === 'dependencyUnavailable') {
-                // Keep the @apply unelaborated.
-                return either.makeRight(applyExpression)
-              } else {
-                return either.makeLeft(result.value)
-              }
-            } else {
-              return result
-            }
-          } else if (containsAnyUnelaboratedNodes(functionToApply)) {
-            // The function isn't ready, so keep the @apply unelaborated.
-            return either.makeRight(applyExpression)
-          } else {
-            return either.makeLeft({
-              kind: 'invalidExpression',
-              message: 'only functions can be applied',
-            })
-          }
-        },
-      )
-    },
+        return either.map(argumentTypeCheck, _ => applyExpression)
+      }),
   )
