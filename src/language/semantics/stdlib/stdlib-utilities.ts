@@ -1,5 +1,6 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
+import { defaultConfiguration } from '../../configuration.js'
 import type { Bug, UnserializableValueError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import {
@@ -90,6 +91,9 @@ export const applyValidatingParameterType = (
  * "outside your program" and don't have a meaningful `ExpressionContext`).
  */
 export const emptyContextForStdlibApplications: ExpressionContext = {
+  // This context belongs to no particular run, so the best it can do is supply
+  // defaults.
+  configuration: defaultConfiguration,
   keywordHandlers: {
     '@apply': either.makeRight,
     '@check': either.makeRight,

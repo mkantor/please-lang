@@ -1,10 +1,13 @@
 import { compile } from '../compiling/compiler.js'
+import { defaultConfiguration } from '../configuration.js'
 import { handleInput } from './input.js'
 import { handleOutput } from './output.js'
 
 const main = (process: NodeJS.Process): Promise<undefined> =>
   handleOutput(process, () =>
-    handleInput(process, input => compile(input, new Map())),
+    handleInput(process, input =>
+      compile(defaultConfiguration)(input, new Map()),
+    ),
   )
 
 await main(process)

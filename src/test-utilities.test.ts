@@ -2,6 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
 import { compile } from './language/compiling.js'
+import { defaultConfiguration } from './language/configuration.js'
 import type {
   CompilationError,
   ParseError,
@@ -74,12 +75,12 @@ export const toSyntaxTree = (input: JsonValue): SyntaxTree =>
     )
 
 export const compileWithoutSpans = (syntaxTree: SyntaxTree) =>
-  compile(syntaxTree, new Map())
+  compile(defaultConfiguration)(syntaxTree, new Map())
 
 export const parseAndCompileAndRun = (input: string): ProgramResult => {
   const syntaxTree = parse(input)
   const program = either.flatMap(syntaxTree, compileWithoutSpans)
-  const runtimeOutput = either.flatMap(program, evaluate)
+  const runtimeOutput = either.flatMap(program, evaluate(defaultConfiguration))
   return runtimeOutput
 }
 

@@ -849,6 +849,7 @@ const getFunctionParameterType = (
                 positionInEnclosingExpression === 'argument'
               ) {
                 const contextOfEnclosingExpression: ExpressionContext = {
+                  configuration: contextOfFunction.configuration,
                   program: contextOfFunction.program,
                   keywordHandlers: contextOfFunction.keywordHandlers,
                   location: contextOfFunction.location.slice(0, -2),
@@ -1008,6 +1009,7 @@ const resolveEnclosingFunctionParameters = (
             const parameterTypeInfoResult = getFunctionParameterType(
               functionExpression,
               {
+                configuration: context.configuration,
                 keywordHandlers: context.keywordHandlers,
                 program: context.program,
                 location: enclosingFunctionLocation,

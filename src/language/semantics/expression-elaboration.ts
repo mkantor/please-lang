@@ -2,6 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
 import { withPhantomData, type WithPhantomData } from '../../phantom-data.js'
 import type { Writable } from '../../utility-types.js'
+import type { Configuration } from '../configuration.js'
 import type { ElaborationError, InvalidSyntaxTreeError } from '../errors.js'
 import type {
   Atom,
@@ -59,6 +60,7 @@ export type FunctionParameterTypeInfo = {
 }
 
 export type ExpressionContext = {
+  readonly configuration: Configuration
   readonly keywordHandlers: KeywordHandlers
   readonly location: KeyPath
   readonly program: SemanticGraph
@@ -108,20 +110,23 @@ export type KeywordHandler = (
 
 export type KeywordHandlers = Readonly<Record<Keyword, KeywordHandler>>
 
-export const elaborate = (
-  program: SyntaxTree,
-  keywordHandlers: KeywordHandlers,
-  spans?: ExpressionSpansByLocation,
-): Either<ElaborationError, ElaboratedSemanticGraph> =>
-  elaborateWithContext(program, {
-    keywordHandlers,
-    location: [],
-    mutableInferenceCache: new Map(),
-    mutableFunctionParameterCache: new Map(),
-    program:
-      typeof program === 'string' ? program : objectNodeFromMolecule(program),
-    sourceSpans: spans,
-  })
+export const elaborate =
+  (configuration: Configuration) =>
+  (
+    program: SyntaxTree,
+    keywordHandlers: KeywordHandlers,
+    spans?: ExpressionSpansByLocation,
+  ): Either<ElaborationError, ElaboratedSemanticGraph> =>
+    elaborateWithContext(program, {
+      configuration,
+      keywordHandlers,
+      location: [],
+      mutableInferenceCache: new Map(),
+      mutableFunctionParameterCache: new Map(),
+      program:
+        typeof program === 'string' ? program : objectNodeFromMolecule(program),
+      sourceSpans: spans,
+    })
 
 export const elaborateWithContext = (
   program: SyntaxTree,

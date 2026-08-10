@@ -234,6 +234,7 @@ export const lookup = ({
       return lookup({
         key,
         context: {
+          configuration: context.configuration,
           keywordHandlers: context.keywordHandlers,
           location: result.nextLocationToCheckFrom,
           program: context.program,

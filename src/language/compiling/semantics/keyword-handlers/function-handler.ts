@@ -254,6 +254,7 @@ const apply = (
       ),
       updatedProgram =>
         elaborateWithContext(serializedBody, {
+          configuration: functionDefinitionContext.configuration,
           keywordHandlers: functionDefinitionContext.keywordHandlers,
           location: [...functionDefinitionContext.location, returnKey],
           program: updatedProgram,

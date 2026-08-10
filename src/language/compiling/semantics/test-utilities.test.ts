@@ -2,6 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import { withPhantomData } from '../../../phantom-data.js'
 import { testCases, toSyntaxTree } from '../../../test-utilities.test.js'
 import type { JsonValue } from '../../../utility-types.js'
+import { defaultConfiguration } from '../../configuration.js'
 import type { ElaborationError } from '../../errors.js'
 import {
   elaborate,
@@ -11,7 +12,8 @@ import {
 import { keywordHandlers } from './keywords.js'
 
 export const elaborationSuite = testCases(
-  (input: JsonValue) => elaborate(toSyntaxTree(input), keywordHandlers),
+  (input: JsonValue) =>
+    elaborate(defaultConfiguration)(toSyntaxTree(input), keywordHandlers),
   input => `elaborating \`${JSON.stringify(input)}\``,
 )
 

@@ -2,6 +2,7 @@ import either from '@matt.kantor/either'
 import option from '@matt.kantor/option'
 import assert from 'node:assert'
 import { formatError } from './language/cli/error-formatting.js'
+import { defaultConfiguration } from './language/configuration.js'
 import { parse } from './language/parsing/parser.js'
 import { evaluate } from './language/runtime.js'
 import * as orderedRecord from './ordered-record.js'
@@ -37,7 +38,10 @@ const endToEnd = (input: string) => {
     unparseAndRoundtrip,
   )
 
-  const runtimeOutput: ProgramResult = either.flatMap(program, evaluate)
+  const runtimeOutput: ProgramResult = either.flatMap(
+    program,
+    evaluate(defaultConfiguration),
+  )
 
   // These errors could be stitched into the returned `Either`'s left, but
   // that'd lead to worse test reporting.
