@@ -59,6 +59,12 @@ suite('compile attaches source spans to elaboration errors', () => {
     assert.equal(source.slice(14, 22), ':missing')
   })
 
+  test('an invalid parameter annotation blames the annotation', () => {
+    const source = '(a: { [:something.type]: a }) => :a object.lookup a'
+    assert.deepEqual(compileErrorSpan(source), [4, 28])
+    assert.equal(source.slice(4, 28), '{ [:something.type]: a }')
+  })
+
   test('omits the span when compiled with no spans', () => {
     const lookupNonexistentKey = toSyntaxTree({
       0: '@lookup',
