@@ -65,6 +65,26 @@ export const recordSpan =
     }))
 
 /**
+ * Like `recordSpan`, but for a node built around one which was already parsed
+ * (e.g. the `@check` which `a ~ b` builds around `a`). The produced node spans
+ * from where `initialNode` began through the end of what `parser` consumed.
+ */
+export const recordSpanExtending =
+  (initialNode: SpannedTree) =>
+  (parser: Parser<SpannedTree>): Parser<SpannedTree> =>
+  (input, offset = 0n) =>
+    either.map(parser(input, offset), success => ({
+      offset: success.offset,
+      output:
+        initialNode.span === undefined ?
+          success.output
+        : {
+            ...success.output,
+            span: spanEndingAt(initialNode.span, success.offset),
+          },
+    }))
+
+/**
  * Build a synthetic atom node (no source span of its own).
  */
 export const syntheticAtom = (value: Atom): SpannedAtom => ({
@@ -95,6 +115,8 @@ const spanFromOffsets = (start: bigint, end: bigint): Span => [
   Number(start),
   Number(end),
 ]
+
+const spanEndingAt = (span: Span, end: bigint): Span => [span[0], Number(end)]
 
 // Recursively find all spans within the given `node`.
 const spanEntries = (

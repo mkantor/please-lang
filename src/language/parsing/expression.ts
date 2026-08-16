@@ -39,6 +39,7 @@ import {
 } from './parentheses.js'
 import {
   recordSpan,
+  recordSpanExtending,
   spannedAtom,
   syntheticAtom,
   syntheticMolecule,
@@ -537,10 +538,9 @@ const trailingUnionTokens = map(
           flatMap(
             lazy(() => expressionWhichMayHaveTrailingExpressions),
             initialExpression =>
-              oneOf([
-                ...trailingExpressionsExceptUnion(initialExpression),
-                map(nothing, _ => initialExpression),
-              ]),
+              withTrailingExpressions({ unionsMayFollow: false })(
+                initialExpression,
+              ),
           ),
           trivia,
           unionBar,
@@ -857,19 +857,38 @@ const trailingUnionExpression = (initialExpression: SpannedTree) =>
     unionTokensToExpression([initialExpression, ...trailingUnionTokens]),
   )
 
-const trailingExpressionsExceptUnion = (initialExpression: SpannedTree) =>
-  [
-    trailingInfixExpression(initialExpression),
-    trailingSignatureExpression(initialExpression),
-    trailingCheckExpression(initialExpression),
-  ] as const
+/**
+ * Parse a chain of trailing expressions, each taking the previous parse result
+ * as its left-hand side. This lets `1 + 1 ~ 2` parse as `(1 + 1) ~ 2` rather
+ * than `1 + (1 ~ 2)`.
+ *
+ * Union members set `unionsMayFollow` to `false`, keeping `a | b | c` a single
+ * flat union (see `trailingUnionTokens`).
+ */
+const withTrailingExpressions =
+  (options: { readonly unionsMayFollow: boolean }) =>
+  (initialExpression: SpannedTree): Parser<SpannedTree> => {
+    const chainedAfter = (trailingExpression: Parser<SpannedTree>) =>
+      flatMap(
+        recordSpanExtending(initialExpression)(trailingExpression),
+        withTrailingExpressions(options),
+      )
+    return oneOf([
+      chainedAfter(trailingInfixExpression(initialExpression)),
+      // `@signature`s must be attempted before `@check`s: `>` is a valid atom,
+      // so `a ~>` would otherwise be parsed as `a ~ >`.
+      chainedAfter(trailingSignatureExpression(initialExpression)),
+      chainedAfter(trailingCheckExpression(initialExpression)),
+      ...(options.unionsMayFollow ?
+        [chainedAfter(trailingUnionExpression(initialExpression))]
+      : []),
+      map(nothing, _ => initialExpression),
+    ])
+  }
 
 export const expression: Parser<SpannedTree> = recordSpan(
-  flatMap(expressionWhichMayHaveTrailingExpressions, initialExpression =>
-    oneOf([
-      ...trailingExpressionsExceptUnion(initialExpression),
-      trailingUnionExpression(initialExpression),
-      map(nothing, _ => initialExpression),
-    ]),
+  flatMap(
+    expressionWhichMayHaveTrailingExpressions,
+    withTrailingExpressions({ unionsMayFollow: true }),
   ),
 )
