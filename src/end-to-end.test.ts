@@ -906,6 +906,29 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     typeMismatch,
   ],
   [
+    `(stuff: { a: :integer.type } | { a: :boolean.type }) => :stuff object.lookup a ~ :option.type(:integer.type | :boolean.type)`,
+    assertSuccess,
+  ],
+  [
+    `(stuff: { a: :integer.type } | { a: :boolean.type }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    typeMismatch,
+  ],
+  [
+    `(stuff: {
+      a: :integer.type
+      [:atom.type]: :nothing.type
+    } | {
+      b: :boolean.type
+      [:atom.type]: :nothing.type
+    }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    assertSuccess,
+  ],
+  [
+    `(stuff: { a: :integer.type } | { b: :boolean.type }) =>
+      :stuff object.lookup a ~ :option.type(:integer.type)`,
+    typeMismatch,
+  ],
+  [
     `((x: { [:atom.type]: :integer.type }) => :x)({ a: 42 }) ~ { a: 42 }`,
     success({ a: '42' }),
   ],

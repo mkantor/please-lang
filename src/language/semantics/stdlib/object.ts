@@ -12,12 +12,15 @@ import {
   makeUnionType,
   types,
   unionOfTypes,
+  type ObjectType,
   type Type,
+  type UnionType,
 } from '../type-system.js'
 import {
   asUnionWithLiteralAtomMembers,
   effectiveExcessClauses,
   excessBoundForKey,
+  simplifyUnionType,
 } from '../type-system/subtyping.js'
 import { concreteUpperBound } from '../type-system/type-substitution.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
@@ -115,7 +118,7 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
  * possibly select. The `some` member is omitted when no value is selectable,
  * and the `none` member is omitted when the key definitely selects a value.
  */
-const lookupReturnType = ({
+const optionType = ({
   possibleValueTypes,
   mayBeNone,
 }: {
@@ -159,6 +162,78 @@ const literalKeyCandidates = (keyType: Type): Option<ReadonlySet<Atom>> => {
     : option.none
 }
 
+/**
+ * Every member of a union as an object type, or `none` when one or more members
+ * aren't object types.
+ */
+const memberObjectTypes = (
+  unionType: UnionType,
+): Option<readonly ObjectType[]> =>
+  option.sequence(
+    [...unionType.members].map(member => {
+      if (typeof member === 'string') {
+        return option.none
+      } else {
+        const memberBound = concreteUpperBound(member)
+        return memberBound.kind === 'object' ?
+            option.makeSome(memberBound)
+          : option.none
+      }
+    }),
+  )
+
+const lookupReturnTypeForObjectType = (
+  possibleKeys: Option<ReadonlySet<Atom>>,
+  objectType: ObjectType,
+): Type =>
+  option.match(possibleKeys, {
+    some: keys => {
+      const presentValueTypes = [...keys].flatMap(key => {
+        const valueType = objectType.children[key]
+        return valueType === undefined ? [] : [valueType]
+      })
+      const someKeyMayBeAbsent = presentValueTypes.length !== keys.size
+      const absentKeyBounds = [...keys]
+        .filter(key => objectType.children[key] === undefined)
+        .map(key => excessBoundForKey(key, objectType.excess))
+      return (
+        !someKeyMayBeAbsent ?
+          optionType({
+            possibleValueTypes: presentValueTypes,
+            mayBeNone: false,
+          })
+          // A key not among the children may exist as an unlisted property,
+          // whose value is bounded by the last clause matching the key.
+        : absentKeyBounds.some(bound => bound === types.something) ?
+          types.option(types.something)
+        : optionType({
+            possibleValueTypes: [
+              ...presentValueTypes,
+              ...absentKeyBounds.filter(bound => !isBottomType(bound)),
+            ],
+            mayBeNone: true,
+          })
+      )
+    },
+    none: _ => {
+      // Whatever the key turns out to be, it can only select one of the
+      // object's own property values, an unlisted property's value (bounded
+      // by the object's excess clauses), or nothing.
+      const objectExcess = effectiveExcessClauses(objectType.excess)
+      return objectExcess.some(clause => clause.values === types.something) ?
+          types.option(types.something)
+        : optionType({
+            possibleValueTypes: [
+              ...Object.values(objectType.children),
+              ...objectExcess
+                .map(clause => clause.values)
+                .filter(clauseValues => !isBottomType(clauseValues)),
+            ],
+            mayBeNone: true,
+          })
+    },
+  })
+
 // `lookup(key)(object)` returns `some(object[key])` when the key is definitely
 // present, `none` when definitely absent (e.g. a closed object lacking it),
 // otherwise a union covering all possible outcomes.
@@ -172,60 +247,31 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
     throw new Error(
       '`lookup` function did not receive two arguments. This is a bug!',
     )
-  } else if (objectType.kind !== 'object') {
-    // TODO: Consider distributing over union members, so that looking a key up
-    // in `{ a: :integer.type } | { a: :boolean.type }` yields
-    // `:option.type(:integer.type | :boolean.type)`.
-    return types.option(types.something)
   } else {
-    return option.match(literalKeyCandidates(keyType), {
-      some: possibleKeys => {
-        const presentValueTypes = [...possibleKeys].flatMap(key => {
-          const valueType = objectType.children[key]
-          return valueType === undefined ? [] : [valueType]
+    const possibleKeys = literalKeyCandidates(keyType)
+    return (
+      objectType.kind === 'object' ?
+        lookupReturnTypeForObjectType(possibleKeys, objectType)
+      : objectType.kind === 'union' ?
+        // For each object-typed member, look up the property, then union the
+        // results. `{ a: 1 } | { a: 2 }` with key `a` emits `option(1 | 2)`.
+        option.match(memberObjectTypes(objectType), {
+          none: _ =>
+            // TODO: When one or more members are non-object types, could they
+            // be filtered out instead of giving up? A lookup on `a | { z: 1 }`
+            // can only ever return `option(1)`, after all.
+            types.option(types.something),
+          some: members =>
+            simplifyIfUnion(
+              unionOfTypes(
+                members.map(member =>
+                  lookupReturnTypeForObjectType(possibleKeys, member),
+                ),
+              ),
+            ),
         })
-        const someKeyMayBeAbsent =
-          presentValueTypes.length !== possibleKeys.size
-        const absentKeyBounds = [...possibleKeys]
-          .filter(key => objectType.children[key] === undefined)
-          .map(key => excessBoundForKey(key, objectType.excess))
-        return (
-          !someKeyMayBeAbsent ?
-            lookupReturnType({
-              possibleValueTypes: presentValueTypes,
-              mayBeNone: false,
-            })
-            // A key not among the children may exist as an unlisted property,
-            // whose value is bounded by the last clause matching the key.
-          : absentKeyBounds.some(bound => bound === types.something) ?
-            types.option(types.something)
-          : lookupReturnType({
-              possibleValueTypes: [
-                ...presentValueTypes,
-                ...absentKeyBounds.filter(bound => !isBottomType(bound)),
-              ],
-              mayBeNone: true,
-            })
-        )
-      },
-      none: _ => {
-        // Whatever the key turns out to be, it can only select one of the
-        // object's own property values, an unlisted property's value (bounded
-        // by the object's excess clauses), or nothing.
-        const objectExcess = effectiveExcessClauses(objectType.excess)
-        return objectExcess.some(clause => clause.values === types.something) ?
-            types.option(types.something)
-          : lookupReturnType({
-              possibleValueTypes: [
-                ...Object.values(objectType.children),
-                ...objectExcess
-                  .map(clause => clause.values)
-                  .filter(clauseValues => !isBottomType(clauseValues)),
-              ],
-              mayBeNone: true,
-            })
-      },
-    })
+      : types.option(types.something)
+    )
   }
 }
 
@@ -307,3 +353,6 @@ export const object = {
     computeOverlayReturnType,
   ),
 } as const
+
+const simplifyIfUnion = (type: Type): Type =>
+  type.kind === 'union' ? simplifyUnionType(type) : type
