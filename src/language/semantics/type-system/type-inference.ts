@@ -19,7 +19,7 @@ import {
   readPanicExpression,
   readRuntimeExpression,
   readUnionExpression,
-  stringifyTypeForEndUser,
+  stringifyResolvedTypeForEndUser,
   type ExpressionContext,
   type FunctionParameterTypeInfo,
   type KeyPath,
@@ -321,7 +321,7 @@ const inferTypeImplementation = (
                     kind: 'typeMismatch',
                     message: `property \`${stringifyTypeKeyPathForEndUser(
                       keyPath,
-                    )}\` does not exist on type \`${stringifyTypeForEndUser(
+                    )}\` does not exist on type \`${stringifyResolvedTypeForEndUser(
                       objectType,
                     )}\``,
                   }),
@@ -589,9 +589,9 @@ const inferTypeImplementation = (
           : !isAssignable({ source: keysType, target: types.atom }) ?
             either.makeLeft({
               kind: 'typeMismatch',
-              message: `\`@object\` excess clause keys must be an atom subtype, but \`${stringifyTypeForEndUser(
+              message: `\`@object\` excess clause keys must be an atom subtype, but \`${stringifyResolvedTypeForEndUser(
                 keysType,
-              )}\` is not assignable to \`${stringifyTypeForEndUser(
+              )}\` is not assignable to \`${stringifyResolvedTypeForEndUser(
                 types.atom,
               )}\``,
             })

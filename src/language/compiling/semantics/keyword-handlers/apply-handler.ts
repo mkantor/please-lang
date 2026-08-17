@@ -15,7 +15,7 @@ import {
   makeApplyExpression,
   readApplyExpression,
   rigidTypeParameterIdentities,
-  stringifyTypeForEndUser,
+  stringifyResolvedTypeForEndUser,
   supplyTypeArgument,
   supplyTypeArguments,
   typeParameterAssignableToConstraintKey,
@@ -67,7 +67,7 @@ const checkArgumentType = (
       : parameterType
     return either.makeLeft({
       kind: 'typeMismatch',
-      message: `argument with type \`${stringifyTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyTypeForEndUser(simplifiedParameterType)}\``,
+      message: `argument with type \`${stringifyResolvedTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyResolvedTypeForEndUser(simplifiedParameterType)}\``,
     })
   }
 }
@@ -147,7 +147,7 @@ const checkApplication = (
     none: _ =>
       either.makeLeft({
         kind: 'invalidExpression',
-        message: `only functions can be applied, but got a \`${stringifyTypeForEndUser(functionType)}\``,
+        message: `only functions can be applied, but got a \`${stringifyResolvedTypeForEndUser(functionType)}\``,
       }),
     some: signatures => {
       const analysisResults = option.match(

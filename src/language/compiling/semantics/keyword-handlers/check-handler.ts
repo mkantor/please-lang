@@ -5,8 +5,8 @@ import {
   elaborateOperands,
   isAssignable,
   readCheckExpression,
+  stringifyResolvedTypeForEndUser,
   stringifySemanticGraphForEndUser,
-  stringifyTypeForEndUser,
   type Expression,
   type ExpressionContext,
   type SemanticGraph,
@@ -54,7 +54,7 @@ const check = ({
                 kind: 'typeMismatch',
                 message: `the value \`${stringifySemanticGraphForEndUser(
                   value,
-                )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyTypeForEndUser(targetType)}\``,
+                )}\` ${isSingletonType(valueAsType) ? '' : `(inferred to have type \`${stringifyResolvedTypeForEndUser(valueAsType)}\`) `}is not assignable to the type \`${stringifyResolvedTypeForEndUser(targetType)}\``,
               }),
             ),
       ),

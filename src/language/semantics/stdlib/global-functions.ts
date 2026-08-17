@@ -5,8 +5,8 @@ import { withDynamicEvaluationState } from '../expression-elaboration.js'
 import { isFunctionNode } from '../function-node.js'
 import { lookupPropertyOfObjectNode } from '../object-node.js'
 import {
+  stringifyResolvedTypeForEndUser,
   stringifySemanticGraphForEndUser,
-  stringifyTypeForEndUser,
 } from '../semantic-graph.js'
 import {
   isAssignable,
@@ -116,7 +116,7 @@ export const globalFunctions = {
                     kind: 'typeMismatch',
                     message: `the value \`${stringifySemanticGraphForEndUser(
                       value,
-                    )}\` is not assignable to the type \`${stringifyTypeForEndUser(typeAsType)}\``,
+                    )}\` is not assignable to the type \`${stringifyResolvedTypeForEndUser(typeAsType)}\``,
                   }),
             ),
         ),

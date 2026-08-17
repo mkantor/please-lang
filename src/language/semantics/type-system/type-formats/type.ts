@@ -1,4 +1,4 @@
-import { somethingTypeSymbol } from '../prelude-types.js'
+import { somethingTypeSymbol } from '../prelude-types/type-symbols.js'
 import type { ApplicationType } from './application-type.js'
 import type { FunctionType } from './function-type.js'
 import type { IndexedAccessType } from './indexed-access-type.js'

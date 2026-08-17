@@ -40,6 +40,7 @@ import {
   matchTypeFormat,
   typeParameterAssignableToConstraintKey,
   types,
+  withStuckApplicationsResolved,
   type TypeKeyPath,
 } from './type-system.js'
 import {
@@ -423,6 +424,13 @@ export const typeToSemanticGraph = (
 
 export const stringifyTypeForEndUser = (type: Type): string =>
   stringifySemanticGraphForEndUser(typeToSemanticGraph(type, new Set()))
+
+/**
+ * Like `stringifyTypeForEndUser`, but stuck applications are first replaced with
+ * what they are known to produce.
+ */
+export const stringifyResolvedTypeForEndUser = (type: Type): string =>
+  stringifyTypeForEndUser(withStuckApplicationsResolved(type))
 
 export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
   makeIndexExpression({
