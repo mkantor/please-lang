@@ -890,6 +890,26 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [`(stuff: {}) => :stuff object.lookup a ~ :integer.type`, typeMismatch],
   [
+    `(stuff: { [:atom.type]: :integer.type }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    assertSuccess,
+  ],
+  [
+    `(stuff: { [:atom.type]: :integer.type }) => :stuff object.lookup a ~ :option.type(:boolean.type)`,
+    typeMismatch,
+  ],
+  [
+    `(stuff: { [a | b]: :integer.type }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    assertSuccess,
+  ],
+  [
+    `(stuff: { [a | b]: :integer.type }) => :stuff object.lookup c ~ :option.type(:integer.type)`,
+    typeMismatch,
+  ],
+  [
+    `((x: { [:atom.type]: :integer.type }) => :x)({ a: 42 }) ~ { a: 42 }`,
+    success({ a: '42' }),
+  ],
+  [
     `{
       |>: (f: ?a ~> ?b) => (a: :a) => :f(:a)
       ab: a |> :atom.append(b)

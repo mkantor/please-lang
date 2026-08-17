@@ -2441,4 +2441,34 @@ testCases(
       assert(either.isRight(result))
     },
   ],
+
+  [
+    `{
+      f: (stuff: { inner: { [:atom.type]: :integer.type } }) =>
+        :stuff.inner object.lookup a ~ :option.type(:integer.type)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (g: :atom.type ~> { [:atom.type]: :integer.type }) => (key: :atom.type) =>
+        :g(:key) object.lookup a ~ :option.type(:integer.type)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (key: @union { a, b }) =>
+        :object.from_property(:key)(1) ~ @union { { a: 1 }, { b: 1 } }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
 ])

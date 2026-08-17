@@ -219,6 +219,23 @@ export const replaceAllTypeParametersWithTheirConstraints = (
       )
 
 /**
+ * The most specific upper bound of a type which is neither a type parameter nor
+ * a stuck type, if one exists. Types which are already concrete are returned
+ * unchanged, as are stuck types whose bounds can't be resolved further.
+ */
+export const concreteUpperBound = (type: Type): Type =>
+  matchTypeFormat(type, {
+    application: upperBoundOfResolvableStuckType,
+    function: _ => type,
+    indexedAccess: upperBoundOfResolvableStuckType,
+    intrinsicApplication: upperBoundOfResolvableStuckType,
+    object: _ => type,
+    opaque: _ => type,
+    parameter: type => concreteUpperBound(type.constraint.assignableTo),
+    union: _ => type,
+  })
+
+/**
  * The most specific resolvable upper bound of a stuck type, or `none` when
  * nothing further can be resolved.
  */
@@ -254,6 +271,14 @@ export const upperBoundOfStuckType = (
     }
   }
 }
+
+const upperBoundOfResolvableStuckType = (
+  stuckType: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
+): Type =>
+  option.match(upperBoundOfStuckType(stuckType), {
+    none: _ => stuckType,
+    some: concreteUpperBound,
+  })
 
 /**
  * Finds concrete types for the `TypeParameter`s in `parameter` by locating the

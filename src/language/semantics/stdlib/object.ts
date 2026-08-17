@@ -19,7 +19,7 @@ import {
   effectiveExcessClauses,
   excessBoundForKey,
 } from '../type-system/subtyping.js'
-import { replaceAllTypeParametersWithTheirConstraints } from '../type-system/type-substitution.js'
+import { concreteUpperBound } from '../type-system/type-substitution.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
@@ -33,29 +33,21 @@ const computeFromPropertyReturnType = (
       '`from_property` function did not receive two arguments. This is a bug!',
     )
   } else {
-    return option.match(
-      // TODO: Consider also supporting type parameters/stuck types via their
-      // upper bounds.
-      keyType.kind === 'union' ?
-        asUnionWithLiteralAtomMembers(keyType)
-      : option.none,
-      {
-        // The key isn't statically known, but every property value is the
-        // supplied one.
-        none: _ =>
-          makeObjectType({}, [{ keys: types.atom, values: valueType }]),
-        some: keys =>
-          unionOfTypes([
-            ...keys.members
-              .values()
-              .map(key =>
-                makeObjectType({ [key]: valueType }, [
-                  { keys: types.atom, values: types.nothing },
-                ]),
-              ),
-          ]),
-      },
-    )
+    return option.match(literalKeyCandidates(keyType), {
+      // The key isn't statically known, but every property value is the
+      // supplied one.
+      none: _ => makeObjectType({}, [{ keys: types.atom, values: valueType }]),
+      some: keys =>
+        unionOfTypes([
+          ...keys
+            .values()
+            .map(key =>
+              makeObjectType({ [key]: valueType }, [
+                { keys: types.atom, values: types.nothing },
+              ]),
+            ),
+        ]),
+    })
   }
 }
 
@@ -63,11 +55,11 @@ const computeOverlayReturnType = (parameterTypes: readonly Type[]): Type => {
   const [rawObject2Type, rawObject1Type] = parameterTypes
   const object2Type =
     rawObject2Type === undefined ? rawObject2Type : (
-      replaceAllTypeParametersWithTheirConstraints(rawObject2Type)
+      concreteUpperBound(rawObject2Type)
     )
   const object1Type =
     rawObject1Type === undefined ? rawObject1Type : (
-      replaceAllTypeParametersWithTheirConstraints(rawObject1Type)
+      concreteUpperBound(rawObject1Type)
     )
   if (object2Type === undefined || object1Type === undefined) {
     throw new Error(
@@ -160,30 +152,33 @@ const lookupReturnType = ({
 /**
  * Literal atoms the key could be at runtime (when statically enumerable).
  */
-const literalLookupKeyCandidates = (
-  keyType: Type,
-): Option<ReadonlySet<Atom>> =>
-  keyType.kind === 'union' ?
-    option.map(asUnionWithLiteralAtomMembers(keyType), union => union.members)
-  : keyType.kind === 'parameter' ?
-    literalLookupKeyCandidates(keyType.constraint.assignableTo)
-  : option.none
+const literalKeyCandidates = (keyType: Type): Option<ReadonlySet<Atom>> => {
+  const bound = concreteUpperBound(keyType)
+  return bound.kind === 'union' ?
+      option.map(asUnionWithLiteralAtomMembers(bound), union => union.members)
+    : option.none
+}
 
 // `lookup(key)(object)` returns `some(object[key])` when the key is definitely
 // present, `none` when definitely absent (e.g. a closed object lacking it),
 // otherwise a union covering all possible outcomes.
 const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
-  const [keyType, objectType] = parameterTypes
+  const [keyType, rawObjectType] = parameterTypes
+  const objectType =
+    rawObjectType === undefined ? rawObjectType : (
+      concreteUpperBound(rawObjectType)
+    )
   if (keyType === undefined || objectType === undefined) {
     throw new Error(
       '`lookup` function did not receive two arguments. This is a bug!',
     )
   } else if (objectType.kind !== 'object') {
-    // TODO: Consider also supporting stuck/type-parameter object types via
-    // their upper bounds.
+    // TODO: Consider distributing over union members, so that looking a key up
+    // in `{ a: :integer.type } | { a: :boolean.type }` yields
+    // `:option.type(:integer.type | :boolean.type)`.
     return types.option(types.something)
   } else {
-    return option.match(literalLookupKeyCandidates(keyType), {
+    return option.match(literalKeyCandidates(keyType), {
       some: possibleKeys => {
         const presentValueTypes = [...possibleKeys].flatMap(key => {
           const valueType = objectType.children[key]
