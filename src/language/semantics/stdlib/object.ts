@@ -7,6 +7,7 @@ import {
   orderedEntriesOfObjectNode,
 } from '../object-node.js'
 import {
+  isAssignable,
   isBottomType,
   makeObjectType,
   makeUnionType,
@@ -182,11 +183,32 @@ const memberObjectTypes = (
     }),
   )
 
+const excessClausesReachableFromKey = (
+  keyBound: Type,
+  excess: ObjectType['excess'],
+): ObjectType['excess'] => {
+  const clausesMatchEveryPossibleKey = (
+    clauses: ObjectType['excess'],
+  ): boolean =>
+    isAssignable({
+      source: keyBound,
+      target: unionOfTypes(clauses.map(clause => clause.keys)),
+    })
+  const matchableClauses =
+    clausesMatchEveryPossibleKey(excess) ? excess : (
+      effectiveExcessClauses(excess)
+    )
+  return matchableClauses.filter(
+    (_clause, index) =>
+      !clausesMatchEveryPossibleKey(matchableClauses.slice(index + 1)),
+  )
+}
+
 const lookupReturnTypeForObjectType = (
-  possibleKeys: Option<ReadonlySet<Atom>>,
+  keyType: Type,
   objectType: ObjectType,
 ): Type =>
-  option.match(possibleKeys, {
+  option.match(literalKeyCandidates(keyType), {
     some: keys => {
       const presentValueTypes = [...keys].flatMap(key => {
         const valueType = objectType.children[key]
@@ -218,14 +240,26 @@ const lookupReturnTypeForObjectType = (
     none: _ => {
       // Whatever the key turns out to be, it can only select one of the
       // object's own property values, an unlisted property's value (bounded
-      // by the object's excess clauses), or nothing.
-      const objectExcess = effectiveExcessClauses(objectType.excess)
-      return objectExcess.some(clause => clause.values === types.something) ?
+      // by the object's excess clauses), or nothing. Properties whose key the
+      // key type rules out are unselectable, so they bound nothing here.
+      const keyBound = concreteUpperBound(keyType)
+      const reachableExcess = excessClausesReachableFromKey(
+        keyBound,
+        objectType.excess,
+      )
+      return reachableExcess.some(clause => clause.values === types.something) ?
           types.option(types.something)
         : optionType({
             possibleValueTypes: [
-              ...Object.values(objectType.children),
-              ...objectExcess
+              ...Object.entries(objectType.children)
+                .filter(([key]) =>
+                  isAssignable({
+                    source: makeUnionType([key]),
+                    target: keyBound,
+                  }),
+                )
+                .map(([_key, valueType]) => valueType),
+              ...reachableExcess
                 .map(clause => clause.values)
                 .filter(clauseValues => !isBottomType(clauseValues)),
             ],
@@ -248,10 +282,9 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
       '`lookup` function did not receive two arguments. This is a bug!',
     )
   } else {
-    const possibleKeys = literalKeyCandidates(keyType)
     return (
       objectType.kind === 'object' ?
-        lookupReturnTypeForObjectType(possibleKeys, objectType)
+        lookupReturnTypeForObjectType(keyType, objectType)
       : objectType.kind === 'union' ?
         // For each object-typed member, look up the property, then union the
         // results. `{ a: 1 } | { a: 2 }` with key `a` emits `option(1 | 2)`.
@@ -265,7 +298,7 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
             simplifyIfUnion(
               unionOfTypes(
                 members.map(member =>
-                  lookupReturnTypeForObjectType(possibleKeys, member),
+                  lookupReturnTypeForObjectType(keyType, member),
                 ),
               ),
             ),

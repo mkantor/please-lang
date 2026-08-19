@@ -933,6 +933,36 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success({ a: '42' }),
   ],
   [
+    `(key: :natural_number.type) =>
+      (stuff: { [:natural_number.type]: :integer.type }) =>
+        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    assertSuccess,
+  ],
+  [
+    `(key: :natural_number.type) =>
+      (stuff: { [:natural_number.type]: :integer.type }) =>
+        :stuff object.lookup :key ~ :option.type(:boolean.type)`,
+    typeMismatch,
+  ],
+  [
+    `(key: :atom.type) =>
+      (stuff: { [:natural_number.type]: :integer.type }) =>
+        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    typeMismatch,
+  ],
+  [
+    `(key: :natural_number.type) =>
+      (stuff: { [:atom.type]: :boolean.type, [:natural_number.type]: :integer.type }) =>
+        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    assertSuccess,
+  ],
+  [
+    `(key: :natural_number.type) =>
+      (stuff: { foo: true, [:natural_number.type]: :integer.type }) =>
+        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    assertSuccess,
+  ],
+  [
     `{
       |>: (f: ?a ~> ?b) => (a: :a) => :f(:a)
       ab: a |> :atom.append(b)

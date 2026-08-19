@@ -2471,4 +2471,28 @@ testCases(
       assert(either.isRight(result))
     },
   ],
+
+  [
+    `(key: :natural_number.type) =>
+      (stuff: {
+        [:natural_number.type]: :integer.type
+      } | {
+        [:natural_number.type]: :boolean.type
+      }) =>
+        :stuff object.lookup :key ~ :option.type(:integer.type | :boolean.type)
+    `,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `(key: :integer.type) =>
+      (stuff: { [:integer.type]: :integer.type }) =>
+        :stuff object.lookup :key ~ :option.type(:integer.type)
+    `,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
 ])
