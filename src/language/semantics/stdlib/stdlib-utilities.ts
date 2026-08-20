@@ -1,11 +1,13 @@
 import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
+import { defaultConfiguration } from '../../configuration.js'
 import type { Bug, UnserializableValueError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import {
   keyPathToLookupExpression,
   makeApplyExpression,
   objectNodeFromOrderedEntries,
+  withDynamicEvaluationState,
   type ExpressionContext,
 } from '../../semantics.js'
 import {
@@ -46,14 +48,17 @@ import type {
 
 const handleUnavailableDependencies =
   (f: FunctionNodeCallSignature) =>
-  (argument: SemanticGraph): ReturnType<FunctionNodeCallSignature> => {
+  (
+    argument: SemanticGraph,
+    contextOfApplication: ExpressionContext,
+  ): ReturnType<FunctionNodeCallSignature> => {
     if (containsAnyUnelaboratedNodes(argument)) {
       return either.makeLeft({
         kind: 'dependencyUnavailable',
         message: 'one or more dependencies are unavailable',
       })
     } else {
-      return f(argument, emptyContextForStdlibApplications)
+      return f(argument, contextOfApplication)
     }
   }
 
@@ -65,6 +70,7 @@ const handleUnavailableDependencies =
 export const applyValidatingParameterType = (
   functionNode: FunctionNode,
   argument: SemanticGraph,
+  contextOfApplication: ExpressionContext,
 ): Either<FunctionNodeCallError, SemanticGraph> =>
   either.flatMap(
     typeFromSemanticGraph(argument, { objectsAreExact: true }),
@@ -75,7 +81,13 @@ export const applyValidatingParameterType = (
         functionNode.signature.parameter,
       )
       return isAssignable({ source: argumentType, target: parameterBound }) ?
-          functionNode(argument, emptyContextForStdlibApplications)
+          functionNode(
+            argument,
+            withDynamicEvaluationState(
+              emptyContextForStdlibApplications,
+              contextOfApplication,
+            ),
+          )
         : either.makeLeft({
             kind: 'typeMismatch',
             message: `the value \`${stringifySemanticGraphForEndUser(
@@ -90,6 +102,9 @@ export const applyValidatingParameterType = (
  * "outside your program" and don't have a meaningful `ExpressionContext`).
  */
 export const emptyContextForStdlibApplications: ExpressionContext = {
+  // This context belongs to no particular run, so the best it can do is supply
+  // defaults.
+  configuration: defaultConfiguration,
   keywordHandlers: {
     '@apply': either.makeRight,
     '@check': either.makeRight,
@@ -109,6 +124,7 @@ export const emptyContextForStdlibApplications: ExpressionContext = {
   mutableInferenceCache: new Map(),
   mutableFunctionParameterCache: new Map(),
   isExternalToProgram: true,
+  applicationChain: [],
 }
 
 export type PreludeFunctionBody<Parameters extends readonly AnyParameter[]> =
@@ -120,6 +136,7 @@ export type PreludeFunctionBody<Parameters extends readonly AnyParameter[]> =
   ) ?
     (
       value: Value,
+      contextOfApplication: ExpressionContext,
     ) => Either<
       FunctionNodeCallError,
       RemainingParameters extends readonly [] ? SemanticGraph
@@ -170,6 +187,7 @@ export const preludeFunction = <const Parameters extends NonEmptyParameters>(
 
 type BodyStage = (
   value: SemanticGraph,
+  contextOfApplication: ExpressionContext,
 ) => Either<FunctionNodeCallError, SemanticGraph | BodyStage>
 
 type PreludeFunctionDefinition = {
@@ -241,7 +259,8 @@ const applyBody =
                       parameter,
                       argumentValue,
                     ),
-                    stage,
+                    parsedArgument =>
+                      stage(parsedArgument, emptyContextForStdlibApplications),
                   )
             }),
           ),
@@ -282,7 +301,10 @@ type PartialApplicationState = {
 const acceptArgument =
   (definition: PreludeFunctionDefinition) =>
   (state: PartialApplicationState) =>
-  (argument: SemanticGraph): Either<FunctionNodeCallError, SemanticGraph> => {
+  (
+    argument: SemanticGraph,
+    contextOfApplication: ExpressionContext,
+  ): Either<FunctionNodeCallError, SemanticGraph> => {
     const [parameter, ...restParameters] = state.remainingParameters
     if (parameter === undefined) {
       return either.makeLeft({
@@ -294,40 +316,43 @@ const acceptArgument =
       return either.flatMap(
         parseArgument(definition.functionName, parameter, argument),
         validArgument =>
-          either.flatMap(state.stage(validArgument), stageResult => {
-            const argumentsSoFar: readonly SemanticGraph[] = [
-              ...state.argumentsSoFar,
-              validArgument,
-            ]
-            return restParameters.length === 0 ?
-                asFinalResult(stageResult)
-              : either.flatMap(asNextStage(stageResult), nextStage =>
-                  either.map(
-                    refineReturnedFunctionType(
-                      state.signature.parameter,
-                      state.signature.return,
-                      argument,
-                    ),
-                    refinedReturn =>
-                      makeFunctionNode(
-                        refinedReturn.signature,
-                        serializeAppliedFunction(
-                          definition.keyPath,
-                          argumentsSoFar,
-                        ),
-                        option.none,
-                        handleUnavailableDependencies(
-                          acceptArgument(definition)({
-                            remainingParameters: restParameters,
-                            argumentsSoFar,
-                            signature: refinedReturn.signature,
-                            stage: nextStage,
-                          }),
-                        ),
+          either.flatMap(
+            state.stage(validArgument, contextOfApplication),
+            stageResult => {
+              const argumentsSoFar: readonly SemanticGraph[] = [
+                ...state.argumentsSoFar,
+                validArgument,
+              ]
+              return restParameters.length === 0 ?
+                  asFinalResult(stageResult)
+                : either.flatMap(asNextStage(stageResult), nextStage =>
+                    either.map(
+                      refineReturnedFunctionType(
+                        state.signature.parameter,
+                        state.signature.return,
+                        argument,
                       ),
-                  ),
-                )
-          }),
+                      refinedReturn =>
+                        makeFunctionNode(
+                          refinedReturn.signature,
+                          serializeAppliedFunction(
+                            definition.keyPath,
+                            argumentsSoFar,
+                          ),
+                          option.none,
+                          handleUnavailableDependencies(
+                            acceptArgument(definition)({
+                              remainingParameters: restParameters,
+                              argumentsSoFar,
+                              signature: refinedReturn.signature,
+                              stage: nextStage,
+                            }),
+                          ),
+                        ),
+                    ),
+                  )
+            },
+          ),
       )
     }
   }

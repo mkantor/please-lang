@@ -1,6 +1,11 @@
 import either, { type Either } from '@matt.kantor/either'
-import option from '@matt.kantor/option'
-import type { ElaborationError } from '../../../errors.js'
+import option, { type Option } from '@matt.kantor/option'
+import type { Configuration } from '../../../configuration.js'
+import type {
+  DependencyUnavailable,
+  ElaborationError,
+  Panic,
+} from '../../../errors.js'
 import type { Atom } from '../../../parsing.js'
 import {
   asSemanticGraph,
@@ -17,13 +22,17 @@ import {
   readFunctionExpression,
   replaceAllTypeParametersWithTheirConstraints,
   serialize,
+  stringifyKeyPathForInternalUse,
   types,
   updateValueAtKeyPathInSemanticGraph,
+  withDynamicEvaluationState,
+  type ApplicationChainEntry,
   type Expression,
   type ExpressionContext,
   type ExpressionWithElaboratedOperands,
   type FunctionExpression,
   type FunctionNode,
+  type KeyPathStringifiedForInternalUse,
   type SemanticGraph,
   type Type,
 } from '../../../semantics.js'
@@ -43,12 +52,7 @@ export const functionKeywordHandler = (
   context: ExpressionContext,
 ): Either<ElaborationError, FunctionNode> =>
   either.flatMap(
-    elaborateOperands(expression, {
-      ...context,
-      // `@panic`s inside functions shouldn't fire while elaborating the body,
-      // only when the function is eventually called.
-      panicsAreDeferred: true,
-    }),
+    elaborateOperands(expression, functionOperandContext(context)),
     ({ expression, context: operandContext }) =>
       makeFunctionFromElaboratedExpression(expression, {
         // The original `context` is used here; `panicsAreDeferred` applies only
@@ -57,6 +61,22 @@ export const functionKeywordHandler = (
         program: operandContext.program,
       }),
   )
+
+/**
+ * The context in which a `@function`'s operands are eagerly elaborated (when
+ * the body is elaborated at the definition site ahead of application).
+ */
+const functionOperandContext = (
+  context: ExpressionContext,
+): ExpressionContext => ({
+  ...context,
+  // `@panic`s inside functions shouldn't fire while elaborating the body, only
+  // when the function is eventually called.
+  panicsAreDeferred: true,
+  // Function applications occurring within the body are speculative until this
+  // function is applied.
+  applicationsAreSpeculative: true,
+})
 
 const makeFunctionFromElaboratedExpression = (
   expression: ExpressionWithElaboratedOperands,
@@ -131,9 +151,6 @@ const apply = (
     readonly applySiteContext: ExpressionContext
   },
 ): ReturnType<FunctionNode> => {
-  const parameterName = getParameterName(expression)
-  const body = expression[1].body
-
   const ownKey =
     functionDefinitionContext.location[
       functionDefinitionContext.location.length - 1
@@ -143,132 +160,234 @@ const apply = (
       kind: 'panic',
       message: 'function had no location',
     })
-  }
+  } else {
+    const definitionLocationKey = stringifyKeyPathForInternalUse(
+      functionDefinitionContext.location,
+    )
+    const applicationIsSpeculative =
+      applySiteContext.applicationsAreSpeculative === true
+    return option.match(
+      applicationLimitError({
+        ownKey,
+        expression,
+        definitionLocationKey,
+        configuration: functionDefinitionContext.configuration,
+        applicationChain: applySiteContext.applicationChain,
+        applicationIsSpeculative,
+      }),
+      {
+        some: either.makeLeft,
+        none: _ => {
+          // Apply the function by splicing its argument (and everything else
+          // its body may refer to) into the program, then re-elaborating the
+          // body there.
 
-  // TODO: Make this foolproof.
-  const returnKey =
-    parameterName === 'return' || ownKey === 'return' ?
-      'return with a different key to avoid collision with a stupidly-named parameter'
-    : 'return'
+          const parameterName = getParameterName(expression)
+          const body = expression[1].body
 
-  // Put each `@hole` from the annotation into scope under its name so the body
-  // can refer to it (e.g. `(first: ?a) => (second: :a) => …`). When the
-  // argument can be used to pin down type parameters, re-mint their `@hole`s
-  // with constraints specialized to this call site. Holes can also remain
-  // generic, staying stuck until an enclosing function is applied.
-  const holeBindings: Iterable<readonly [string, SemanticGraph]> = option.match(
-    getParameterTypeAnnotation(expression),
-    {
-      none: _ => [],
-      some: annotation => {
-        const typesForTypeParametersByName = either.match(
-          // Use the inferred argument type to pin down type parameters.
-          inferType(argument, {
-            ...applySiteContext,
-            location: [...applySiteContext.location, '1', 'argument'],
-          }),
-          {
-            left: _ => new Map<Atom, Type>(),
-            right: argumentType =>
-              new Map(
-                getTypesForTypeParameters({
-                  parameterType: signature.parameter,
-                  argumentType,
-                })
+          // TODO: Make this foolproof.
+          const returnKey =
+            parameterName === 'return' || ownKey === 'return' ?
+              'return with a different key to avoid collision with a stupidly-named parameter'
+            : 'return'
+
+          // Put each `@hole` from the annotation into scope under its name so
+          // the body can refer to it (e.g. `(first: ?a) => (second: :a) => …`).
+          // When the argument can be used to pin down type parameters, re-mint
+          // their `@hole`s with constraints specialized to this call site.
+          // Holes can also remain generic, staying stuck until an enclosing
+          // function is applied.
+          const holeBindings: Iterable<readonly [string, SemanticGraph]> =
+            option.match(getParameterTypeAnnotation(expression), {
+              none: _ => [],
+              some: annotation => {
+                const typesForTypeParametersByName = either.match(
+                  // Use the inferred argument type to pin down type parameters.
+                  inferType(argument, {
+                    ...applySiteContext,
+                    location: [...applySiteContext.location, '1', 'argument'],
+                  }),
+                  {
+                    left: _ => new Map<Atom, Type>(),
+                    right: argumentType =>
+                      new Map(
+                        getTypesForTypeParameters({
+                          parameterType: signature.parameter,
+                          argumentType,
+                        })
+                          .entries()
+                          .map(([typeParameter, specialization]) => [
+                            typeParameter.name,
+                            specialization,
+                          ]),
+                      ),
+                  },
+                )
+
+                return collectHolesByName(annotation)
                   .entries()
-                  .map(([typeParameter, specialization]) => [
-                    typeParameter.name,
-                    specialization,
+                  .filter(
+                    ([name, _hole]) =>
+                      name !== parameterName &&
+                      name !== ownKey &&
+                      name !== returnKey &&
+                      name !== ignoredKey,
+                  )
+                  .map(([name, hole]) => {
+                    const typeForTypeParameter =
+                      typesForTypeParametersByName.get(name)
+                    if (typeForTypeParameter === undefined) {
+                      return [name, hole]
+                    } else {
+                      return [
+                        name,
+                        makeHoleExpressionWithExtantTypeParameter(
+                          name,
+                          hole[1].constraint,
+                          makeTypeParameter(name, {
+                            assignableTo:
+                              // `typeForTypeParameter` may still contain
+                              // unsolved type parameters. If so, eliminate
+                              // them. This is merely to simplify the type in
+                              // diagnostics and doesn't affect semantics.
+                              replaceAllTypeParametersWithTheirConstraints(
+                                typeForTypeParameter,
+                              ),
+                          }),
+                        ),
+                      ]
+                    }
+                  })
+              },
+            })
+
+          const result = either.flatMap(serialize(body), serializedBody =>
+            either.flatMap(
+              updateValueAtKeyPathInSemanticGraph(
+                functionDefinitionContext.program,
+                functionDefinitionContext.location,
+                _ =>
+                  objectNodeFromOrderedEntries([
+                    // Include the function itself to allow recursion.
+                    [
+                      ownKey,
+                      makeFunctionNode(
+                        signature,
+                        () => either.makeRight(expression),
+                        option.makeSome(parameterName),
+                        (argument, applySiteContextOfNestedApplication) =>
+                          apply(expression, signature, argument, {
+                            functionDefinitionContext,
+                            applySiteContext: withDynamicEvaluationState(
+                              applySiteContext,
+                              applySiteContextOfNestedApplication,
+                            ),
+                          }),
+                      ),
+                    ],
+                    // Put the argument in scope.
+                    [parameterName, argument],
+                    // Put any `@hole`s from the parameter annotation in scope
+                    // so type parameters can be referenced.
+                    ...holeBindings,
+                    // Use the serialized form so the body in the program
+                    // matches what gets re-elaborated.
+                    [returnKey, asSemanticGraph(serializedBody)],
                   ]),
               ),
-          },
-        )
-
-        return collectHolesByName(annotation)
-          .entries()
-          .filter(
-            ([name, _hole]) =>
-              name !== parameterName &&
-              name !== ownKey &&
-              name !== returnKey &&
-              name !== ignoredKey,
+              updatedProgram =>
+                elaborateWithContext(serializedBody, {
+                  configuration: functionDefinitionContext.configuration,
+                  keywordHandlers: functionDefinitionContext.keywordHandlers,
+                  location: [...functionDefinitionContext.location, returnKey],
+                  program: updatedProgram,
+                  // Every application of this function re-elaborates the body
+                  // at the same location but against a different spliced
+                  // program, so cached inferences from other applications would
+                  // be wrong here. Use fresh caches to keep each application's
+                  // type information isolated.
+                  mutableInferenceCache: new Map(),
+                  mutableFunctionParameterCache: new Map(),
+                  // The body is demanded by this application, so the
+                  // speculative flag is deliberately not carried over and
+                  // `applicationChain` records the application.
+                  applicationChain: [
+                    ...applySiteContext.applicationChain,
+                    {
+                      locationKey: definitionLocationKey,
+                      expression,
+                      speculative: applicationIsSpeculative,
+                    },
+                  ],
+                }),
+            ),
           )
-          .map(([name, hole]) => {
-            const typeForTypeParameter = typesForTypeParametersByName.get(name)
-            if (typeForTypeParameter === undefined) {
-              return [name, hole]
-            } else {
-              return [
-                name,
-                makeHoleExpressionWithExtantTypeParameter(
-                  name,
-                  hole[1].constraint,
-                  makeTypeParameter(name, {
-                    assignableTo:
-                      // `typeForTypeParameter` may still contain unsolved type
-                      // parameters. If so, eliminate them. This is merely to
-                      // simplify the type in diagnostics and doesn't affect
-                      // semantics.
-                      replaceAllTypeParametersWithTheirConstraints(
-                        typeForTypeParameter,
-                      ),
-                  }),
-                ),
-              ]
-            }
-          })
+
+          return either.mapLeft(result, error => ({
+            kind: 'panic',
+            message: error.message,
+          }))
+        },
       },
-    },
-  )
+    )
+  }
+}
 
-  const result = either.flatMap(serialize(body), serializedBody =>
-    either.flatMap(
-      updateValueAtKeyPathInSemanticGraph(
-        functionDefinitionContext.program,
-        functionDefinitionContext.location,
-        _ =>
-          objectNodeFromOrderedEntries([
-            // Include the function itself to allow recursion.
-            [
-              ownKey,
-              makeFunctionNode(
-                signature,
-                () => either.makeRight(expression),
-                option.makeSome(parameterName),
-                argument =>
-                  apply(expression, signature, argument, {
-                    functionDefinitionContext,
-                    applySiteContext,
-                  }),
-              ),
-            ],
-            // Put the argument in scope.
-            [parameterName, argument],
-            // Put any `@hole`s from the parameter annotation in scope so type
-            // parameters can be referenced.
-            ...holeBindings,
-            // Use the serialized form so the body in the program matches what
-            // gets re-elaborated.
-            [returnKey, asSemanticGraph(serializedBody)],
-          ]),
-      ),
-      updatedProgram =>
-        elaborateWithContext(serializedBody, {
-          keywordHandlers: functionDefinitionContext.keywordHandlers,
-          location: [...functionDefinitionContext.location, returnKey],
-          program: updatedProgram,
-          // Every application of this function re-elaborates the body at the
-          // same location but against a different spliced program, so cached
-          // inferences from other applications would be wrong here. Use fresh
-          // caches to keep each application's type information isolated.
-          mutableInferenceCache: new Map(),
-          mutableFunctionParameterCache: new Map(),
-        }),
-    ),
+/**
+ * Decide whether this application may proceed, given the applications already
+ * in flight.
+ */
+const applicationLimitError = ({
+  ownKey,
+  expression,
+  definitionLocationKey,
+  configuration,
+  applicationChain,
+  applicationIsSpeculative,
+}: {
+  readonly ownKey: Atom
+  readonly expression: FunctionExpression
+  readonly definitionLocationKey: KeyPathStringifiedForInternalUse
+  readonly configuration: Configuration
+  readonly applicationChain: readonly ApplicationChainEntry[]
+  readonly applicationIsSpeculative: boolean
+}): Option<DependencyUnavailable | Panic> => {
+  const chainAlreadyContainsThisFunction = applicationChain.some(
+    chainEntry =>
+      chainEntry.expression === expression ||
+      chainEntry.locationKey === definitionLocationKey,
   )
+  const speculativeApplicationCount = applicationChain.filter(
+    chainEntry => chainEntry.speculative,
+  ).length
 
-  return either.mapLeft(result, error => ({
-    kind: 'panic',
-    message: error.message,
-  }))
+  if (applicationIsSpeculative && chainAlreadyContainsThisFunction) {
+    // Re-entrancy deferral: reducing a speculative application of a function
+    // which is already in flight could continue forever.
+    return option.makeSome({
+      kind: 'dependencyUnavailable',
+      message: `application of \`${ownKey}\` was deferred while elaborating an unapplied function body because of recursion`,
+    })
+  } else if (
+    applicationIsSpeculative &&
+    speculativeApplicationCount >=
+      configuration.speculativeApplicationDepthLimit
+  ) {
+    // Out of speculative application fuel.
+    return option.makeSome({
+      kind: 'dependencyUnavailable',
+      message: `application of \`${ownKey}\` was deferred while elaborating an unapplied function body because it did not fully reduce in ${configuration.speculativeApplicationDepthLimit} steps`,
+    })
+  } else if (
+    applicationChain.length >= configuration.demandedApplicationDepthLimit
+  ) {
+    // Out of demanded budget. Deferral isn't an option (something demanded this
+    // result), so the program is at fault.
+    return option.makeSome({
+      kind: 'panic',
+      message: `evaluation did not terminate: exceeded ${configuration.demandedApplicationDepthLimit} nested function applications (possible unbounded recursion involving \`${ownKey}\`)`,
+    })
+  } else {
+    return option.none
+  }
 }

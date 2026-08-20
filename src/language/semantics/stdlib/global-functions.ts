@@ -1,6 +1,7 @@
 import either from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
+import { withDynamicEvaluationState } from '../expression-elaboration.js'
 import { isFunctionNode } from '../function-node.js'
 import { lookupPropertyOfObjectNode } from '../object-node.js'
 import {
@@ -84,8 +85,14 @@ export const globalFunctions = {
     ],
     B,
     argument =>
-      either.makeRight(functionToApply =>
-        functionToApply(argument, emptyContextForStdlibApplications),
+      either.makeRight((functionToApply, contextOfApplication) =>
+        functionToApply(
+          argument,
+          withDynamicEvaluationState(
+            emptyContextForStdlibApplications,
+            contextOfApplication,
+          ),
+        ),
       ),
   ),
 
@@ -127,11 +134,23 @@ export const globalFunctions = {
     C,
     secondFunction =>
       either.makeRight(firstFunction =>
-        either.makeRight(firstArgument =>
+        either.makeRight((firstArgument, contextOfApplication) =>
           either.flatMap(
-            firstFunction(firstArgument, emptyContextForStdlibApplications),
+            firstFunction(
+              firstArgument,
+              withDynamicEvaluationState(
+                emptyContextForStdlibApplications,
+                contextOfApplication,
+              ),
+            ),
             secondArgument =>
-              secondFunction(secondArgument, emptyContextForStdlibApplications),
+              secondFunction(
+                secondArgument,
+                withDynamicEvaluationState(
+                  emptyContextForStdlibApplications,
+                  contextOfApplication,
+                ),
+              ),
           ),
         ),
       ),
@@ -145,7 +164,7 @@ export const globalFunctions = {
     [objectParameter, taggedParameter],
     types.something,
     cases =>
-      either.makeRight(argument =>
+      either.makeRight((argument, contextOfApplication) =>
         option.match(lookupPropertyOfObjectNode(argument.tag, cases), {
           none: _ =>
             either.makeLeft({
@@ -154,7 +173,11 @@ export const globalFunctions = {
             }),
           some: relevantCase =>
             isFunctionNode(relevantCase) ?
-              applyValidatingParameterType(relevantCase, argument.value)
+              applyValidatingParameterType(
+                relevantCase,
+                argument.value,
+                contextOfApplication,
+              )
             : either.makeRight(relevantCase),
         }),
       ),

@@ -3,6 +3,7 @@ import assert from 'node:assert'
 import { withPhantomData } from '../../phantom-data.js'
 import { testCases, toSyntaxTree } from '../../test-utilities.test.js'
 import type { JsonValue } from '../../utility-types.js'
+import { defaultConfiguration } from '../configuration.js'
 import type { ElaborationError } from '../errors.js'
 import type { Atom, Molecule } from '../parsing.js'
 import type { Output } from '../semantics.js'
@@ -14,7 +15,7 @@ const success = (
   either.makeRight(withPhantomData<never>()(expectedOutput))
 
 const canonicalizeAndEvaluate = (input: JsonValue) =>
-  evaluate(toSyntaxTree(input))
+  evaluate(defaultConfiguration)(toSyntaxTree(input))
 
 testCases(
   canonicalizeAndEvaluate,

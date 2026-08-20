@@ -67,6 +67,7 @@ import {
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForTypeParameters,
+  replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArguments,
 } from './type-substitution.js'
 
@@ -230,9 +231,9 @@ const inferTypeImplementation = (
     if (paramType !== undefined) {
       return cacheOnSuccess(either.makeRight(paramType))
     } else if (!lookingUpKeys.has(key)) {
-      const lookupResult = lookup({ key, context })
+      const lookupResult = lookup({ key, context, inlineSelfReferences: true })
       if (either.isRight(lookupResult) && option.isSome(lookupResult.value)) {
-        const { foundValue, foundLocation, foundHole } =
+        const { foundValue, foundLocation, foundHole, foundIsSelfReference } =
           lookupResult.value.value
         const innerResult = option.match(foundHole, {
           // The hole lives in an enclosing parameter annotation. Infer it here
@@ -266,7 +267,14 @@ const inferTypeImplementation = (
                 },
             ),
         })
-        return cacheOnSuccess(innerResult)
+        const resultWithMonomorphicSelfReference = either.map(
+          innerResult,
+          inferredType =>
+            foundIsSelfReference ?
+              replaceAllTypeParametersWithTheirConstraints(inferredType)
+            : inferredType,
+        )
+        return cacheOnSuccess(resultWithMonomorphicSelfReference)
       } else {
         // Fall back to the top type.
         return either.makeRight(types.something)
@@ -849,6 +857,7 @@ const getFunctionParameterType = (
                 positionInEnclosingExpression === 'argument'
               ) {
                 const contextOfEnclosingExpression: ExpressionContext = {
+                  configuration: contextOfFunction.configuration,
                   program: contextOfFunction.program,
                   keywordHandlers: contextOfFunction.keywordHandlers,
                   location: contextOfFunction.location.slice(0, -2),
@@ -861,6 +870,7 @@ const getFunctionParameterType = (
                   mutableFunctionParameterCache:
                     contextOfFunction.mutableFunctionParameterCache,
                   isExternalToProgram: contextOfFunction.isExternalToProgram,
+                  applicationChain: contextOfFunction.applicationChain,
                 }
                 const contextuallyAppliedFunctionType = inferType(
                   applyExpressionResult.value[1].function,
@@ -1008,12 +1018,14 @@ const resolveEnclosingFunctionParameters = (
             const parameterTypeInfoResult = getFunctionParameterType(
               functionExpression,
               {
+                configuration: context.configuration,
                 keywordHandlers: context.keywordHandlers,
                 program: context.program,
                 location: enclosingFunctionLocation,
                 mutableInferenceCache: context.mutableInferenceCache,
                 mutableFunctionParameterCache:
                   context.mutableFunctionParameterCache,
+                applicationChain: context.applicationChain,
               },
             )
 
