@@ -100,8 +100,10 @@ export type ExpressionContext = {
    * aborting.
    */
   readonly panicsAreDeferred?: true | undefined
-  // The remaining properties are dynamic evaluation state (see
-  // `withDynamicEvaluationState`).
+
+  // The remaining properties are dynamic evaluation state (they describe the
+  // evaluation in progress rather than the program being elaborated).
+
   /**
    * Set while elaborating the body of a not-yet-applied `@function`. Function
    * applications occurring in such positions are speculative: their results
@@ -114,6 +116,10 @@ export type ExpressionContext = {
    * budget (see `configuration.ts`).
    */
   readonly applicationChain: readonly ApplicationChainEntry[]
+  /**
+   * The keyword expression currently being handled in its unelaborated form.
+   */
+  readonly unelaboratedExpression?: SemanticGraph | undefined
 }
 
 export type ApplicationChainEntry = {
@@ -126,11 +132,9 @@ export type ApplicationChainEntry = {
 }
 
 /**
- * Carry over what a from-scratch base context cannot know: `source`'s
- * configuration and its dynamic evaluation state (the state describing the
- * in-progress evaluation rather than the program being elaborated). The result
- * is otherwise `base`. Use this whenever an application's static context comes
- * from somewhere other than its call site.
+ * Copy configuration and application state to a new `ExpressionContext`. Use
+ * this whenever an application site's context comes from somewhere other than
+ * its call site (e.g. applications occurring within the standard library).
  */
 export const withDynamicEvaluationState = (
   base: ExpressionContext,
@@ -286,10 +290,10 @@ const elaborateWithinMolecule = (
   ) {
     // Keyword handlers are passed the raw expression; each handler explicitly
     // elaborates its own operands (typically via `elaborateOperands`).
-    return handleObjectNodeWhichMayBeAExpression(
-      moleculeAsSemanticGraph,
-      context,
-    )
+    return handleObjectNodeWhichMayBeAExpression(moleculeAsSemanticGraph, {
+      ...context,
+      unelaboratedExpression: moleculeAsSemanticGraph,
+    })
   } else {
     const propertiesResult = elaborateProperties(
       isSemanticGraph(molecule) ?
@@ -390,6 +394,7 @@ const elaborateWithinMolecule = (
                 ...context,
                 program: updatedProgram,
                 location: context.location,
+                unelaboratedExpression: moleculeAsSemanticGraph,
               },
             ),
         })
