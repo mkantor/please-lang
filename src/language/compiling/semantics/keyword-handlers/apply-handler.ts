@@ -275,19 +275,23 @@ export const readAndAnalyzeApplyExpression = (
             ),
           ]),
           ([functionType, argumentType]) =>
-            either.mapLeft(
-              checkApplication(
-                argument,
-                functionType,
-                argumentType,
-                rigidTypeParameterIdentities(context),
-              ),
-              error =>
-                // A `typeMismatch` here means the argument didn't fit the
-                // parameter, so blame the argument specifically.
-                error.kind === 'typeMismatch' ?
-                  attachSpanIfAbsent(subContextForArgument)(error)
-                : error,
+            either.flatMap(
+              rigidTypeParameterIdentities(context),
+              rigidTypeParameters =>
+                either.mapLeft(
+                  checkApplication(
+                    argument,
+                    functionType,
+                    argumentType,
+                    rigidTypeParameters,
+                  ),
+                  error =>
+                    // A `typeMismatch` here means the argument didn't fit the
+                    // parameter, so blame the argument specifically.
+                    error.kind === 'typeMismatch' ?
+                      attachSpanIfAbsent(subContextForArgument)(error)
+                    : error,
+                ),
             ),
         )
 

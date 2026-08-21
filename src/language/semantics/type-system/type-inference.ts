@@ -4,6 +4,7 @@ import type { ElaborationError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import {
   applyKeyPathToSemanticGraph,
+  attachSpanIfAbsent,
   getParameterName,
   ignoredKey,
   isAssignable,
@@ -72,22 +73,24 @@ import {
 } from './type-substitution.js'
 
 /**
- * Returns a `Map` of parameter names to their types for the function parameters
+ * Returns a map of parameter names to their types for the function parameters
  * that are in scope for the given `context`'s `location`. Inner parameters
  * shadow outer ones with the same name.
  */
 export const resolveParameterTypes = (
   context: ExpressionContext,
-): ReadonlyMap<Atom, Type> =>
-  resolveEnclosingFunctionParameters(context).reduce(
-    (parameterTypes, { parameterName, parameterTypeInfo }) =>
-      parameterTypes.has(parameterName) ? parameterTypes : (
-        new Map([
-          ...parameterTypes,
-          [parameterName, parameterTypeInfo.parameterType],
-        ])
-      ),
-    new Map<Atom, Type>(),
+): Either<ElaborationError, ReadonlyMap<Atom, Type>> =>
+  either.map(resolveEnclosingFunctionParameters(context), enclosingParameters =>
+    enclosingParameters.reduce(
+      (parameterTypes, { parameterName, parameterTypeInfo }) =>
+        parameterTypes.has(parameterName) ? parameterTypes : (
+          new Map([
+            ...parameterTypes,
+            [parameterName, parameterTypeInfo.parameterType],
+          ])
+        ),
+      new Map<Atom, Type>(),
+    ),
   )
 
 /**
@@ -97,24 +100,23 @@ export const resolveParameterTypes = (
  */
 export const rigidTypeParameterIdentities = (
   context: ExpressionContext,
-): ReadonlySet<symbol> =>
-  new Set(
-    resolveEnclosingFunctionParameters(context).flatMap(
-      ({ parameterTypeInfo }) => [
-        ...parameterTypeInfo.typeParametersBoundByFunction,
-      ],
-    ),
+): Either<ElaborationError, ReadonlySet<symbol>> =>
+  either.map(
+    resolveEnclosingFunctionParameters(context),
+    enclosingParameters =>
+      new Set(
+        enclosingParameters.flatMap(({ parameterTypeInfo }) => [
+          ...parameterTypeInfo.typeParametersBoundByFunction,
+        ]),
+      ),
   )
 
 export const inferType = (
   node: SemanticGraph,
   context: ExpressionContext,
 ): Either<ElaborationError, Type> =>
-  inferTypeImplementation(
-    node,
-    resolveParameterTypes(context),
-    new Set(),
-    context,
+  either.flatMap(resolveParameterTypes(context), parameterTypes =>
+    inferTypeImplementation(node, parameterTypes, new Set(), context),
   )
 
 /**
@@ -135,11 +137,13 @@ export const inferTypeOfTypeAnnotation = (
   node: SemanticGraph,
   context: ExpressionContext,
 ): Either<ElaborationError, Type> =>
-  inferTypeOfTypeAnnotationImplementation(
-    node,
-    resolveParameterTypes(context),
-    new Set(),
-    context,
+  either.flatMap(resolveParameterTypes(context), parameterTypes =>
+    inferTypeOfTypeAnnotationImplementation(
+      node,
+      parameterTypes,
+      new Set(),
+      context,
+    ),
   )
 
 const inferTypeImplementation = (
@@ -982,12 +986,12 @@ type EnclosingFunctionParameter = {
  */
 const resolveEnclosingFunctionParameters = (
   context: ExpressionContext,
-): readonly EnclosingFunctionParameter[] => {
+): Either<ElaborationError, readonly EnclosingFunctionParameter[]> => {
   const collectFromLocation = (
     currentLocation: KeyPath,
-  ): readonly EnclosingFunctionParameter[] => {
+  ): Either<ElaborationError, readonly EnclosingFunctionParameter[]> => {
     if (currentLocation.length < 2) {
-      return []
+      return either.makeRight([])
     } else {
       const enclosingFunction = option.flatMap(
         enclosingExpressionFromPropertyOfExpressionArgument({
@@ -1009,47 +1013,50 @@ const resolveEnclosingFunctionParameters = (
         context.location[enclosingFunctionLocation.length] === '1' &&
         context.location[enclosingFunctionLocation.length + 1] === 'parameter'
 
-      const parametersFromThisLevel = option.match(enclosingFunction, {
-        none: _ => [],
+      const parametersFromThisLevel: Either<
+        ElaborationError,
+        readonly EnclosingFunctionParameter[]
+      > = option.match(enclosingFunction, {
+        none: _ => either.makeRight([]),
         some: functionExpression => {
-          if (isInsideOwnAnnotation) {
-            return []
-          } else {
-            const parameterTypeInfoResult = getFunctionParameterType(
-              functionExpression,
-              {
-                configuration: context.configuration,
-                keywordHandlers: context.keywordHandlers,
-                program: context.program,
-                location: enclosingFunctionLocation,
-                mutableInferenceCache: context.mutableInferenceCache,
-                mutableFunctionParameterCache:
-                  context.mutableFunctionParameterCache,
-                applicationChain: context.applicationChain,
-              },
-            )
-
-            if (either.isLeft(parameterTypeInfoResult)) {
-              throw new Error(
-                'Cannot determine parameter type of function. This is a bug!',
-                { cause: parameterTypeInfoResult.value },
+          const parameterName = getParameterName(functionExpression)
+          return isInsideOwnAnnotation ?
+              either.makeRight([])
+            : either.map(
+                either.mapLeft(
+                  getFunctionParameterType(functionExpression, {
+                    configuration: context.configuration,
+                    keywordHandlers: context.keywordHandlers,
+                    program: context.program,
+                    location: enclosingFunctionLocation,
+                    mutableInferenceCache: context.mutableInferenceCache,
+                    mutableFunctionParameterCache:
+                      context.mutableFunctionParameterCache,
+                    applicationChain: context.applicationChain,
+                  }),
+                  // The annotation is at fault, not whatever is being inferred
+                  // at `context.location`.
+                  attachSpanIfAbsent({
+                    ...context,
+                    location: [
+                      ...enclosingFunctionLocation,
+                      '1',
+                      'parameter',
+                      parameterName,
+                    ],
+                  }),
+                ),
+                parameterTypeInfo => [{ parameterName, parameterTypeInfo }],
               )
-            } else {
-              return [
-                {
-                  parameterName: getParameterName(functionExpression),
-                  parameterTypeInfo: parameterTypeInfoResult.value,
-                },
-              ]
-            }
-          }
         },
       })
 
-      return [
-        ...parametersFromThisLevel,
-        ...collectFromLocation(currentLocation.slice(0, -1)),
-      ]
+      return either.flatMap(parametersFromThisLevel, parameters =>
+        either.map(
+          collectFromLocation(currentLocation.slice(0, -1)),
+          enclosingParameters => [...parameters, ...enclosingParameters],
+        ),
+      )
     }
   }
   return collectFromLocation(context.location)
