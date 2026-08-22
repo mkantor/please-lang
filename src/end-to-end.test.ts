@@ -864,6 +864,32 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }),
   ],
   [
+    // `(1 + 1) ~ 2`
+    '1 + 1 ~ 2',
+    success('2'),
+  ],
+  [
+    // `(1 + 1) | 3`
+    '1 + 1 | 3',
+    success({ '0': '@union', '1': { '0': '2', '1': '3' } }),
+  ],
+  [
+    // `false | ((1 + 1) ~ 2) | true`
+    'false | 1 + 1 ~ 2 | true',
+    success({ '0': '@union', '1': { '0': 'false', '1': '2', '2': 'true' } }),
+  ],
+  [
+    // `(a: :atom.type) => ((:a ~ :atom.type) ~ :atom.type)`
+    '(a: :atom.type) => :a ~ :atom.type ~ :atom.type',
+    assertSuccess,
+  ],
+  [
+    // `(stuff: {}) => ((:stuff object.lookup a) ~ :option.type(:something.type))`
+    '(stuff: {}) => :stuff object.lookup a ~ :option.type(:something.type)',
+    assertSuccess,
+  ],
+  [`(stuff: {}) => :stuff object.lookup a ~ :integer.type`, typeMismatch],
+  [
     `{
       |>: (f: ?a ~> ?b) => (a: :a) => :f(:a)
       ab: a |> :atom.append(b)

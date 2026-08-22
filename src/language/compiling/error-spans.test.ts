@@ -59,6 +59,18 @@ suite('compile attaches source spans to elaboration errors', () => {
     assert.equal(source.slice(14, 22), ':missing')
   })
 
+  test('a check on an infix expression blames the whole expression', () => {
+    const source = '1 + 1 ~ :object.type'
+    assert.deepEqual(compileErrorSpan(source), [0, 5])
+    assert.equal(source.slice(0, 5), '1 + 1')
+  })
+
+  test('a check trailing a function body blames the body', () => {
+    const source = '(stuff: {}) => :stuff object.lookup a ~ :integer.type'
+    assert.deepEqual(compileErrorSpan(source), [15, 37])
+    assert.equal(source.slice(15, 37), ':stuff object.lookup a')
+  })
+
   test('an invalid parameter annotation blames the annotation', () => {
     const source = '(a: { [:something.type]: a }) => :a object.lookup a'
     assert.deepEqual(compileErrorSpan(source), [4, 28])
