@@ -273,8 +273,8 @@ annotated:
 }
 ```
 
-The `~` operator (syntax sugar for the `@check` keyword) can be used for type
-ascription of expressions:
+The `~` operator (syntax sugar for the `@check` keyword) can be used to annotate
+the type of expressions:
 
 ```plz
 :a ~ :boolean.type
@@ -283,8 +283,21 @@ ascription of expressions:
 An error will be raised at compile time if `:a` is not a boolean value.
 
 Types are values in Please, and can be created and transformed via any mechanism
-you'd apply to other values (you can return them from functions, pass them as
-arguments, use `@if` to base them on a condition, etc).
+you'd use for other values (you can return them from functions, pass them as
+arguments, use `@if` to base them on a condition, etc). For example, this works:
+
+```plz
+{
+  one: 1
+  two: :one * 2
+  three: @if {
+    :two atom.equals (:one + :one)
+    then: 3
+    else: nope
+  }
+  (3 - 2 * 3) ~ :three // this line typechecks
+}
+```
 
 Function types can be denoted using `~>` instead of `=>` to avoid naming the
 parameter, but this is merely syntax sugar. `a ~> b` is exactly equivalent to
