@@ -111,7 +111,7 @@ const compileSuite = testCases(
 
 compileSuite('self-referential lookups', [
   [
-    '{ f: (n: :integer.type) => :f(:n) }',
+    '{ f: (n: :Integer) => :f(:n) }',
     output => {
       assert(either.isRight(output))
       assert.deepEqual(
@@ -123,7 +123,7 @@ compileSuite('self-referential lookups', [
   ],
 
   [
-    '{ helper: 1, f: (x: :integer.type) => :helper }',
+    '{ helper: 1, f: (x: :Integer) => :helper }',
     output => {
       assert(either.isRight(output))
       assert(
@@ -142,7 +142,7 @@ const compileAndRun = testCases(
 compileAndRun('types of self-referential lookups', [
   [
     `{
-      f: (n: :integer.type) => @if { :n < 1, then: 0, else: 1 + :f(:n - 1) }
+      f: (n: :Integer) => @if { :n < 1, then: 0, else: 1 + :f(:n - 1) }
       main: :f(3)
     }.main`,
     output => {
@@ -154,7 +154,7 @@ compileAndRun('types of self-referential lookups', [
 
 compileAndRun('unbounded recursion within a self-referential function', [
   [
-    '{ f: (n: :integer.type) => :f(1), main: :f(0) }.main',
+    '{ f: (n: :Integer) => :f(1), main: :f(0) }.main',
     output => {
       assert(either.isLeft(output))
       assert('kind' in output.value)

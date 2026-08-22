@@ -112,8 +112,8 @@ const compileAndRun = testCases(
 compileAndRun('recursion through host-implemented functions', [
   [
     `{
-      f: (n: :integer.type) =>
-        :option.make_some(42) option.map ((m: :integer.type) => :f(:m))
+      f: (n: :Integer) =>
+        :option.make_some(42) option.map ((m: :Integer) => :f(:m))
       main: :f(0)
     }.main`,
     output => {
@@ -126,8 +126,8 @@ compileAndRun('recursion through host-implemented functions', [
 
   [
     `{
-      f: (n: :integer.type) => :option.make_some(42) match {
-        some: (m: :integer.type) => :f(:m)
+      f: (n: :Integer) => :option.make_some(42) match {
+        some: (m: :Integer) => :f(:m)
         none: _ => 0
       }
       main: :f(0)
@@ -142,8 +142,8 @@ compileAndRun('recursion through host-implemented functions', [
 
   [
     `{
-      f: (n: :integer.type) =>
-        :option.make_some(42) option.map ((m: :integer.type) => :f(:m))
+      f: (n: :Integer) =>
+        :option.make_some(42) option.map ((m: :Integer) => :f(:m))
     }`,
     output => {
       assert(either.isRight(output))

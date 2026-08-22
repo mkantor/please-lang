@@ -269,7 +269,7 @@ annotated:
 
 ```plz
 {
-  increment: (a: :integer.type) => :a + 1
+  increment: (a: :Integer) => :a + 1
 }
 ```
 
@@ -277,7 +277,7 @@ The `~` operator (syntax sugar for the `@check` keyword) can be used to annotate
 the type of expressions:
 
 ```plz
-:a ~ :boolean.type
+:a ~ :Boolean
 ```
 
 An error will be raised at compile time if `:a` is not a boolean value.
@@ -310,8 +310,8 @@ example:
 
 ```plz
 {
-  integer_identity: (n: :integer.type) => :n
-  answer: :integer_identity(42) ~ 42 // return type is `42`, not `:integer.type`
+  integer_identity: (n: :Integer) => :n
+  answer: :integer_identity(42) ~ 42 // return type is `42`, not `:Integer`
 }
 ```
 
@@ -334,8 +334,8 @@ two functions mean the same thing:
 
 ```plz
 {
-  integer_identity_1: (n: (?n: :integer.type)) => :n
-  integer_identity_2: (n: :integer.type) => :n
+  integer_identity_1: (n: (?n: :Integer)) => :n
+  integer_identity_2: (n: :Integer) => :n
 }
 ```
 
@@ -347,13 +347,13 @@ are closed under addition, so the return value of the below function is
 statically known to be a natural number:
 
 ```plz
-(a: :natural_number.type) => (:a + 1) ~ :natural_number.type
+(a: :NaturalNumber) => (:a + 1) ~ :NaturalNumber
 ```
 
 Subtraction can underflow, so it _isn't_ closed over the natural numbers like
 addition. An analogous program using `:a - 1` is rejected at compile time
-because the inferred type is only `:integer.type` (`:a` could be `0`, then
-`:a - 1` would be `-1` which isn't a natural number).
+because the inferred type is only `:Integer` (`:a` could be `0`, then `:a - 1`
+would be `-1` which isn't a natural number).
 
 Please also understands that indexing an object will yield one of the values
 that specific key could select:
@@ -370,7 +370,7 @@ reason about the condition, Please knows which branch will be executed:
 
 ```plz
 {
-  classify: (a: :integer.type) =>
+  classify: (a: :Integer) =>
     @if {
       :a < 0
       then: negative

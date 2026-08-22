@@ -29,29 +29,29 @@ const assertMessageContains = (source: string, expected: string): void => {
 suite('stuck applications are resolved in error messages', () => {
   test('a partially applied prelude function reports what it produces', () => {
     assertMessageContains(
-      '(x: { a: :integer.type }) => :object.overlay(:x)({ b: true }) ~ { b: true }',
-      '`{ b: :something.type, a: (?"x.a": :integer.type) }`',
+      '(x: { a: :Integer }) => :object.overlay(:x)({ b: true }) ~ { b: true }',
+      '`{ b: :Something, a: (?"x.a": :Integer) }`',
     )
   })
 
   test('nested applications collapse rather than compounding', () => {
     assertMessageContains(
-      '(f: :atom.type ~> :atom.type) => (x: :atom.type) => :f(:f(:f(:f(:x)))) ~ :nothing.type',
-      'inferred to have type `(?"f.#return": :atom.type)`',
+      '(f: :Atom ~> :Atom) => (x: :Atom) => :f(:f(:f(:f(:x)))) ~ :Nothing',
+      'inferred to have type `(?"f.#return": :Atom)`',
     )
   })
 
   test('applications within a stuck projection are resolved', () => {
     assertMessageContains(
-      '(f: :atom.type ~> :integer.type) => (b: :boolean.type) => (x: :atom.type) => @if { :b, then: :f(:x), else: true } ~ :nothing.type',
-      '`{ false: true, true: (?"f.#return": :integer.type) }.((?b: false | true))`',
+      '(f: :Atom ~> :Integer) => (b: :Boolean) => (x: :Atom) => @if { :b, then: :f(:x), else: true } ~ :Nothing',
+      '`{ false: true, true: (?"f.#return": :Integer) }.((?b: false | true))`',
     )
   })
 
   test('applications within a stdlib return type are resolved', () => {
     assertMessageContains(
-      '(f: :atom.type ~> :integer.type) => (x: :atom.type) => :object.overlay({ a: :f(:x) })({ b: true }) ~ :nothing.type',
-      '`{ [:atom.type]: :nothing.type, b: true, a: (?"f.#return": :integer.type) }`',
+      '(f: :Atom ~> :Integer) => (x: :Atom) => :object.overlay({ a: :f(:x) })({ b: true }) ~ :Nothing',
+      '`{ [:Atom]: :Nothing, b: true, a: (?"f.#return": :Integer) }`',
     )
   })
 })
@@ -59,8 +59,8 @@ suite('stuck applications are resolved in error messages', () => {
 suite('the top type is reported as itself', () => {
   test('a union which contains it collapses to it', () => {
     assertMessageContains(
-      '{ recurse: (k: :atom.type) => (:object.lookup(:k)({ a: :recurse, b: true }) ~ :nothing.type) }',
-      'value: :something.type',
+      '{ recurse: (k: :Atom) => (:object.lookup(:k)({ a: :recurse, b: true }) ~ :Nothing) }',
+      'value: :Something',
     )
   })
 })
@@ -68,19 +68,19 @@ suite('the top type is reported as itself', () => {
 suite('type parameters survive in error messages', () => {
   test('a signature requiring two positions to agree keeps saying so', () => {
     assertMessageContains(
-      '((f: ?a ~> :a) => :f)((x: :integer.type) => true)',
+      '((f: ?a ~> :a) => :f)((x: :Integer) => true)',
       'parameter type `?a ~> :a`',
     )
   })
 
   test('a parameter shared between properties keeps its identity', () => {
     assertMessageContains(
-      '(x: ?t) => { first: :x, second: :x } ~ { first: :integer.type, second: :atom.type }',
+      '(x: ?t) => { first: :x, second: :x } ~ { first: :Integer, second: :Atom }',
       'first: ?t, second: :t',
     )
   })
 
   test('an unannotated parameter is not reported as the top type', () => {
-    assertMessageContains('a => :a ~ :integer.type', 'have type `?a`')
+    assertMessageContains('a => :a ~ :Integer', 'have type `?a`')
   })
 })

@@ -22,7 +22,7 @@ export type GenericizedFunctionParameterAnnotation = {
  * make functions implicitly generic, even when annotated. For example:
  *
  * ```plz
- * ((x: { a: :integer.type }) => :x.a)({ a: 42 }) ~ 42
+ * ((x: { a: :Integer }) => :x.a)({ a: 42 }) ~ 42
  * ```
  */
 export const genericizeFunctionParameterAnnotation = (
@@ -71,7 +71,7 @@ const genericizeFunctionParameterAnnotationAtKeyPath = (
     object: type => {
       if (Object.keys(type.children).length === 0) {
         // Treat empty object types as leaves to make sure that functions like
-        // `(a: :object.type) => :a` are genericized.
+        // `(a: :Object) => :a` are genericized.
         return genericizeLeaf(
           parameterName,
           keyPath,

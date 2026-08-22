@@ -13,9 +13,7 @@ import {
   ignoredKey,
   isExpression,
   isSemanticGraph,
-  makeIndexExpression,
   makeLookupExpression,
-  objectNodeFromOrderedEntries,
   readApplyExpression,
   readFunctionExpression,
   readHoleExpression,
@@ -587,8 +585,12 @@ const unparseSugaredLookup =
       ),
     )
 
+// Serialization spells the top type as the prelude alias `:Something`, but the
+// `:something.type` property that alias points at is equally valid to write by
+// hand, so both spellings have to be recognized here.
 const isTopType = (value: SemanticGraph): boolean =>
   value === types.somethingTypeSymbol ||
+  isTopTypeAliasLookup(value) ||
   either.match(
     either.flatMap(readIndexExpression(value), ({ 1: { object, query } }) =>
       query[0] === 'type' && Object.keys(query).length === 1 ?
@@ -600,6 +602,12 @@ const isTopType = (value: SemanticGraph): boolean =>
       left: _ => false,
     },
   )
+
+const isTopTypeAliasLookup = (value: SemanticGraph): boolean =>
+  either.match(readLookupExpression(value), {
+    right: lookupExpression => lookupExpression[1].key === 'Something',
+    left: _ => false,
+  })
 
 const unparseSugaredHole =
   ({ unparseAtomOrMolecule }: Context) =>
@@ -771,7 +779,7 @@ const unparseSugaredUnion =
     const members = Object.values(expression[1])
 
     if (members.length === 0) {
-      return unparseSugaredIndex(context)(getBottomTypeAsSemanticGraph())
+      return unparseSugaredLookup(context)(getBottomTypeAsSemanticGraph())
     } else {
       // Unparse each member, adding parentheses when needed.
       return members.reduce(
@@ -892,7 +900,7 @@ const isTightlyBoundNonCompactExpression = (
 const isNonCompactExpression = (expression: SemanticGraph | Molecule) =>
   isTightlyBoundNonCompactExpression(expression) ||
   either.match(readUnionExpression(asSemanticGraph(expression)), {
-    // Empty unions render as `:nothing.type`.
+    // Empty unions render as `:Nothing`.
     right: unionExpression => Object.values(unionExpression[1]).length !== 0,
     left: _ => false,
   }) ||
@@ -903,8 +911,4 @@ const isNonCompactExpression = (expression: SemanticGraph | Molecule) =>
     ),
   )
 
-const getBottomTypeAsSemanticGraph = () =>
-  makeIndexExpression({
-    object: makeLookupExpression('nothing'),
-    query: objectNodeFromOrderedEntries([['0', 'type']]),
-  })
+const getBottomTypeAsSemanticGraph = () => makeLookupExpression('Nothing')

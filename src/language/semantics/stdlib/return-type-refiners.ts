@@ -27,7 +27,7 @@ export const closedOver =
 /**
  * Builds a `computeRefinedReturnType` function for an `is`-style predicate:
  * when the argument type is assignable to `target` the result is necessarily
- * the literal `true`, otherwise it stays `:boolean.type`.
+ * the literal `true`, otherwise it stays `:Boolean`.
  */
 export const computeIsReturnType =
   (target: Type) =>

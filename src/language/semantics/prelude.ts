@@ -20,6 +20,15 @@ export const prelude = makeObjectNode({
   object: makeObjectNode(object),
   something: makeObjectNode(something),
 
+  Atom: atom.type,
+  Option: option.type,
+  Boolean: boolean.type,
+  Integer: integer.type,
+  NaturalNumber: natural_number.type,
+  Nothing: nothing.type,
+  Object: object.type,
+  Something: something.type,
+
   // Aliases:
   '>>': globalFunctions.flow,
   '|>': globalFunctions.identity,

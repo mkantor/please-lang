@@ -105,8 +105,8 @@ testCases(parseAndCompileAndRun, code => code)('runtime-derived values', [
     success('42'),
   ],
   [
-    `((a: :natural_number.type) => {
-      my_function: (b: :natural_number.type) => @if {
+    `((a: :NaturalNumber) => {
+      my_function: (b: :NaturalNumber) => @if {
         :b > :a
         then: @panic "should not go down this branch"
         else: 2 + @if {
@@ -121,8 +121,8 @@ testCases(parseAndCompileAndRun, code => code)('runtime-derived values', [
   ],
   [
     `{
-      count: (limit: :natural_number.type) => {
-        count_internal: (state: { current: :integer.type, output: :atom.type }) =>
+      count: (limit: :NaturalNumber) => {
+        count_internal: (state: { current: :Integer, output: :Atom }) =>
           @if {
             :state.current > :limit
             then: :state.output
@@ -474,7 +474,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [
     `{
-      fibonacci: (n: :integer.type) =>
+      fibonacci: (n: :Integer) =>
         @if {
           :integer.is_less_than(2)(:n)
           then: :n
@@ -486,7 +486,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [
     `{
-      +: (a: :integer.type) => (b: :integer.type) => :integer.add(:a)(:b)
+      +: (a: :Integer) => (b: :Integer) => :integer.add(:a)(:b)
       result: 1 + 1
      }.result`,
     success('2'),
@@ -501,7 +501,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [`0 > 0`, success('false')],
   [`1 < 0`, success('false')],
   [`0 > 1`, success('false')],
-  [`((a: :integer.type) => (1 + :a))(1)`, success('2')],
+  [`((a: :Integer) => (1 + :a))(1)`, success('2')],
   [`2 |> (a => :a)`, success('2')],
   [`a atom.append b atom.append c`, success('abc')],
   [`b atom.append c atom.prepend a`, success('abc')],
@@ -636,7 +636,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [':option.make_some(value) option.get_or_else fallback', success('value')],
   [':option.none |> :option.get_or_else(fallback)', success('fallback')],
   [
-    '((a: :atom.type) => (:option.make_some(:a) option.get_or_else other) ~ :atom.type)(hello)',
+    '((a: :Atom) => (:option.make_some(:a) option.get_or_else other) ~ :Atom)(hello)',
     success('hello'),
   ],
   [':option.is_some(:option.make_some(7))', success('true')],
@@ -644,17 +644,17 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [':option.is_none(:option.none)', success('true')],
   [':option.is_none(:option.make_some(7))', success('false')],
   [
-    `:option.make_some(key) option.flat_map ((a: :atom.type) => { key: value } object.lookup :a)`,
+    `:option.make_some(key) option.flat_map ((a: :Atom) => { key: value } object.lookup :a)`,
     success({ tag: 'some', value: 'value' }),
   ],
   [
-    `((code: :atom.type) =>
-      ({ en: Hello, es: Hola } object.lookup :code option.get_or_else Hi) ~ :atom.type
+    `((code: :Atom) =>
+      ({ en: Hello, es: Hola } object.lookup :code option.get_or_else Hi) ~ :Atom
     )(es)`,
     success('Hola'),
   ],
-  [`((x: { a: :integer.type }) => :x.a)({ a: 42, b: extra })`, success('42')],
-  [`((x: :object.type) => :x)({ a: 1, b: {} })`, success({ a: '1', b: {} })],
+  [`((x: { a: :Integer }) => :x.a)({ a: 42, b: extra })`, success('42')],
+  [`((x: :Object) => :x)({ a: 1, b: {} })`, success({ a: '1', b: {} })],
   [
     // Lookups should never target keyword expression properties.
     `{
@@ -712,11 +712,11 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [
     `{
-      a: 42 assume :natural_number.type
-      b: true ~ :boolean.type
-      c: {} ~ :object.type
-      d: { z: -42 } assume { z: :integer.type }
-      e: "not a number" assume @union { :integer.type, "not a number" }
+      a: 42 assume :NaturalNumber
+      b: true ~ :Boolean
+      c: {} ~ :Object
+      d: { z: -42 } assume { z: :Integer }
+      e: "not a number" assume @union { :Integer, "not a number" }
     }`,
     success({
       a: '42',
@@ -726,7 +726,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       e: 'not a number',
     }),
   ],
-  [`"not a number" assume :integer.type`, typeMismatch],
+  [`"not a number" assume :Integer`, typeMismatch],
   [
     `@runtime { context =>
       :context.environment.lookup("not a legal environment variable name")
@@ -736,10 +736,10 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }`,
     success('a'),
   ],
-  [`((a: :integer.type) => (b: :integer.type) => :a + :b)(1)(1)`, success('2')],
+  [`((a: :Integer) => (b: :Integer) => :a + :b)(1)(1)`, success('2')],
   [
     `{
-      f: (state: { current: :integer.type, limit: :integer.type }) => @if {
+      f: (state: { current: :Integer, limit: :Integer }) => @if {
         :state.current > :state.limit
         then: "it works"
         else: :f({
@@ -751,7 +751,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success('it works'),
   ],
   [
-    `((inner: { a: :boolean.type }) => @if {
+    `((inner: { a: :Boolean }) => @if {
       :inner.a
       then: "it works"
       else: { @panic }
@@ -759,8 +759,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success('it works'),
   ],
   [
-    `((outer: :boolean.type) =>
-      ((inner: { value: :boolean.type }) =>
+    `((outer: :Boolean) =>
+      ((inner: { value: :Boolean }) =>
         @if {
           condition: :boolean.or(:outer)(:inner.value)
           then: { @panic }
@@ -771,8 +771,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success('true'),
   ],
   [
-    `((outer: :boolean.type) =>
-      ((inner: { value: :boolean.type }) =>
+    `((outer: :Boolean) =>
+      ((inner: { value: :Boolean }) =>
         @if {
           condition: :boolean.or(:outer)(:inner.value)
           then: "it works"
@@ -782,8 +782,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     )(true)`,
     success('it works'),
   ],
-  [`(:boolean.not ~ (:boolean.type ~> :boolean.type))(false)`, success('true')],
-  [`:boolean.not ~ (:boolean.type ~> :integer.type)`, typeMismatch],
+  [`(:boolean.not ~ (:Boolean ~> :Boolean))(false)`, success('true')],
+  [`:boolean.not ~ (:Boolean ~> :Integer)`, typeMismatch],
   [
     `{ 1 integer.equals 1, 1 integer.equals 2 }`,
     success({ 0: 'true', 1: 'false' }),
@@ -800,17 +800,17 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     ),
   ],
   [`:object.from_property(key)(value)`, success({ key: 'value' })],
-  [`(1 + 1) ~ :integer.type`, success('2')],
+  [`(1 + 1) ~ :Integer`, success('2')],
   [
     `{
-      1 ~ :something.type
-      blah ~ :something.type
-      {} ~ :something.type
-      (a => :a) ~ :something.type
+      1 ~ :Something
+      blah ~ :Something
+      {} ~ :Something
+      (a => :a) ~ :Something
     }`,
     assertSuccess,
   ],
-  [`"arbitrary value" ~ :nothing.type`, typeMismatch],
+  [`"arbitrary value" ~ :Nothing`, typeMismatch],
   [
     // `true | (false || true) | false`
     'true | false || true | false',
@@ -879,87 +879,87 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success({ '0': '@union', '1': { '0': 'false', '1': '2', '2': 'true' } }),
   ],
   [
-    // `(a: :atom.type) => ((:a ~ :atom.type) ~ :atom.type)`
-    '(a: :atom.type) => :a ~ :atom.type ~ :atom.type',
+    // `(a: :Atom) => ((:a ~ :Atom) ~ :Atom)`
+    '(a: :Atom) => :a ~ :Atom ~ :Atom',
     assertSuccess,
   ],
   [
-    // `(stuff: {}) => ((:stuff object.lookup a) ~ :option.type(:something.type))`
-    '(stuff: {}) => :stuff object.lookup a ~ :option.type(:something.type)',
+    // `(stuff: {}) => ((:stuff object.lookup a) ~ :Option(:Something))`
+    '(stuff: {}) => :stuff object.lookup a ~ :Option(:Something)',
     assertSuccess,
   ],
-  [`(stuff: {}) => :stuff object.lookup a ~ :integer.type`, typeMismatch],
+  [`(stuff: {}) => :stuff object.lookup a ~ :Integer`, typeMismatch],
   [
-    `(stuff: { [:atom.type]: :integer.type }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    `(stuff: { [:Atom]: :Integer }) => :stuff object.lookup a ~ :Option(:Integer)`,
     assertSuccess,
   ],
   [
-    `(stuff: { [:atom.type]: :integer.type }) => :stuff object.lookup a ~ :option.type(:boolean.type)`,
+    `(stuff: { [:Atom]: :Integer }) => :stuff object.lookup a ~ :Option(:Boolean)`,
     typeMismatch,
   ],
   [
-    `(stuff: { [a | b]: :integer.type }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    `(stuff: { [a | b]: :Integer }) => :stuff object.lookup a ~ :Option(:Integer)`,
     assertSuccess,
   ],
   [
-    `(stuff: { [a | b]: :integer.type }) => :stuff object.lookup c ~ :option.type(:integer.type)`,
+    `(stuff: { [a | b]: :Integer }) => :stuff object.lookup c ~ :Option(:Integer)`,
     typeMismatch,
   ],
   [
-    `(stuff: { a: :integer.type } | { a: :boolean.type }) => :stuff object.lookup a ~ :option.type(:integer.type | :boolean.type)`,
+    `(stuff: { a: :Integer } | { a: :Boolean }) => :stuff object.lookup a ~ :Option(:Integer | :Boolean)`,
     assertSuccess,
   ],
   [
-    `(stuff: { a: :integer.type } | { a: :boolean.type }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+    `(stuff: { a: :Integer } | { a: :Boolean }) => :stuff object.lookup a ~ :Option(:Integer)`,
     typeMismatch,
   ],
   [
     `(stuff: {
-      a: :integer.type
-      [:atom.type]: :nothing.type
+      a: :Integer
+      [:Atom]: :Nothing
     } | {
-      b: :boolean.type
-      [:atom.type]: :nothing.type
-    }) => :stuff object.lookup a ~ :option.type(:integer.type)`,
+      b: :Boolean
+      [:Atom]: :Nothing
+    }) => :stuff object.lookup a ~ :Option(:Integer)`,
     assertSuccess,
   ],
   [
-    `(stuff: { a: :integer.type } | { b: :boolean.type }) =>
-      :stuff object.lookup a ~ :option.type(:integer.type)`,
+    `(stuff: { a: :Integer } | { b: :Boolean }) =>
+      :stuff object.lookup a ~ :Option(:Integer)`,
     typeMismatch,
   ],
   [
-    `((x: { [:atom.type]: :integer.type }) => :x)({ a: 42 }) ~ { a: 42 }`,
+    `((x: { [:Atom]: :Integer }) => :x)({ a: 42 }) ~ { a: 42 }`,
     success({ a: '42' }),
   ],
   [
-    `(key: :natural_number.type) =>
-      (stuff: { [:natural_number.type]: :integer.type }) =>
-        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    `(key: :NaturalNumber) =>
+      (stuff: { [:NaturalNumber]: :Integer }) =>
+        :stuff object.lookup :key ~ :Option(:Integer)`,
     assertSuccess,
   ],
   [
-    `(key: :natural_number.type) =>
-      (stuff: { [:natural_number.type]: :integer.type }) =>
-        :stuff object.lookup :key ~ :option.type(:boolean.type)`,
+    `(key: :NaturalNumber) =>
+      (stuff: { [:NaturalNumber]: :Integer }) =>
+        :stuff object.lookup :key ~ :Option(:Boolean)`,
     typeMismatch,
   ],
   [
-    `(key: :atom.type) =>
-      (stuff: { [:natural_number.type]: :integer.type }) =>
-        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    `(key: :Atom) =>
+      (stuff: { [:NaturalNumber]: :Integer }) =>
+        :stuff object.lookup :key ~ :Option(:Integer)`,
     typeMismatch,
   ],
   [
-    `(key: :natural_number.type) =>
-      (stuff: { [:atom.type]: :boolean.type, [:natural_number.type]: :integer.type }) =>
-        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    `(key: :NaturalNumber) =>
+      (stuff: { [:Atom]: :Boolean, [:NaturalNumber]: :Integer }) =>
+        :stuff object.lookup :key ~ :Option(:Integer)`,
     assertSuccess,
   ],
   [
-    `(key: :natural_number.type) =>
-      (stuff: { foo: true, [:natural_number.type]: :integer.type }) =>
-        :stuff object.lookup :key ~ :option.type(:integer.type)`,
+    `(key: :NaturalNumber) =>
+      (stuff: { foo: true, [:NaturalNumber]: :Integer }) =>
+        :stuff object.lookup :key ~ :Option(:Integer)`,
     assertSuccess,
   ],
   [
@@ -989,7 +989,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [
     `{
       increment: @function {
-        parameter: { a: :integer.type }
+        parameter: { a: :Integer }
         body: :a + 1
       }
       two: :increment(1)
@@ -1013,14 +1013,14 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     `(x: @object {
       properties: {}
       excess: {
-        { :atom.type, :nothing.type }
-        { :natural_number.type, :atom.type }
+        { :Atom, :Nothing }
+        { :NaturalNumber, :Atom }
       }
     }) =>
       (:x ~ @object {
         properties: {}
         excess: {
-          { :atom.type, :atom.type }
+          { :Atom, :Atom }
         }
       })`,
     assertSuccess,
@@ -1029,31 +1029,31 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     `(x: @object {
       properties: {}
       excess: {
-        { :atom.type, :atom.type }
+        { :Atom, :Atom }
       }
     }) =>
       (:x ~ @object {
         properties: {}
         excess: {
-          { :atom.type, :atom.type }
-          { :natural_number.type, :integer.type }
+          { :Atom, :Atom }
+          { :NaturalNumber, :Integer }
         }
       })`,
     typeMismatch,
   ],
   [
     `(x: @object {
-      properties: { a: :integer.type }
+      properties: { a: :Integer }
       excess: {
-        { :atom.type, :atom.type }
-        { :natural_number.type, :integer.type }
+        { :Atom, :Atom }
+        { :NaturalNumber, :Integer }
       }
     }) =>
-      (:object.lookup(5)(:x) ~ :option.type(:integer.type))`,
+      (:object.lookup(5)(:x) ~ :Option(:Integer))`,
     assertSuccess,
   ],
   [
-    `(o: :object.type) => {
+    `(o: :Object) => {
       first: :o object.lookup 0
       return: :identity(:first.value)
     }.return`,
@@ -1067,97 +1067,91 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success({ deferred: { value: '1' }, out: '1' }),
   ],
   [
-    `(o: :object.type) => {
+    `(o: :Object) => {
       first: :o object.lookup 0
       return: :first.value + 1
     }.return`,
     typeMismatch,
   ],
   [
-    `(o: :object.type) => {
+    `(o: :Object) => {
       first: :o object.lookup 0
       return: :first.value(1)
     }.return`,
     invalidExpression,
   ],
   [
-    `(x: { a: :atom.type }) => (y: { b: :atom.type }) =>
+    `(x: { a: :Atom }) => (y: { b: :Atom }) =>
       (:object.overlay(:x)(:y) ~ @object {
-        properties: { a: :atom.type, b: :something.type }
+        properties: { a: :Atom, b: :Something }
         excess: {
-          { :atom.type, :nothing.type }
+          { :Atom, :Nothing }
         }
       })`,
     typeMismatch,
   ],
   [
-    `:match({ a: (v: :integer.type) => :v })({ tag: a, value: hello })`,
+    `:match({ a: (v: :Integer) => :v })({ tag: a, value: hello })`,
     typeMismatch,
   ],
   [
-    `:match({ a: (v: :integer.type) => :v + 1 })({ tag: a, value: 41 })`,
+    `:match({ a: (v: :Integer) => :v + 1 })({ tag: a, value: 41 })`,
     success('42'),
   ],
   [
-    `((x: { [:atom.type]: :integer.type }) => :x)({ a: 1, b: 2 })`,
+    `((x: { [:Atom]: :Integer }) => :x)({ a: 1, b: 2 })`,
     success({ a: '1', b: '2' }),
   ],
-  [`((x: { [:atom.type]: :integer.type }) => :x)({ a: hello })`, typeMismatch],
+  [`((x: { [:Atom]: :Integer }) => :x)({ a: hello })`, typeMismatch],
   [
-    `((x: { [:atom.type]: :nothing.type, a: :integer.type }) => :x)({ a: 1, b: 2 })`,
+    `((x: { [:Atom]: :Nothing, a: :Integer }) => :x)({ a: 1, b: 2 })`,
     typeMismatch,
   ],
   [
-    `((x: { [:atom.type]: :nothing.type, a: :integer.type }) => :x)({ a: 1 })`,
+    `((x: { [:Atom]: :Nothing, a: :Integer }) => :x)({ a: 1 })`,
     success({ a: '1' }),
   ],
-  [`{ a: 1 } ~ { [:atom.type]: :atom.type }`, success({ a: '1' })],
-  [`{ a: {} } ~ { [:atom.type]: :atom.type }`, typeMismatch],
+  [`{ a: 1 } ~ { [:Atom]: :Atom }`, success({ a: '1' })],
+  [`{ a: {} } ~ { [:Atom]: :Atom }`, typeMismatch],
   [
-    `{ 1: hello, name: x } ~ { [:natural_number.type]: :atom.type }`,
+    `{ 1: hello, name: x } ~ { [:NaturalNumber]: :Atom }`,
     success({ 1: 'hello', name: 'x' }),
   ],
-  [`{ 1: {}, name: x } ~ { [:natural_number.type]: :atom.type }`, typeMismatch],
+  [`{ 1: {}, name: x } ~ { [:NaturalNumber]: :Atom }`, typeMismatch],
   [
-    `{ 1: hello, name: x } ~ { [:atom.type]: :nothing.type, [:natural_number.type]: :atom.type }`,
+    `{ 1: hello, name: x } ~ { [:Atom]: :Nothing, [:NaturalNumber]: :Atom }`,
     typeMismatch,
   ],
   [
-    `{ 1: hello } ~ { [:atom.type]: :atom.type, [:natural_number.type]: :integer.type }`,
+    `{ 1: hello } ~ { [:Atom]: :Atom, [:NaturalNumber]: :Integer }`,
     typeMismatch,
   ],
   [
-    `{ x: hello } ~ { [:atom.type]: :atom.type, [:natural_number.type]: :integer.type }`,
+    `{ x: hello } ~ { [:Atom]: :Atom, [:NaturalNumber]: :Integer }`,
     success({ x: 'hello' }),
   ],
+  [`{ a: hello } ~ { [a]: :Nothing, a: :Atom }`, success({ a: 'hello' })],
   [
-    `{ a: hello } ~ { [a]: :nothing.type, a: :atom.type }`,
-    success({ a: 'hello' }),
-  ],
-  [
-    `{ a: hello, b: x } ~ { a: :atom.type, [@union { a, b }]: :nothing.type }`,
+    `{ a: hello, b: x } ~ { a: :Atom, [@union { a, b }]: :Nothing }`,
     typeMismatch,
   ],
+  [`{} ~ { [:Atom]: :Atom, [:Atom]: :Nothing }`, success({})],
+  [`{} ~ { [:Atom]: a, [:Atom]: b }`, success({})],
   [
-    `{} ~ { [:atom.type]: :atom.type, [:atom.type]: :nothing.type }`,
-    success({}),
-  ],
-  [`{} ~ { [:atom.type]: a, [:atom.type]: b }`, success({})],
-  [
-    `{ a: 1, b: 2 } ~ @union { 0: { [:atom.type]: :nothing.type, a: :integer.type } }`,
+    `{ a: 1, b: 2 } ~ @union { 0: { [:Atom]: :Nothing, a: :Integer } }`,
     typeMismatch,
   ],
   // Excess clause key types much be a subtype of `atom`.
-  [`(a: { [:something.type]: a }) => _`, typeMismatch],
+  [`(a: { [:Something]: a }) => _`, typeMismatch],
   [`(a: { [{}]: b }) => _`, typeMismatch],
   [
     `{
-      sum: (start_key: :natural_number.type) =>
-        (sequence: { [:natural_number.type]: :integer.type }) =>
+      sum: (start_key: :NaturalNumber) =>
+        (sequence: { [:NaturalNumber]: :Integer }) =>
           :sequence object.lookup :start_key option.map (
-            (value1: :integer.type) =>
+            (value1: :Integer) =>
               :sequence sum (:start_key + 1) match {
-                some: (value2: :integer.type) => :value1 + :value2
+                some: (value2: :Integer) => :value1 + :value2
                 none: _ => :value1
               }
           )
@@ -1177,12 +1171,12 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [
     `{
-      sum: (start_key: :natural_number.type) =>
-        (sequence: { [:natural_number.type]: :integer.type }) =>
+      sum: (start_key: :NaturalNumber) =>
+        (sequence: { [:NaturalNumber]: :Integer }) =>
           :sequence object.lookup :start_key option.map (
-            (value1: :integer.type) =>
+            (value1: :Integer) =>
               :sequence sum (:start_key + 1) match {
-                some: (value2: :integer.type) => :value1 + :value2
+                some: (value2: :Integer) => :value1 + :value2
                 none: _ => :value1
               }
           )
@@ -1194,8 +1188,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   ],
   [
     `{
-      even: (n: :integer.type) => @if { :n < 1, true, else: :odd(:n - 1) }
-      odd: (n: :integer.type) => @if { :n < 1, false, else: :even(:n - 1) }
+      even: (n: :Integer) => @if { :n < 1, true, else: :odd(:n - 1) }
+      odd: (n: :Integer) => @if { :n < 1, false, else: :even(:n - 1) }
       results: {
         six: :even(6)
         seven: :even(7)
@@ -1208,4 +1202,19 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       mapped: { tag: 'some', value: 'true' },
     }),
   ],
+
+  // PascalCased names like `:Boolean` are the idiomatic way to name types, but
+  // standard library types are also reachable at `:module.type`.
+  [`hello ~ :atom.type ~ :Atom`, success('hello')],
+  [`(:boolean.not ~ (:boolean.type ~> :Boolean))(false)`, success('true')],
+  [`(1 + 1) ~ :integer.type ~ :Integer`, success('2')],
+  [`42 ~ :natural_number.type ~ :NaturalNumber`, success('42')],
+  [
+    `:option.make_some(1) ~ :option.type(:Integer)`,
+    success({ tag: 'some', value: '1' }),
+  ],
+  [`{ a: 1 } ~ :object.type ~ :Object`, success({ a: '1' })],
+  [`{} ~ :something.type ~ :Something`, success({})],
+  [`{ a: 1 } ~ { [:atom.type]: :Nothing, a: :Integer }`, success({ a: '1' })],
+  [`((a: :atom.type) => :a) ~ (:Atom ~> :Atom)`, assertSuccess],
 ])

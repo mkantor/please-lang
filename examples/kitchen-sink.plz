@@ -4,7 +4,7 @@
   bar: :foo
   sky_is_blue: :boolean.not(false)
   colors: { red, green, blue }
-  two: (1 + 1) ~ :integer.type
+  two: (1 + 1) ~ :Integer
   add_one: :integer.add(1)
   three: :add_one(:two)
   function: x => { value: :x }

@@ -4,7 +4,7 @@
  * Usage: cat ./examples/fibonacci.plz | ./please --input=7
  */
 {
-  fibonacci: (n: :integer.type) =>
+  fibonacci: (n: :Integer) =>
     @if {
       :n < 2
       then: :n

@@ -5,10 +5,10 @@ import type { Type } from './type.js'
 
 /**
  * A stuck application of a host-implemented standard library function. Standard
- * library functions whose return type is concrete (e.g. `:atom.type ~>
- * :atom.type ~> :atom.type` for `atom.append`) are lifted so their return
- * becomes one of these, letting the type system compute the result type from
- * argument types even when argument values are unelaborated.
+ * library functions whose return type is concrete (e.g. `:Atom ~> :Atom ~>
+ * :Atom` for `atom.append`) are lifted so their return becomes one of these,
+ * letting the type system compute the result type from argument types even when
+ * argument values are unelaborated.
  *
  * It reduces once every argument type's inhabitants can be exhaustively
  * enumerated (the type is finitely-sized). Until then it stays stuck, behaving
