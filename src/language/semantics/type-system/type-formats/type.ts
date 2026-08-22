@@ -1,4 +1,4 @@
-import { somethingTypeSymbol } from '../prelude-types.js'
+import { somethingTypeSymbol } from '../prelude-types/type-symbols.js'
 import type { ApplicationType } from './application-type.js'
 import type { FunctionType } from './function-type.js'
 import type { IndexedAccessType } from './indexed-access-type.js'
@@ -24,5 +24,5 @@ export type Type = (
 export const isBottomType = (type: Type) =>
   type.kind === 'union' && type.members.size === 0
 
-export const isTopType = (type: Type) =>
+export const isCanonicalTopType = (type: Type) =>
   'identity' in type && type.identity === somethingTypeSymbol

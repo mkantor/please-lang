@@ -1,5 +1,5 @@
 import type { Atom } from '../../../parsing.js'
-import type { Type } from './type.js'
+import { isCanonicalTopType, type Type } from './type.js'
 
 export type UnionType = {
   readonly kind: 'union'
@@ -25,12 +25,16 @@ export const makeUnionType = <Member extends Atom | Exclude<Type, UnionType>>(
 /**
  * Combine `types` into a single type: the sole element when there is exactly
  * one, otherwise a flattened union.
+ *
+ * A union containing the top type is the top type, which is returned as-is to
+ * preserve its identity.
  */
 export const unionOfTypes = (types: readonly Type[]): Type =>
-  types.length === 1 && types[0] !== undefined ?
+  types.find(isCanonicalTopType) ??
+  (types.length === 1 && types[0] !== undefined ?
     types[0]
   : makeUnionType(
       types.flatMap(type =>
         type.kind === 'union' ? [...type.members] : [type],
       ),
-    )
+    ))

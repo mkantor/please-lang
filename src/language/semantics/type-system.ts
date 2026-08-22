@@ -38,4 +38,5 @@ export {
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArgument,
   supplyTypeArguments,
+  withStuckApplicationsResolved,
 } from './type-system/type-substitution.js'

@@ -36,10 +36,11 @@ import { nodeTag } from './semantic-graph-node-tag.js'
 import {
   functionParameterKey,
   functionReturnKey,
-  isTopType,
+  isCanonicalTopType,
   matchTypeFormat,
   typeParameterAssignableToConstraintKey,
   types,
+  withStuckApplicationsResolved,
   type TypeKeyPath,
 } from './type-system.js'
 import {
@@ -353,7 +354,7 @@ export const typeToSemanticGraph = (
         firstClause === undefined ||
         (remainingClauses.length === 0 &&
           firstClause.keys === types.atom &&
-          isTopType(firstClause.values))
+          isCanonicalTopType(firstClause.values))
       return isOpen ? properties : (
           makeObjectTypeExpression(
             properties,
@@ -395,7 +396,7 @@ export const typeToSemanticGraph = (
       }
     },
     union: type => {
-      if (isTopType(type)) {
+      if (isCanonicalTopType(type)) {
         return typeSymbolToSemanticGraph(somethingTypeSymbol)
       } else {
         const [firstMember, ...remainingMembers] = type.members
@@ -423,6 +424,13 @@ export const typeToSemanticGraph = (
 
 export const stringifyTypeForEndUser = (type: Type): string =>
   stringifySemanticGraphForEndUser(typeToSemanticGraph(type, new Set()))
+
+/**
+ * Like `stringifyTypeForEndUser`, but stuck applications are first replaced with
+ * what they are known to produce.
+ */
+export const stringifyResolvedTypeForEndUser = (type: Type): string =>
+  stringifyTypeForEndUser(withStuckApplicationsResolved(type))
 
 export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
   makeIndexExpression({

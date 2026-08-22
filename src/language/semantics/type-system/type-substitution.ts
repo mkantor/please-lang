@@ -14,7 +14,10 @@ import {
   makeFunctionType,
   type FunctionType,
 } from './type-formats/function-type.js'
-import { type IndexedAccessType } from './type-formats/indexed-access-type.js'
+import {
+  makeIndexedAccessType,
+  type IndexedAccessType,
+} from './type-formats/indexed-access-type.js'
 import {
   makeIntrinsicApplicationType,
   type IntrinsicApplicationType,
@@ -25,7 +28,11 @@ import {
   makeTypeParameter,
   type TypeParameter,
 } from './type-formats/type-parameter-type.js'
-import { isBottomType, isTopType, type Type } from './type-formats/type.js'
+import {
+  isBottomType,
+  isCanonicalTopType,
+  type Type,
+} from './type-formats/type.js'
 import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
   atomKeyPathComponentFromType,
@@ -296,7 +303,7 @@ export const getTypesForTypeParameters = ({
   readonly argumentType: Type
 }): ReadonlyMap<TypeParameter, Type> => {
   // Avoid infinite recursion when we hit the top type.
-  if (isTopType(parameterType)) {
+  if (isCanonicalTopType(parameterType)) {
     return new Map()
   } else if (argumentType.kind === 'intrinsicApplication') {
     return getTypesForTypeParameters({
@@ -539,6 +546,67 @@ export const applyTypeToArgumentType = (
   )
 
 /**
+ * Recursively replace stuck applications with what they are known to produce.
+ * Type parameters are preserved.
+ */
+export const withStuckApplicationsResolved = (type: Type): Type =>
+  // Avoid infinite recursion when we hit the top type.
+  isCanonicalTopType(type) ? type : (
+    matchTypeFormat(type, {
+      application: type =>
+        // Resolve the application.
+        type.function.kind === 'function' ?
+          option.match(applyTypeToArgumentType(type.function, type.argument), {
+            none: _ => type,
+            some: withStuckApplicationsResolved,
+          })
+        : type,
+      function: type =>
+        makeFunctionType({
+          parameter: withStuckApplicationsResolved(type.signature.parameter),
+          return: withStuckApplicationsResolved(type.signature.return),
+        }),
+      indexedAccess: type =>
+        makeIndexedAccessType(
+          withStuckApplicationsResolved(type.object),
+          withStuckApplicationsResolved(type.key),
+        ),
+      intrinsicApplication: type =>
+        makeIntrinsicApplicationType(
+          type.parameterTypes,
+          type.reduce,
+          parameterTypes =>
+            withStuckApplicationsResolved(
+              type.computeUpperBound(parameterTypes),
+            ),
+        ),
+      object: type =>
+        makeObjectType(
+          Object.fromEntries(
+            Object.entries(type.children).map(([key, child]) => [
+              key,
+              withStuckApplicationsResolved(child),
+            ]),
+          ),
+          type.excess.map(clause => ({
+            keys: withStuckApplicationsResolved(clause.keys),
+            values: withStuckApplicationsResolved(clause.values),
+          })),
+        ),
+      opaque: type => type,
+      parameter: type => type,
+      union: type =>
+        unionOfTypes(
+          [...type.members].map(member =>
+            typeof member === 'string' ?
+              makeUnionType([member])
+            : withStuckApplicationsResolved(member),
+          ),
+        ),
+    })
+  )
+
+/**
  * Attempt to reduce a (possibly stuck) application of `functionType(argument)`.
  * While the function still contains any of the `parametersStuckOn` (type
  * parameters an enclosing function will instantiate), the application stays
@@ -582,7 +650,7 @@ export const enumerateInhabitants = (
   type: Type,
 ): Option<readonly SemanticGraph[]> =>
   // Avoid infinite recursion when we hit the top type.
-  isTopType(type) ?
+  isCanonicalTopType(type) ?
     option.none
   : matchTypeFormat(type, {
       application: _ => option.none,
@@ -676,7 +744,7 @@ export const supplyTypeArgument = (
   typeArgument: Type,
 ): Type => {
   // Avoid infinite recursion when we hit the top type.
-  if (isTopType(type)) {
+  if (isCanonicalTopType(type)) {
     return type
   } else {
     return matchTypeFormat(type, {

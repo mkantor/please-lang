@@ -19,7 +19,7 @@ import {
   readPanicExpression,
   readRuntimeExpression,
   readUnionExpression,
-  stringifyTypeForEndUser,
+  stringifyResolvedTypeForEndUser,
   type ExpressionContext,
   type FunctionParameterTypeInfo,
   type KeyPath,
@@ -52,7 +52,7 @@ import { makeIntrinsicApplicationType } from './type-formats/intrinsic-applicati
 import { matchTypeFormat } from './type-formats/match-type-format.js'
 import { makeObjectType } from './type-formats/object-type.js'
 import type { Type } from './type-formats/type.js'
-import { isBottomType, isTopType } from './type-formats/type.js'
+import { isBottomType, isCanonicalTopType } from './type-formats/type.js'
 import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
   functionParameterKey,
@@ -321,7 +321,7 @@ const inferTypeImplementation = (
                     kind: 'typeMismatch',
                     message: `property \`${stringifyTypeKeyPathForEndUser(
                       keyPath,
-                    )}\` does not exist on type \`${stringifyTypeForEndUser(
+                    )}\` does not exist on type \`${stringifyResolvedTypeForEndUser(
                       objectType,
                     )}\``,
                   }),
@@ -589,9 +589,9 @@ const inferTypeImplementation = (
           : !isAssignable({ source: keysType, target: types.atom }) ?
             either.makeLeft({
               kind: 'typeMismatch',
-              message: `\`@object\` excess clause keys must be an atom subtype, but \`${stringifyTypeForEndUser(
+              message: `\`@object\` excess clause keys must be an atom subtype, but \`${stringifyResolvedTypeForEndUser(
                 keysType,
-              )}\` is not assignable to \`${stringifyTypeForEndUser(
+              )}\` is not assignable to \`${stringifyResolvedTypeForEndUser(
                 types.atom,
               )}\``,
             })
@@ -1073,7 +1073,7 @@ const resolveEnclosingFunctionParameters = (
  */
 const recursivelyOpenObjectTypes = (type: Type): Type =>
   // Avoid infinite recursion when we hit the top type.
-  isTopType(type) ? type : (
+  isCanonicalTopType(type) ? type : (
     matchTypeFormat<Type>(type, {
       application: type =>
         makeApplicationType(

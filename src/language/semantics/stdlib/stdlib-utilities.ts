@@ -21,8 +21,8 @@ import type { ObjectNode } from '../object-node.js'
 import { nodeTag } from '../semantic-graph-node-tag.js'
 import {
   containsAnyUnelaboratedNodes,
+  stringifyResolvedTypeForEndUser,
   stringifySemanticGraphForEndUser,
-  stringifyTypeForEndUser,
   type SemanticGraph,
 } from '../semantic-graph.js'
 import {
@@ -92,7 +92,7 @@ export const applyValidatingParameterType = (
             kind: 'typeMismatch',
             message: `the value \`${stringifySemanticGraphForEndUser(
               argument,
-            )}\` is not assignable to the function's parameter type \`${stringifyTypeForEndUser(parameterBound)}\``,
+            )}\` is not assignable to the function's parameter type \`${stringifyResolvedTypeForEndUser(parameterBound)}\``,
           })
     },
   )

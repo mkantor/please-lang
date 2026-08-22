@@ -8,7 +8,7 @@ import {
   elaborateOperands,
   inferType,
   readIndexExpression,
-  stringifyTypeForEndUser,
+  stringifyResolvedTypeForEndUser,
   type Expression,
   type ExpressionContext,
   type SemanticGraph,
@@ -53,7 +53,7 @@ const checkKeyPathExistsInType = (
               kind: 'typeMismatch',
               message: `property \`${stringifyTypeKeyPathForEndUser(
                 keyPath.slice(0, firstUnresolvableComponentIndex + 1),
-              )}\` does not exist on type \`${stringifyTypeForEndUser(objectType)}\``,
+              )}\` does not exist on type \`${stringifyResolvedTypeForEndUser(objectType)}\``,
             }),
           )
     },
