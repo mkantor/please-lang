@@ -8,7 +8,7 @@ import {
   type ExcessClause,
   type ObjectType,
 } from './type-formats/object-type.js'
-import { isTopType, type Type } from './type-formats/type.js'
+import { isCanonicalTopType, type Type } from './type-formats/type.js'
 import {
   makeUnionType,
   unionOfTypes,
@@ -256,7 +256,7 @@ export const isAssignable = ({
                 const targetBound = excessBoundForKey(key, target.excess)
                 return (
                   target.children[key] !== undefined ||
-                  isTopType(targetBound) ||
+                  isCanonicalTopType(targetBound) ||
                   isAssignable({ source: sourceChild, target: targetBound })
                 )
               })

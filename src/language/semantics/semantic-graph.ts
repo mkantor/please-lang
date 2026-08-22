@@ -36,7 +36,7 @@ import { nodeTag } from './semantic-graph-node-tag.js'
 import {
   functionParameterKey,
   functionReturnKey,
-  isTopType,
+  isCanonicalTopType,
   matchTypeFormat,
   typeParameterAssignableToConstraintKey,
   types,
@@ -354,7 +354,7 @@ export const typeToSemanticGraph = (
         firstClause === undefined ||
         (remainingClauses.length === 0 &&
           firstClause.keys === types.atom &&
-          isTopType(firstClause.values))
+          isCanonicalTopType(firstClause.values))
       return isOpen ? properties : (
           makeObjectTypeExpression(
             properties,
@@ -396,7 +396,7 @@ export const typeToSemanticGraph = (
       }
     },
     union: type => {
-      if (isTopType(type)) {
+      if (isCanonicalTopType(type)) {
         return typeSymbolToSemanticGraph(somethingTypeSymbol)
       } else {
         const [firstMember, ...remainingMembers] = type.members

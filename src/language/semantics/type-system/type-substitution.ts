@@ -28,7 +28,11 @@ import {
   makeTypeParameter,
   type TypeParameter,
 } from './type-formats/type-parameter-type.js'
-import { isBottomType, isTopType, type Type } from './type-formats/type.js'
+import {
+  isBottomType,
+  isCanonicalTopType,
+  type Type,
+} from './type-formats/type.js'
 import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
   atomKeyPathComponentFromType,
@@ -299,7 +303,7 @@ export const getTypesForTypeParameters = ({
   readonly argumentType: Type
 }): ReadonlyMap<TypeParameter, Type> => {
   // Avoid infinite recursion when we hit the top type.
-  if (isTopType(parameterType)) {
+  if (isCanonicalTopType(parameterType)) {
     return new Map()
   } else if (argumentType.kind === 'intrinsicApplication') {
     return getTypesForTypeParameters({
@@ -547,7 +551,7 @@ export const applyTypeToArgumentType = (
  */
 export const withStuckApplicationsResolved = (type: Type): Type =>
   // Avoid infinite recursion when we hit the top type.
-  isTopType(type) ? type : (
+  isCanonicalTopType(type) ? type : (
     matchTypeFormat(type, {
       application: type =>
         // Resolve the application.
@@ -646,7 +650,7 @@ export const enumerateInhabitants = (
   type: Type,
 ): Option<readonly SemanticGraph[]> =>
   // Avoid infinite recursion when we hit the top type.
-  isTopType(type) ?
+  isCanonicalTopType(type) ?
     option.none
   : matchTypeFormat(type, {
       application: _ => option.none,
@@ -740,7 +744,7 @@ export const supplyTypeArgument = (
   typeArgument: Type,
 ): Type => {
   // Avoid infinite recursion when we hit the top type.
-  if (isTopType(type)) {
+  if (isCanonicalTopType(type)) {
     return type
   } else {
     return matchTypeFormat(type, {

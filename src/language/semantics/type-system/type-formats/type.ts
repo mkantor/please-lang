@@ -24,5 +24,5 @@ export type Type = (
 export const isBottomType = (type: Type) =>
   type.kind === 'union' && type.members.size === 0
 
-export const isTopType = (type: Type) =>
+export const isCanonicalTopType = (type: Type) =>
   'identity' in type && type.identity === somethingTypeSymbol

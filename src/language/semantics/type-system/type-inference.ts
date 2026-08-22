@@ -52,7 +52,7 @@ import { makeIntrinsicApplicationType } from './type-formats/intrinsic-applicati
 import { matchTypeFormat } from './type-formats/match-type-format.js'
 import { makeObjectType } from './type-formats/object-type.js'
 import type { Type } from './type-formats/type.js'
-import { isBottomType, isTopType } from './type-formats/type.js'
+import { isBottomType, isCanonicalTopType } from './type-formats/type.js'
 import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
   functionParameterKey,
@@ -1073,7 +1073,7 @@ const resolveEnclosingFunctionParameters = (
  */
 const recursivelyOpenObjectTypes = (type: Type): Type =>
   // Avoid infinite recursion when we hit the top type.
-  isTopType(type) ? type : (
+  isCanonicalTopType(type) ? type : (
     matchTypeFormat<Type>(type, {
       application: type =>
         makeApplicationType(

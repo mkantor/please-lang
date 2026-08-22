@@ -1,5 +1,5 @@
 import type { Atom } from '../../../parsing.js'
-import { isTopType, type Type } from './type.js'
+import { isCanonicalTopType, type Type } from './type.js'
 
 export type UnionType = {
   readonly kind: 'union'
@@ -30,7 +30,7 @@ export const makeUnionType = <Member extends Atom | Exclude<Type, UnionType>>(
  * preserve its identity.
  */
 export const unionOfTypes = (types: readonly Type[]): Type =>
-  types.find(isTopType) ??
+  types.find(isCanonicalTopType) ??
   (types.length === 1 && types[0] !== undefined ?
     types[0]
   : makeUnionType(

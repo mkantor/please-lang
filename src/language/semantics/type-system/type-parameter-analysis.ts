@@ -1,7 +1,7 @@
 import { simplifyUnionType } from './subtyping.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
 import { type TypeParameter } from './type-formats/type-parameter-type.js'
-import { isTopType, type Type } from './type-formats/type.js'
+import { isCanonicalTopType, type Type } from './type-formats/type.js'
 import { makeUnionType, type UnionType } from './type-formats/union-type.js'
 import {
   functionParameterKey,
@@ -31,7 +31,7 @@ const containedTypeParametersImplementation = (
   root: TypeKeyPath,
 ): TypeParametersByKeyPath => {
   // Avoid infinite recursion when we hit the top type.
-  if (isTopType(type)) {
+  if (isCanonicalTopType(type)) {
     return new Map()
   } else {
     return matchTypeFormat<TypeParametersByKeyPath>(type, {
@@ -118,7 +118,7 @@ const findKeyPathsToTypeParameterImplementation = (
   root: TypeKeyPath,
 ): Set<TypeKeyPath> => {
   // Avoid infinite recursion when we hit the top type.
-  if (isTopType(type)) {
+  if (isCanonicalTopType(type)) {
     return new Set()
   } else {
     return matchTypeFormat(type, {
