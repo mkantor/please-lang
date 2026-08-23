@@ -1,5 +1,5 @@
 {
-  "name": "please-prototype",
+  "name": "@matt.kantor/please",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
