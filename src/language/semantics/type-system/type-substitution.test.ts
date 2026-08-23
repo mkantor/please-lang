@@ -588,9 +588,9 @@ const genericizeParameterAnnotationSuite = testCases(
 )
 
 genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
-  [['a', atom], '(?a: :atom.type)'],
+  [['a', atom], '(?a: :Atom)'],
 
-  [['a', integer], '(?a: :integer.type)'],
+  [['a', integer], '(?a: :Integer)'],
 
   [['a', makeUnionType(['foo', 'bar'])], '(?a: foo | bar)'],
 
@@ -604,7 +604,7 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
         b: atom,
       }),
     ],
-    '{ a: (?"x.a": :integer.type), b: (?"x.b": :atom.type) }',
+    '{ a: (?"x.a": :Integer), b: (?"x.b": :Atom) }',
   ],
 
   [
@@ -614,7 +614,7 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
         a: makeObjectType({ b: atom }),
       }),
     ],
-    '{ a: { b: (?"x.a.b": :atom.type) } }',
+    '{ a: { b: (?"x.a.b": :Atom) } }',
   ],
 
   [
@@ -624,7 +624,7 @@ genericizeParameterAnnotationSuite('genericizeParameterAnnotation', [
         callback: makeFunctionType({ parameter: atom, return: integer }),
       }),
     ],
-    '{ callback: (?"x.callback.#parameter": :atom.type) ~> (?"x.callback.#return": :integer.type) }',
+    '{ callback: (?"x.callback.#parameter": :Atom) ~> (?"x.callback.#return": :Integer) }',
   ],
 
   [['empty', makeObjectType({})], '(?empty: {})'],

@@ -10,7 +10,7 @@
   name: @runtime { context => :context.arguments.lookup(name) }
     option.get_or_else user
 
-  sentence: (parts: { :atom.type, :atom.type }) =>
+  sentence: (parts: { :Atom, :Atom }) =>
     :parts.0 atom.append :name atom.append :parts.1
 
   greetings: {
@@ -23,6 +23,6 @@
   }
 
   output: @runtime { context => :context.arguments.lookup(language) }
-    option.flat_map ((code: :atom.type) => :greetings object.lookup :code)
+    option.flat_map ((code: :Atom) => :greetings object.lookup :code)
     option.get_or_else :greetings.en
 }.output

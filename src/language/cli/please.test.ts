@@ -50,14 +50,14 @@ suite('please CLI error reporting', () => {
   })
 
   test('frames a type mismatch error with an underline', async () => {
-    const { stdout, stderr, code } = await runPlease('1 ~ :boolean.type', [
+    const { stdout, stderr, code } = await runPlease('1 ~ :Boolean', [
       '--no-color',
     ])
     assert.equal(code, 1)
     assert.equal(stdout, '')
     assert.match(stderr, /^Error: /)
     assert.ok(stderr.includes('\n<stdin>:1:1\n'))
-    assert.ok(stderr.includes('\n1 │ 1 ~ :boolean.type\n'))
+    assert.ok(stderr.includes('\n1 │ 1 ~ :Boolean\n'))
     assert.ok(stderr.includes('\n  │ ▔\n'))
   })
 
@@ -68,9 +68,7 @@ suite('please CLI error reporting', () => {
     assert.equal(code, 1)
     assert.equal(stdout, '')
     assert.ok(
-      stderr.startsWith(
-        'Error: argument with type `{ [:atom.type]: :nothing.type }`',
-      ),
+      stderr.startsWith('Error: argument with type `{ [:Atom]: :Nothing }`'),
     )
     assert.ok(stderr.includes('\n<stdin>:1:14\n'))
     assert.ok(stderr.includes('\n1 │ :boolean.not({})\n'))

@@ -104,7 +104,7 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
   ],
 
   [
-    '(a: :integer.type) => :a',
+    '(a: :Integer) => :a',
     either.makeRight(
       syntaxTree([
         ['0', '@function'],
@@ -117,20 +117,8 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
                 [
                   'a',
                   [
-                    ['0', '@index'],
-                    [
-                      '1',
-                      [
-                        [
-                          'object',
-                          [
-                            ['0', '@lookup'],
-                            ['1', [['key', 'integer']]],
-                          ],
-                        ],
-                        ['query', [['0', 'type']]],
-                      ],
-                    ],
+                    ['0', '@lookup'],
+                    ['1', [['key', 'Integer']]],
                   ],
                 ],
               ],
@@ -264,7 +252,7 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
   ],
 
   [
-    ':a ~ :integer.type',
+    ':a ~ :Integer',
     either.makeRight(
       syntaxTree([
         ['0', '@check'],
@@ -281,20 +269,8 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
             [
               'type',
               [
-                ['0', '@index'],
-                [
-                  '1',
-                  [
-                    [
-                      'object',
-                      [
-                        ['0', '@lookup'],
-                        ['1', [['key', 'integer']]],
-                      ],
-                    ],
-                    ['query', [['0', 'type']]],
-                  ],
-                ],
+                ['0', '@lookup'],
+                ['1', [['key', 'Integer']]],
               ],
             ],
           ],
@@ -396,20 +372,8 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
                 [
                   'assignableTo',
                   [
-                    ['0', '@index'],
-                    [
-                      '1',
-                      [
-                        [
-                          'object',
-                          [
-                            ['0', '@lookup'],
-                            ['1', [['key', 'something']]],
-                          ],
-                        ],
-                        ['query', [['0', 'type']]],
-                      ],
-                    ],
+                    ['0', '@lookup'],
+                    ['1', [['key', 'Something']]],
                   ],
                 ],
               ],
@@ -421,7 +385,7 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
   ],
 
   [
-    '(?a: :atom.type)',
+    '(?a: :Atom)',
     either.makeRight(
       syntaxTree([
         ['0', '@hole'],
@@ -435,20 +399,8 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
                 [
                   'assignableTo',
                   [
-                    ['0', '@index'],
-                    [
-                      '1',
-                      [
-                        [
-                          'object',
-                          [
-                            ['0', '@lookup'],
-                            ['1', [['key', 'atom']]],
-                          ],
-                        ],
-                        ['query', [['0', 'type']]],
-                      ],
-                    ],
+                    ['0', '@lookup'],
+                    ['1', [['key', 'Atom']]],
                   ],
                 ],
               ],
@@ -460,67 +412,63 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
   ],
 
   [
-    '{ [:atom.type]: :atom.type }',
+    '{ [:Atom]: :Atom }',
+    result => {
+      assert.deepEqual(
+        result,
+        parse('@object { properties: {}, excess: { 0: { :Atom, :Atom } } }'),
+      )
+    },
+  ],
+  [
+    '{ [:Atom]: :Atom, a: 1 }',
     result => {
       assert.deepEqual(
         result,
         parse(
-          '@object { properties: {}, excess: { 0: { :atom.type, :atom.type } } }',
+          '@object { properties: { a: 1 }, excess: { 0: { :Atom, :Atom } } }',
         ),
       )
     },
   ],
   [
-    '{ [:atom.type]: :atom.type, a: 1 }',
+    '{ [:Atom]: :Something, [:NaturalNumber]: :Atom }',
     result => {
       assert.deepEqual(
         result,
         parse(
-          '@object { properties: { a: 1 }, excess: { 0: { :atom.type, :atom.type } } }',
+          '@object { properties: {}, excess: { 0: { :Atom, :Something }, 1: { :NaturalNumber, :Atom } } }',
         ),
       )
     },
   ],
   [
-    '{ [:atom.type]: :something.type, [:natural_number.type]: :atom.type }',
+    '{ a, [:Atom]: :Atom, b }',
     result => {
       assert.deepEqual(
         result,
         parse(
-          '@object { properties: {}, excess: { 0: { :atom.type, :something.type }, 1: { :natural_number.type, :atom.type } } }',
+          '@object { properties: { a, b }, excess: { 0: { :Atom, :Atom } } }',
         ),
       )
     },
   ],
   [
-    '{ a, [:atom.type]: :atom.type, b }',
+    '@if { [:Atom]: x }',
     result => {
       assert.deepEqual(
         result,
-        parse(
-          '@object { properties: { a, b }, excess: { 0: { :atom.type, :atom.type } } }',
-        ),
+        parse('@if (@object { properties: {}, excess: { 0: { :Atom, x } } })'),
       )
     },
   ],
   [
-    '@if { [:atom.type]: x }',
+    '{ [:Atom]: a, [:Atom]: b }',
     result => {
       assert.deepEqual(
         result,
         parse(
-          '@if (@object { properties: {}, excess: { 0: { :atom.type, x } } })',
-        ),
-      )
-    },
-  ],
-  [
-    '{ [:atom.type]: a, [:atom.type]: b }',
-    result => {
-      assert.deepEqual(
-        result,
-        parse(
-          '@object { properties: {}, excess: { 0: { :atom.type, a }, 1: { :atom.type, b } } }',
+          '@object { properties: {}, excess: { 0: { :Atom, a }, 1: { :Atom, b } } }',
         ),
       )
     },

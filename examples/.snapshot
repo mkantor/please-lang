@@ -54,7 +54,7 @@ exports[`examples > fibonacci.plz > --input=\"not a number\" > stdout 1`] = `
 
 exports[`examples > fibonacci.plz > roundtripped syntax tree 1`] = `
 {
-  fibonacci: (n: :integer.type) => @if {
+  fibonacci: (n: :Integer) => @if {
     (:n < 2)
     then: :n
     else: :fibonacci(:n - 1) + :fibonacci(:n - 2)
@@ -148,11 +148,11 @@ exports[`examples > fizzbuzz.plz > --input=\"not a number\" > stdout 1`] = `
 
 exports[`examples > fizzbuzz.plz > roundtripped syntax tree 1`] = `
 {
-  fizzbuzz: (limit: :natural_number.type) => {
+  fizzbuzz: (limit: :NaturalNumber) => {
     fizzbuzz_internal: (state: {
-      current: :natural_number.type
+      current: :NaturalNumber
       output: {
-        [:atom.type]: :natural_number.type | Fizz | Buzz | FizzBuzz
+        [:Atom]: :NaturalNumber | Fizz | Buzz | FizzBuzz
       }
     }) => @if {
       (:state.current > :limit)
@@ -264,7 +264,7 @@ exports[`examples > greatest-common-divisor.plz > --a=\"not a number\" --b=5 > s
 
 exports[`examples > greatest-common-divisor.plz > roundtripped syntax tree 1`] = `
 {
-  gcd: (a: :natural_number.type) => (b: :natural_number.type) => @if {
+  gcd: (a: :NaturalNumber) => (b: :NaturalNumber) => @if {
     (:b integer.equals 0)
     then: :a
     else: :a % :b gcd :b
@@ -277,9 +277,9 @@ exports[`examples > greatest-common-divisor.plz > roundtripped syntax tree 1`] =
   }
   output: :input.a match {
     none: _ => "missing or invalid --a argument (must be a natural number)"
-    some: (a: :natural_number.type) => :input.b match {
+    some: (a: :NaturalNumber) => :input.b match {
       none: _ => "missing or invalid --b argument (must be a natural number)"
-      some: (b: :natural_number.type) => :b gcd :a
+      some: (b: :NaturalNumber) => :b gcd :a
     }
   }
 }.output
@@ -355,8 +355,8 @@ exports[`examples > greet.plz > roundtripped syntax tree 1`] = `
     context => :context.arguments.lookup(name)
   } option.get_or_else user
   sentence: (parts: {
-    :atom.type
-    :atom.type
+    :Atom
+    :Atom
   }) => :parts.0 atom.append :name atom.append :parts.1
   greetings: {
     de: :sentence({
@@ -386,7 +386,7 @@ exports[`examples > greet.plz > roundtripped syntax tree 1`] = `
   }
   output: @runtime {
     context => :context.arguments.lookup(language)
-  } option.flat_map ((code: :atom.type) => :greetings object.lookup :code) option.get_or_else :greetings.en
+  } option.flat_map ((code: :Atom) => :greetings object.lookup :code) option.get_or_else :greetings.en
 }.output
 
 `;
@@ -465,7 +465,7 @@ exports[`examples > is-prime.plz > --input=\"not a number\" > stdout 1`] = `
 
 exports[`examples > is-prime.plz > roundtripped syntax tree 1`] = `
 {
-  try_divisor: (n: :natural_number.type) => (divisor: :natural_number.type) => @if {
+  try_divisor: (n: :NaturalNumber) => (divisor: :NaturalNumber) => @if {
     (:divisor * :divisor > :n)
     then: true
     else: @if {
@@ -474,7 +474,7 @@ exports[`examples > is-prime.plz > roundtripped syntax tree 1`] = `
       else: :divisor + 1 try_divisor :n
     }
   }
-  is_prime: (n: :natural_number.type) => @if {
+  is_prime: (n: :NaturalNumber) => @if {
     (:n < 2)
     then: false
     else: 2 try_divisor :n
@@ -509,7 +509,7 @@ exports[`examples > kitchen-sink.plz > roundtripped syntax tree 1`] = `
     green
     blue
   }
-  two: (1 + 1) ~ :integer.type
+  two: (1 + 1) ~ :Integer
   add_one: :integer.add(1)
   three: :add_one(:two)
   function: x => {

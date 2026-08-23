@@ -30,7 +30,7 @@ suite('compile attaches source spans to elaboration errors', () => {
   })
 
   test('type mismatch blames the checked value', () => {
-    const source = '{} ~ :boolean.type'
+    const source = '{} ~ :Boolean'
     assert.deepEqual(compileErrorSpan(source), [0, 2])
     assert.equal(source.slice(0, 2), '{}')
   })
@@ -60,21 +60,21 @@ suite('compile attaches source spans to elaboration errors', () => {
   })
 
   test('a check on an infix expression blames the whole expression', () => {
-    const source = '1 + 1 ~ :object.type'
+    const source = '1 + 1 ~ :Object'
     assert.deepEqual(compileErrorSpan(source), [0, 5])
     assert.equal(source.slice(0, 5), '1 + 1')
   })
 
   test('a check trailing a function body blames the body', () => {
-    const source = '(stuff: {}) => :stuff object.lookup a ~ :integer.type'
+    const source = '(stuff: {}) => :stuff object.lookup a ~ :Integer'
     assert.deepEqual(compileErrorSpan(source), [15, 37])
     assert.equal(source.slice(15, 37), ':stuff object.lookup a')
   })
 
   test('an invalid parameter annotation blames the annotation', () => {
-    const source = '(a: { [:something.type]: a }) => :a object.lookup a'
-    assert.deepEqual(compileErrorSpan(source), [4, 28])
-    assert.equal(source.slice(4, 28), '{ [:something.type]: a }')
+    const source = '(a: { [:Something]: a }) => :a object.lookup a'
+    assert.deepEqual(compileErrorSpan(source), [4, 23])
+    assert.equal(source.slice(4, 23), '{ [:Something]: a }')
   })
 
   test('omits the span when compiled with no spans', () => {

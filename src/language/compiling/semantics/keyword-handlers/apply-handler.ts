@@ -80,11 +80,11 @@ const checkArgumentType = (
  *
  * ```plz
  * (object: {
- *   a: :integer.type
- *   f: :integer.type ~> :something.type
+ *   a: :Integer
+ *   f: :Integer ~> :Something
  * } | {
- *   a: :boolean.type
- *   f: :boolean.type ~> :something.type
+ *   a: :Boolean
+ *   f: :Boolean ~> :Something
  * }) => :object.f(:object.a)
  * ```
  *

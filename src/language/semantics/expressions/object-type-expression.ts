@@ -20,8 +20,8 @@ export type ObjectTypeExpression = ObjectNode & {
      * @object {
      *   properties: …
      *   excess: {
-     *     { :atom.type, :integer.type }
-     *     { :natural_number.type, :boolean.type }
+     *     { :Atom, :Integer }
+     *     { :NaturalNumber, :Boolean }
      *   }
      * }
      * ```

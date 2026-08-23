@@ -51,7 +51,7 @@ import {
  * Drill into `type` using the given `keyPath`, returning `none` whenever no
  * match is found. A union can be drilled into only when every member contains
  * the key path; otherwise `none` is returned. A resolved type may legitimately
- * be the bottom type (e.g. `:nothing.type`), which is distinct from `none`.
+ * be the bottom type (e.g. `:Nothing`), which is distinct from `none`.
  */
 export const applyKeyPathToType = (
   type: Type,

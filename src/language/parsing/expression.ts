@@ -499,8 +499,8 @@ const compactExpression: Parser<SpannedTree> = recordSpan(
 // ~> a
 // ~> {}
 // ~> (1 ~> true ~> {})
-// ~> :boolean.type ~> :boolean.type ~> :boolean.type
-// ~> :integer.type
+// ~> :Boolean ~> :Boolean ~> :Boolean
+// ~> :Integer
 const trailingSignatureTokens = map(
   sequence([
     trivia,
@@ -520,7 +520,7 @@ const trailingSignatureTokens = map(
 
 // | a
 // | 1 | true | {}
-// | :boolean.type | :integer.type | a
+// | :Boolean | :Integer | a
 const trailingUnionTokens = map(
   sequence([
     trivia,
@@ -557,7 +557,7 @@ const trailingUnionTokens = map(
 
 // ~ a
 // ~ {}
-// ~ (:boolean.type | :integer.type)
+// ~ (:Boolean | :Integer)
 // ~ (a ~> b)
 const trailingCheckToken = map(
   sequence([trivia, tilde, trivia, compactExpression]),
@@ -612,7 +612,7 @@ const trailingInfixTokens = oneOrMore(
   ),
 )
 
-// (a: :integer.type) => :a + 1
+// (a: :Integer) => :a + 1
 const typedFunctionParameter: Parser<SpannedMolecule> = surroundedByParentheses(
   map(
     sequence([
@@ -637,8 +637,8 @@ const functionParameter: Parser<SpannedTree> = oneOf([
 // a => (b => c => :d)
 // a => b => c => d
 // a => 1 + 1
-// (a: :integer.type) => :a + 1
-// (a: :integer.type) => (b: :integer.type) => :a + :b
+// (a: :Integer) => :a + 1
+// (a: :Integer) => (b: :Integer) => :a + :b
 const precededByAtomThenFunctionArrow = map(
   sequence([
     functionParameter,
@@ -757,22 +757,10 @@ const precededByOpeningBrace = map(
     ),
 )
 
-/** `:something.type` in desugared form. */
+/** `:Something` in desugared form. */
 const topTypeAsMolecule = syntheticMolecule([
-  ['0', syntheticAtom('@index')],
-  [
-    '1',
-    syntheticMolecule([
-      [
-        'object',
-        syntheticMolecule([
-          ['0', syntheticAtom('@lookup')],
-          ['1', syntheticMolecule([['key', syntheticAtom('something')]])],
-        ]),
-      ],
-      ['query', syntheticMolecule([['0', syntheticAtom('type')]])],
-    ]),
-  ],
+  ['0', syntheticAtom('@lookup')],
+  ['1', syntheticMolecule([['key', syntheticAtom('Something')]])],
 ])
 
 const makeHoleMolecule = (

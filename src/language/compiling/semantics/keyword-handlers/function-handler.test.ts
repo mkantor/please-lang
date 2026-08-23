@@ -153,7 +153,7 @@ const elaborateWithApplicationsInFlight = ({
     }),
   )
 
-const programApplyingF = '{ f: (n: :integer.type) => :n, main: :f(1) }'
+const programApplyingF = '{ f: (n: :Integer) => :n, main: :f(1) }'
 const arbitraryFunctionExpression = makeFunctionExpression('_', '_')
 
 /** Applications of functions other than the one under test. */
@@ -229,7 +229,7 @@ testCases(
 
   [
     {
-      program: '{ f: (n: :integer.type) => :f(:n), main: :f(1) }',
+      program: '{ f: (n: :Integer) => :f(:n), main: :f(1) }',
       description: 'with a demanded budget of 3',
       applicationChain: [],
       configuration: {

@@ -255,7 +255,7 @@ testCases(
   ],
 
   [
-    '@runtime { _ => 42 ~ :integer.type }',
+    '@runtime { _ => 42 ~ :Integer }',
     success({
       '0': '@runtime',
       '1': {
@@ -268,7 +268,7 @@ testCases(
   ],
 
   [
-    '@runtime { _ => { some_integer: 42, same_integer: :some_integer ~ :integer.type } }',
+    '@runtime { _ => { some_integer: 42, same_integer: :some_integer ~ :Integer } }',
     success({
       '0': '@runtime',
       '1': {
@@ -284,7 +284,7 @@ testCases(
   ],
 
   [
-    '@runtime { context => :context.program.start_time ~ :atom.type }',
+    '@runtime { context => :context.program.start_time ~ :Atom }',
     success({
       '0': '@runtime',
       '1': {
@@ -312,7 +312,7 @@ testCases(
   ],
 
   [
-    '@runtime { _ => 42 ~ :boolean.type }',
+    '@runtime { _ => 42 ~ :Boolean }',
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -321,7 +321,7 @@ testCases(
   ],
 
   [
-    '@runtime { context => :context.program.start_time ~ :object.type }',
+    '@runtime { context => :context.program.start_time ~ :Object }',
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -330,14 +330,14 @@ testCases(
   ],
 
   [
-    '@runtime { context => { a: :context.program.start_time, :a ~ :atom.type } }',
+    '@runtime { context => { a: :context.program.start_time, :a ~ :Atom } }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '@runtime { context => :context.program.start_time } ~ :atom.type',
+    '@runtime { context => :context.program.start_time } ~ :Atom',
     success({
       '0': '@runtime',
       '1': {
@@ -365,7 +365,7 @@ testCases(
   ],
 
   [
-    '@runtime { context => :context.program.start_time } ~ :atom.type',
+    '@runtime { context => :context.program.start_time } ~ :Atom',
     success({
       '0': '@runtime',
       '1': {
@@ -393,86 +393,86 @@ testCases(
   ],
 
   [
-    '@runtime { context => { a: :context.program.start_time } ~ { a: :atom.type } }',
+    '@runtime { context => { a: :context.program.start_time } ~ { a: :Atom } }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: @runtime { context => :context.program.start_time }, :a ~ :atom.type }',
+    '{ a: @runtime { context => :context.program.start_time }, :a ~ :Atom }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '@runtime { context => { a: :context.program.start_time, b: :a, :b ~ :atom.type } }',
+    '@runtime { context => { a: :context.program.start_time, b: :a, :b ~ :Atom } }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: @runtime { context => :context.program.start_time }, b: :a, :b ~ :atom.type }',
+    '{ a: @runtime { context => :context.program.start_time }, b: :a, :b ~ :Atom }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
-  ['@if { true, true, 42 } ~ :boolean.type', success('true')],
+  ['@if { true, true, 42 } ~ :Boolean', success('true')],
 
   [
-    '{ a: 42, b: :a, @runtime { _ => :b } ~ :integer.type }',
-    result => {
-      assert(either.isRight(result))
-    },
-  ],
-
-  [
-    '{ a: 42, (_ => :a)(@runtime { _ => _ }) ~ :integer.type }',
+    '{ a: 42, b: :a, @runtime { _ => :b } ~ :Integer }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: 42, b: _ => :a, c: :b(_) ~ :integer.type }',
+    '{ a: 42, (_ => :a)(@runtime { _ => _ }) ~ :Integer }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: 42, b: _ => :a, :b(@runtime { _ => _ }) ~ :integer.type }',
+    '{ a: 42, b: _ => :a, c: :b(_) ~ :Integer }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: 42, b: _ => :a }.b(_) ~ :integer.type',
+    '{ a: 42, b: _ => :a, :b(@runtime { _ => _ }) ~ :Integer }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: _ => 42, b: :a, :b(@runtime { _ => _ }) ~ :integer.type }',
+    '{ a: 42, b: _ => :a }.b(_) ~ :Integer',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '(_ => 42) ~ (:something.type ~> :integer.type)',
+    '{ a: _ => 42, b: :a, :b(@runtime { _ => _ }) ~ :Integer }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '(_ => 42) ~ (:something.type ~> :boolean.type)',
+    '(_ => 42) ~ (:Something ~> :Integer)',
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    '(_ => 42) ~ (:Something ~> :Boolean)',
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -481,28 +481,28 @@ testCases(
   ],
 
   [
-    '{ a: 42, f: _ => :a, @runtime { _ => :f } ~ (:something.type ~> :integer.type) }',
+    '{ a: 42, f: _ => :a, @runtime { _ => :f } ~ (:Something ~> :Integer) }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: @if { true, true, 42 }, @runtime { _ => :a } ~ :boolean.type }',
+    '{ a: @if { true, true, 42 }, @runtime { _ => :a } ~ :Boolean }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '{ a: true, b: 42, @runtime { _ => @if { true, :a, :b } } ~ :boolean.type }',
+    '{ a: true, b: 42, @runtime { _ => @if { true, :a, :b } } ~ :Boolean }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '@if { @runtime { _ => true }, 1, "not an integer" } ~ :integer.type',
+    '@if { @runtime { _ => true }, 1, "not an integer" } ~ :Integer',
     result => {
       assert(either.isRight(result))
     },
@@ -540,7 +540,7 @@ testCases(
   ],
 
   [
-    `@runtime { _ => :integer.is_greater_than(1)(2) } ~ :boolean.type`,
+    `@runtime { _ => :integer.is_greater_than(1)(2) } ~ :Boolean`,
     result => {
       assert(either.isRight(result))
     },
@@ -602,14 +602,14 @@ testCases(
   ],
 
   [
-    `@runtime { context => (a => :a)(:context.program.start_time) } ~ :atom.type`,
+    `@runtime { context => (a => :a)(:context.program.start_time) } ~ :Atom`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `@runtime { context => (a => :a)(:context.program.start_time) } ~ :integer.type`,
+    `@runtime { context => (a => :a)(:context.program.start_time) } ~ :Integer`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -636,7 +636,7 @@ testCases(
   [
     `{
       integer_identity: @function {
-        parameter: { a: :integer.type }
+        parameter: { a: :Integer }
         body: :a
       }
       :integer_identity("not an integer")
@@ -649,7 +649,7 @@ testCases(
   ],
 
   [
-    `a => :a ~ :boolean.type`,
+    `a => :a ~ :Boolean`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -659,9 +659,9 @@ testCases(
 
   [
     // `:a` is a lookup of an unannotated parameter, so its inferred type is an
-    // unconstrained type parameter, which is not assignable to `:integer.type`.
-    // If the language eventually gains Hindley–Milner-style inference this
-    // program may become valid (and this test case will need updating).
+    // unconstrained type parameter, which is not assignable to `:Integer`. To
+    // allow this program, Please could contextually type functions based on
+    // their usage in `@apply`s.
     `(a => :integer.add(1)(:a))(1)`,
     result => {
       assert(either.isLeft(result))
@@ -677,7 +677,7 @@ testCases(
       }
       then: 42
       else: @panic
-    } ~ :integer.type`,
+    } ~ :Integer`,
     result => {
       assert(either.isRight(result))
     },
@@ -693,7 +693,7 @@ testCases(
   ],
 
   [
-    `@if { @runtime { _ => true }, "not a boolean" ~ :boolean.type, oops }`,
+    `@if { @runtime { _ => true }, "not a boolean" ~ :Boolean, oops }`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -791,11 +791,11 @@ testCases(
     },
   ],
 
-  [`((a: :integer.type) => :a)(42) ~ 42`, success('42')],
+  [`((a: :Integer) => :a)(42) ~ 42`, success('42')],
 
   [
     `{
-      swap: (parameters: { :something.type, :something.type }) =>
+      swap: (parameters: { :Something, :Something }) =>
         { :parameters.1, :parameters.0 }
     }.swap({ a, b }) ~ { b, a }`,
     result => {
@@ -805,7 +805,7 @@ testCases(
 
   [
     `{
-      constrain_function: (f: { a: :atom.type } ~> :atom.type) => :f({ a: hello })
+      constrain_function: (f: { a: :Atom } ~> :Atom) => :f({ a: hello })
       should_use_contextual_type: :constrain_function(x => :x.a)
     }`,
     result => {
@@ -815,7 +815,7 @@ testCases(
 
   [
     `{
-      f: (x: { a: :something.type }) => {}
+      f: (x: { a: :Something }) => {}
       :f({ a: a })
     }`,
     result => {
@@ -825,7 +825,7 @@ testCases(
 
   [
     `{
-      type: :boolean.type
+      type: :Boolean
       f: (x: { a: :type }) => {}
       :f({ a: true })
     }`,
@@ -856,7 +856,7 @@ testCases(
   ],
 
   [
-    `(_ => (f: :atom.type) => :f) ~ (:something.type ~> (:atom.type ~> :atom.type))`,
+    `(_ => (f: :Atom) => :f) ~ (:Something ~> (:Atom ~> :Atom))`,
     result => {
       assert(either.isRight(result))
     },
@@ -864,22 +864,22 @@ testCases(
 
   [
     `(@runtime { _ =>
-      { constrain_function: (f: { a: :atom.type } ~> :atom.type) => :f({ a: hello }) }
-    }).constrain_function(x => :x.a) ~ :atom.type`,
+      { constrain_function: (f: { a: :Atom } ~> :Atom) => :f({ a: hello }) }
+    }).constrain_function(x => :x.a) ~ :Atom`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '(_ => 42) ~ ((_: :something.type) => :integer.type)',
+    '(_ => 42) ~ ((_: :Something) => :Integer)',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '(_ => 42) ~ ((_: :something.type) => :boolean.type)',
+    '(_ => 42) ~ ((_: :Something) => :Boolean)',
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -888,46 +888,46 @@ testCases(
   ],
 
   [
-    '{ a: 42, f: _ => :a, :f ~ ((_: :something.type) => :integer.type) }',
+    '{ a: 42, f: _ => :a, :f ~ ((_: :Something) => :Integer) }',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '((a: :boolean.type) => 42) ~ ((a: :boolean.type) => :integer.type)',
+    '((a: :Boolean) => 42) ~ ((a: :Boolean) => :Integer)',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '((a: :boolean.type) => :a) ~ ((a: :boolean.type) => :boolean.type)',
+    '((a: :Boolean) => :a) ~ ((a: :Boolean) => :Boolean)',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    '((a: :boolean.type) => :boolean.not(:a)) ~ ((a: :boolean.type) => :boolean.type)',
+    '((a: :Boolean) => :boolean.not(:a)) ~ ((a: :Boolean) => :Boolean)',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    ':boolean.not ~ ((a: :boolean.type) => :boolean.type)',
+    ':boolean.not ~ ((a: :Boolean) => :Boolean)',
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `((x: :atom.type) => @if {
+    `((x: :Atom) => @if {
        @runtime { context => :context.program.start_time atom.equals foo }
        { deeper: :x }
        foo
-     }) ~ ((y: :atom.type) => { deeper: :y })`,
+     }) ~ ((y: :Atom) => { deeper: :y })`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -936,9 +936,9 @@ testCases(
 
   [
     `{
-      consume: (g: ((y: :atom.type) => { deeper: :y })) =>
+      consume: (g: ((y: :Atom) => { deeper: :y })) =>
         @runtime { _ => :g(hello).deeper }
-      :consume((x: :atom.type) => @if {
+      :consume((x: :Atom) => @if {
         @runtime { context => :context.program.start_time atom.equals foo }
         { deeper: :x }
         foo
@@ -951,32 +951,32 @@ testCases(
   ],
 
   [
-    `((x: :atom.type) => ({ deeper: :x } | foo)) ~ ((y: :atom.type) => ({ deeper: :y } | foo))`,
+    `((x: :Atom) => ({ deeper: :x } | foo)) ~ ((y: :Atom) => ({ deeper: :y } | foo))`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `((x: :atom.type) => @if {
+    `((x: :Atom) => @if {
        @runtime { context => :context.program.start_time atom.equals foo }
        { deeper: :x }
        foo
-     }) ~ ((y: :atom.type) => ({ deeper: :y } | foo))`,
+     }) ~ ((y: :Atom) => ({ deeper: :y } | foo))`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `(x: :atom.type) => (:x ~ :x)`,
+    `(x: :Atom) => (:x ~ :x)`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `(x: :atom.type) =>
+    `(x: :Atom) =>
       (@if {
          @runtime { context => :context.program.start_time atom.equals foo }
          :x
@@ -988,14 +988,14 @@ testCases(
   ],
 
   [
-    `(x: :atom.type) => (:x ~ (:x | foo))`,
+    `(x: :Atom) => (:x ~ (:x | foo))`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `(x: :natural_number.type) => (:x ~ (:integer.type | foo))`,
+    `(x: :NaturalNumber) => (:x ~ (:Integer | foo))`,
     result => {
       assert(either.isRight(result))
     },
@@ -1029,7 +1029,7 @@ testCases(
   [
     `{
       apply_to_1:
-        (integer_identity: (a: :integer.type) => :a) => :integer_identity(1)
+        (integer_identity: (a: :Integer) => :a) => :integer_identity(1)
     }.apply_to_1(a => :a) ~ 1`,
     result => {
       assert(either.isRight(result))
@@ -1101,7 +1101,7 @@ testCases(
 
   [
     `{
-      f: (x: @hole { name: t, constraint: { assignableTo: :something.type } })
+      f: (x: @hole { name: t, constraint: { assignableTo: :Something } })
         => :x
       :f(42) ~ 42
     }`,
@@ -1154,7 +1154,7 @@ testCases(
 
   [
     `{
-      f: (x: (?b: :atom.type)) => :x
+      f: (x: (?b: :Atom)) => :x
       :f(hello) ~ hello
     }`,
     result => {
@@ -1201,14 +1201,14 @@ testCases(
   ],
 
   [
-    `{ a: :nothing.type }`,
+    `{ a: :Nothing }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `(x: :nothing.type) => :x`,
+    `(x: :Nothing) => :x`,
     result => {
       assert(either.isRight(result))
     },
@@ -1223,7 +1223,7 @@ testCases(
   ],
 
   [
-    `(x: :nothing.type) => :x.x`,
+    `(x: :Nothing) => :x.x`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -1318,7 +1318,7 @@ testCases(
 
   [
     `{
-      not: (a: :boolean.type) => @if { :a, false, true }
+      not: (a: :Boolean) => @if { :a, false, true }
       :not(@runtime { context =>
         :context.program.start_time atom.equals "arbitrary atom"
       }) ~ false
@@ -1360,7 +1360,7 @@ testCases(
 
   [
     `{
-      lookup_within: (object: { a: :something.type }) => :object.a
+      lookup_within: (object: { a: :Something }) => :object.a
       :lookup_within(@runtime { _ => { a: true } }) ~ true
     }`,
     result => {
@@ -1370,7 +1370,7 @@ testCases(
 
   [
     `{
-      not: (a: :boolean.type) => @if { :a, false, true }
+      not: (a: :Boolean) => @if { :a, false, true }
       :not(@runtime { _ => false }) ~ true
     }`,
     result => {
@@ -1432,7 +1432,7 @@ testCases(
 
   [
     `{
-      choose: (c: :boolean.type) => (@if { :c, { x: yes }, { x: no } }).x
+      choose: (c: :Boolean) => (@if { :c, { x: yes }, { x: no } }).x
       :choose(@runtime { _ => true }) ~ yes
     }`,
     result => {
@@ -1442,7 +1442,7 @@ testCases(
 
   [
     `{
-      f: (k: :atom.type) => (@if { :atom.equals(a)(:k), { x: yes }, { x: no } }).x
+      f: (k: :Atom) => (@if { :atom.equals(a)(:k), { x: yes }, { x: no } }).x
       :f(@runtime { _ => a }) ~ yes
     }`,
     result => {
@@ -1474,7 +1474,7 @@ testCases(
 
   [
     `{
-      not: (a: :boolean.type) => @if { :a, false, true }
+      not: (a: :Boolean) => @if { :a, false, true }
       :not(@runtime { _ => false }) ~ false
     }`,
     result => {
@@ -1498,7 +1498,7 @@ testCases(
 
   [
     `{
-      lookup_within: (object: (?o: { a: :something.type })) => :object.a
+      lookup_within: (object: (?o: { a: :Something })) => :object.a
       :lookup_within(@runtime { _ => { a: true } }) ~ true
     }`,
     result => {
@@ -1508,7 +1508,7 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: :something.type ~> :something.type) => :f(true)
+      apply_to_true: (f: :Something ~> :Something) => :f(true)
       :apply_to_true(@runtime { _ => a => :a }) ~ true
     }`,
     result => {
@@ -1518,7 +1518,7 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: :something.type ~> :something.type) => :f(true)
+      apply_to_true: (f: :Something ~> :Something) => :f(true)
       :apply_to_true(@runtime { _ => a => :a }) ~ false
     }`,
     result => {
@@ -1530,7 +1530,7 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: (?g: :something.type ~> :something.type)) => :f(true)
+      apply_to_true: (f: (?g: :Something ~> :Something)) => :f(true)
       :apply_to_true(@runtime { _ => a => :a }) ~ true
     }`,
     result => {
@@ -1540,7 +1540,7 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: (?g: :something.type ~> :something.type)) => :f(true)
+      apply_to_true: (f: (?g: :Something ~> :Something)) => :f(true)
       :apply_to_true(@runtime { _ => a => :a }) ~ false
     }`,
     result => {
@@ -1552,7 +1552,7 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: (?g: :something.type ~> :something.type)) => :f(true)
+      apply_to_true: (f: (?g: :Something ~> :Something)) => :f(true)
       :apply_to_true(@runtime { _ => _ => false }) ~ false
     }`,
     result => {
@@ -1562,9 +1562,9 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: :something.type ~> :something.type) => :f(true)
+      apply_to_true: (f: :Something ~> :Something) => :f(true)
       first: x => _y => :x
-      :apply_to_true(@runtime { _ => :first }) ~ (:something.type ~> true)
+      :apply_to_true(@runtime { _ => :first }) ~ (:Something ~> true)
     }`,
     result => {
       assert(either.isRight(result))
@@ -1573,9 +1573,9 @@ testCases(
 
   [
     `{
-      apply_to_true: (f: :something.type ~> :something.type) => :f(true)
+      apply_to_true: (f: :Something ~> :Something) => :f(true)
       first: x => _y => :x
-      :apply_to_true(@runtime { _ => :first }) ~ (:something.type ~> false)
+      :apply_to_true(@runtime { _ => :first }) ~ (:Something ~> false)
     }`,
     result => {
       assert(either.isLeft(result))
@@ -1586,7 +1586,7 @@ testCases(
 
   [
     `{
-      lookup_foo: (f: :something.type ~> (?b: { foo: :something.type })) => :f(true).foo
+      lookup_foo: (f: :Something ~> (?b: { foo: :Something })) => :f(true).foo
       :lookup_foo(@runtime { _ => _ => { foo: 42 } }) ~ 42
     }`,
     result => {
@@ -1596,7 +1596,7 @@ testCases(
 
   [
     `{
-      lookup_foo: (f: :something.type ~> (?b: { foo: :something.type })) => :f(true).foo
+      lookup_foo: (f: :Something ~> (?b: { foo: :Something })) => :f(true).foo
       :lookup_foo(@runtime { _ => _ => { foo: 42 } }) ~ 43
     }`,
     result => {
@@ -1607,7 +1607,7 @@ testCases(
   ],
 
   [
-    `{ lookup_foo: (f: :something.type ~> (?b: { foo: :something.type })) => :f(true).bar }`,
+    `{ lookup_foo: (f: :Something ~> (?b: { foo: :Something })) => :f(true).bar }`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -1647,7 +1647,7 @@ testCases(
   ],
 
   [
-    `a => (x: (?b: :a)) => (:x ~ :integer.type)`,
+    `a => (x: (?b: :a)) => (:x ~ :Integer)`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -1655,7 +1655,7 @@ testCases(
   ],
 
   [
-    `a => (x: (?b: :a)) => (:b ~ :integer.type)`,
+    `a => (x: (?b: :a)) => (:b ~ :Integer)`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -1670,7 +1670,7 @@ testCases(
   ],
 
   [
-    `(a: :something.type) => (f: :a ~> :something.type) => :f("an arbitrary value")`,
+    `(a: :Something) => (f: :a ~> :Something) => :f("an arbitrary value")`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -1679,8 +1679,8 @@ testCases(
 
   [
     `{
-      example: (a: :something.type) => (f: :a ~> :something.type) => :f("an arbitrary value")
-      result: :example(@runtime { _ => 1 })((n: :integer.type) => :integer.add(1)(:n))
+      example: (a: :Something) => (f: :a ~> :Something) => :f("an arbitrary value")
+      result: :example(@runtime { _ => 1 })((n: :Integer) => :integer.add(1)(:n))
     }`,
     result => {
       assert(either.isLeft(result))
@@ -1705,8 +1705,8 @@ testCases(
   ],
 
   [
-    `(x: { a: :atom.type }) =>
-      ((h: :x.a ~> :atom.type) => :h(forged))((v: :x.a) => :v)`,
+    `(x: { a: :Atom }) =>
+      ((h: :x.a ~> :Atom) => :h(forged))((v: :x.a) => :v)`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -1715,10 +1715,10 @@ testCases(
 
   [
     `{
-      caller: (g: { a: :atom.type } ~> :atom.type) =>
+      caller: (g: { a: :Atom } ~> :Atom) =>
         @runtime { _ => :g({ a: actual }) }
       result: :caller(x =>
-        ((h: :x.a ~> :atom.type) => :h(forged))((v: :x.a) => :v))
+        ((h: :x.a ~> :Atom) => :h(forged))((v: :x.a) => :v))
     }`,
     result => {
       assert(either.isLeft(result))
@@ -1728,7 +1728,7 @@ testCases(
 
   [
     `{
-      caller: (g: { a: :atom.type } ~> { got: :atom.type }) =>
+      caller: (g: { a: :Atom } ~> { got: :Atom }) =>
         @runtime { _ => :g({ a: actual }) }
       result: :caller(x =>
         ((h: :x.a ~> { got: :x.a }) => :h(forged))((v: :x.a) => { got: :v }))
@@ -1744,9 +1744,9 @@ testCases(
     // application below to unsoundly succeed because the prior call locked in
     // `:a`'s type as `1`.
     `{
-      call_with: x => (f: :something.type ~> :something.type) => :f(:x)
-      first: :call_with(1)((n: :integer.type) => :n)
-      second: :call_with(a)((n: :integer.type) => :n)
+      call_with: x => (f: :Something ~> :Something) => :f(:x)
+      first: :call_with(1)((n: :Integer) => :n)
+      second: :call_with(a)((n: :Integer) => :n)
     }`,
     result => {
       assert(either.isLeft(result))
@@ -1759,9 +1759,9 @@ testCases(
 
   [
     `{
-      test: (f: (:something.type ~> :integer.type) | (:something.type ~> :boolean.type)) =>
+      test: (f: (:Something ~> :Integer) | (:Something ~> :Boolean)) =>
         :f(_)
-      :test(@runtime { _ => _ => 42 }) ~ :integer.type
+      :test(@runtime { _ => _ => 42 }) ~ :Integer
     }`,
     result => {
       assert(either.isRight(result))
@@ -1770,9 +1770,9 @@ testCases(
 
   [
     `{
-      test: (f: (:something.type ~> :integer.type) | (:something.type ~> :boolean.type)) =>
+      test: (f: (:Something ~> :Integer) | (:Something ~> :Boolean)) =>
         :f(_)
-      :test(@runtime { _ => _ => 42 }) ~ :boolean.type
+      :test(@runtime { _ => _ => 42 }) ~ :Boolean
     }`,
     result => {
       assert(either.isLeft(result))
@@ -1784,7 +1784,7 @@ testCases(
   [
     `{
       apply_natural: (f:
-        (:integer.type ~> :something.type) | (:natural_number.type ~> :something.type)
+        (:Integer ~> :Something) | (:NaturalNumber ~> :Something)
       ) => :f(5)
     }`,
     result => {
@@ -1795,7 +1795,7 @@ testCases(
   [
     `{
       apply_natural: (f:
-        (:integer.type ~> :something.type) | (:natural_number.type ~> :something.type)
+        (:Integer ~> :Something) | (:NaturalNumber ~> :Something)
       ) => :f(-1)
     }`,
     result => {
@@ -1808,15 +1808,15 @@ testCases(
   [
     `{
       test: (object: {
-        a: :integer.type
-        f: :integer.type ~> :something.type
+        a: :Integer
+        f: :Integer ~> :Something
       } | {
-        a: :boolean.type
-        f: :boolean.type ~> :something.type
+        a: :Boolean
+        f: :Boolean ~> :Something
       }) => :object.f(:object.a)
       :test({
         a: @runtime { _ => true }
-        f: (x: :boolean.type) => @if { :x, yes, no }
+        f: (x: :Boolean) => @if { :x, yes, no }
       }) ~ yes
     }`,
     result => {
@@ -1827,15 +1827,15 @@ testCases(
   [
     `{
       test: (object: {
-        a: :integer.type
-        f: :integer.type ~> :something.type
+        a: :Integer
+        f: :Integer ~> :Something
       } | {
-        a: :boolean.type
-        f: :boolean.type ~> :something.type
+        a: :Boolean
+        f: :Boolean ~> :Something
       }) => :object.f(:object.a)
       :test({
         a: @runtime { _ => true }
-        f: (x: :boolean.type) => @if { :x, yes, no }
+        f: (x: :Boolean) => @if { :x, yes, no }
       }) ~ no
     }`,
     result => {
@@ -1848,12 +1848,12 @@ testCases(
   [
     `{
       test: (object: (?o: {
-        a: :boolean.type
-        f: :boolean.type ~> :something.type
+        a: :Boolean
+        f: :Boolean ~> :Something
       })) => :object.f(:object.a)
       :test(@runtime { _ => {
         a: true
-        f: (x: :boolean.type) => @if { :x, yes, no }
+        f: (x: :Boolean) => @if { :x, yes, no }
       }}) ~ yes
     }`,
     result => {
@@ -1864,11 +1864,11 @@ testCases(
   [
     `{
       test: (object: {
-        a: :integer.type
-        f: :boolean.type ~> :something.type
+        a: :Integer
+        f: :Boolean ~> :Something
       } | {
-        a: :boolean.type
-        f: :integer.type ~> :something.type
+        a: :Boolean
+        f: :Integer ~> :Something
       }) => :object.f(:object.a)
     }`,
     result => {
@@ -1881,11 +1881,11 @@ testCases(
   [
     `{
       test: (object: {
-        a: :integer.type
-        f: :integer.type ~> ?x
+        a: :Integer
+        f: :Integer ~> ?x
       } | {
-        a: :boolean.type
-        f: :boolean.type ~> ?y
+        a: :Boolean
+        f: :Boolean ~> ?y
       }) => :object.f(:object.a)
     }`,
     result => {
@@ -1931,8 +1931,8 @@ testCases(
 
   [
     `{
-      add_natural_numbers: (b: :natural_number.type) => (a: :natural_number.type) => :a + :b
-      requires_a_natural_number: (a: :natural_number.type) => :a
+      add_natural_numbers: (b: :NaturalNumber) => (a: :NaturalNumber) => :a + :b
+      requires_a_natural_number: (a: :NaturalNumber) => :a
       :requires_a_natural_number(:add_natural_numbers(@runtime { _ => 1 })(@runtime { _ => 1 }))
     }`,
     result => {
@@ -1942,8 +1942,8 @@ testCases(
 
   [
     `{
-      add_natural_numbers: (b: :natural_number.type) => (a: :natural_number.type) => :a + :b
-      requires_a_natural_number: (a: :natural_number.type) => :a
+      add_natural_numbers: (b: :NaturalNumber) => (a: :NaturalNumber) => :a + :b
+      requires_a_natural_number: (a: :NaturalNumber) => :a
       :requires_a_natural_number(:add_natural_numbers(@runtime { _ => 1 })(@runtime { _ => -1 }))
     }`,
     result => {
@@ -1955,8 +1955,8 @@ testCases(
 
   [
     `{
-      add_natural_numbers: (b: :natural_number.type) => (a: :natural_number.type) => :a + :b
-      requires_a_natural_number: (a: :natural_number.type) => :a
+      add_natural_numbers: (b: :NaturalNumber) => (a: :NaturalNumber) => :a + :b
+      requires_a_natural_number: (a: :NaturalNumber) => :a
       :requires_a_natural_number(:add_natural_numbers(@runtime { _ => -1 })(@runtime { _ => 1 }))
     }`,
     result => {
@@ -1968,8 +1968,8 @@ testCases(
 
   [
     `{
-      subtract_natural_numbers: (b: :natural_number.type) => (a: :natural_number.type) => :a - :b
-      requires_a_natural_number: (a: :natural_number.type) => :a
+      subtract_natural_numbers: (b: :NaturalNumber) => (a: :NaturalNumber) => :a - :b
+      requires_a_natural_number: (a: :NaturalNumber) => :a
       :requires_a_natural_number(:subtract_natural_numbers(@runtime { _ => 2 })(@runtime { _ => 1 }))
     }`,
     result => {
@@ -1981,9 +1981,9 @@ testCases(
 
   [
     `{
-      subtract_natural_numbers: (b: :natural_number.type) => (a: :natural_number.type) => :a + :b
-      requires_a_natural_number: (a: :natural_number.type) => :a
-      illegal: (a: :integer.type) => :requires_a_natural_number(:subtract_natural_numbers(@runtime { _ => 1 })(:a))
+      subtract_natural_numbers: (b: :NaturalNumber) => (a: :NaturalNumber) => :a + :b
+      requires_a_natural_number: (a: :NaturalNumber) => :a
+      illegal: (a: :Integer) => :requires_a_natural_number(:subtract_natural_numbers(@runtime { _ => 1 })(:a))
     }`,
     result => {
       assert(either.isLeft(result))
@@ -1993,35 +1993,35 @@ testCases(
   ],
 
   [
-    `{ increment: (x: :natural_number.type) => (1 + :x) ~ :natural_number.type }`,
+    `{ increment: (x: :NaturalNumber) => (1 + :x) ~ :NaturalNumber }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `{ increment: (x: :natural_number.type) => (:x + 1) ~ :natural_number.type }`,
+    `{ increment: (x: :NaturalNumber) => (:x + 1) ~ :NaturalNumber }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `{ double: (x: :natural_number.type) => (2 * :x) ~ :natural_number.type }`,
+    `{ double: (x: :NaturalNumber) => (2 * :x) ~ :NaturalNumber }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `{ f: (x: :natural_number.type) => ((1 + :x) + :x) ~ :natural_number.type }`,
+    `{ f: (x: :NaturalNumber) => ((1 + :x) + :x) ~ :NaturalNumber }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `{ decrement: (x: :natural_number.type) => (:x - 1) ~ :natural_number.type }`,
+    `{ decrement: (x: :NaturalNumber) => (:x - 1) ~ :NaturalNumber }`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -2030,7 +2030,7 @@ testCases(
   ],
 
   [
-    `{ increment: (x: :integer.type) => (1 + :x) ~ :natural_number.type }`,
+    `{ increment: (x: :Integer) => (1 + :x) ~ :NaturalNumber }`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -2046,8 +2046,8 @@ testCases(
     // TODO: Enhance the type system and/or the encoding of numbers to enable
     // this sort of reasoning and eliminate the type mismatch from this test.
     `{
-      classify: (n: :integer.type) => @if { :n + 1 < 1, negative, non_negative }
-      narrowed: (m: :natural_number.type) => :classify(:m) ~ non_negative
+      classify: (n: :Integer) => @if { :n + 1 < 1, negative, non_negative }
+      narrowed: (m: :NaturalNumber) => :classify(:m) ~ non_negative
     }`,
     result => {
       assert(either.isLeft(result))
@@ -2057,21 +2057,21 @@ testCases(
   ],
 
   [
-    `{ f: (x: :integer.type) => :integer.is(:x) ~ true }`,
+    `{ f: (x: :Integer) => :integer.is(:x) ~ true }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `{ f: (x: :natural_number.type) => :integer.is(:x) ~ true }`,
+    `{ f: (x: :NaturalNumber) => :integer.is(:x) ~ true }`,
     result => {
       assert(either.isRight(result))
     },
   ],
 
   [
-    `{ f: (x: :atom.type) => :integer.is(:x) ~ true }`,
+    `{ f: (x: :Atom) => :integer.is(:x) ~ true }`,
     result => {
       assert(either.isLeft(result))
       assert('kind' in result.value)
@@ -2080,7 +2080,7 @@ testCases(
   ],
 
   [
-    `{ f: (x: :something.type) => :something.is(:x) ~ true }`,
+    `{ f: (x: :Something) => :something.is(:x) ~ true }`,
     result => {
       assert(either.isRight(result))
     },
@@ -2088,8 +2088,8 @@ testCases(
 
   [
     `{
-      needs_some: (o: { tag: some, value: :integer.type }) => :o
-      use: (x: :integer.type) => :needs_some(:integer.from(:x))
+      needs_some: (o: { tag: some, value: :Integer }) => :o
+      use: (x: :Integer) => :needs_some(:integer.from(:x))
     }`,
     result => {
       assert(either.isRight(result))
@@ -2102,7 +2102,7 @@ testCases(
         (:integer.from(:a) match {
           some: b => :b
           none: _ => 0
-        }) ~ :integer.type
+        }) ~ :Integer
     }`,
     result => {
       assert(either.isRight(result))
@@ -2115,7 +2115,7 @@ testCases(
         (:integer.from(:a) match {
           some: b => :b
           none: _ => 0
-        }) ~ :natural_number.type
+        }) ~ :NaturalNumber
     }`,
     result => {
       assert(either.isLeft(result))
@@ -2130,7 +2130,7 @@ testCases(
         (:integer.from(:a) match {
           some: _ => true
           none: _ => false
-        }) ~ :boolean.type
+        }) ~ :Boolean
     }`,
     result => {
       assert(either.isRight(result))
@@ -2157,7 +2157,7 @@ testCases(
     `{
       test: a =>
         :integer.from(:a) match {
-          some: (b: :boolean.type) => 1
+          some: (b: :Boolean) => 1
           none: _ => 2
         }
     }`,
@@ -2170,7 +2170,7 @@ testCases(
     // TODO: This should be rejected by static analysis (`:a` may have arbitrary
     // tags).
     `{
-      test: (a: { tag: :atom.type, value: :something.type }) =>
+      test: (a: { tag: :Atom, value: :Something }) =>
         :a match {
           some: _ => 1
           none: _ => 2
@@ -2182,7 +2182,7 @@ testCases(
   ],
 
   [
-    `"-1-1" ~ :integer.type`,
+    `"-1-1" ~ :Integer`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -2190,7 +2190,7 @@ testCases(
   ],
 
   [
-    `"00" ~ :natural_number.type`,
+    `"00" ~ :NaturalNumber`,
     result => {
       assert(either.isLeft(result))
       assert.deepEqual(result.value.kind, 'typeMismatch')
@@ -2235,7 +2235,7 @@ testCases(
   ],
 
   [
-    `(_ => x) ~ ((:something.type ~> :atom.type) | (:something.type ~> :atom.type))`,
+    `(_ => x) ~ ((:Something ~> :Atom) | (:Something ~> :Atom))`,
     result => {
       assert(either.isRight(result))
     },
@@ -2302,7 +2302,7 @@ testCases(
   [
     `(
       { a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }
-    ) ~ { a: 1, b: :atom.type }`,
+    ) ~ { a: 1, b: :Atom }`,
     result => {
       assert(either.isRight(result))
     },
@@ -2319,7 +2319,7 @@ testCases(
   ],
 
   [
-    `({ a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }) ~ :something.type`,
+    `({ a: 1 } object.overlay @runtime { context => { b: :context.program.start_time } }) ~ :Something`,
     result => {
       assert(either.isRight(result))
     },
@@ -2334,8 +2334,8 @@ testCases(
 
   [
     `{
-      f: (x: :integer.type) =>
-        :object.from_property(a)(:x) ~ { a: :integer.type }
+      f: (x: :Integer) =>
+        :object.from_property(a)(:x) ~ { a: :Integer }
     }`,
     result => {
       assert(either.isRight(result))
@@ -2344,8 +2344,8 @@ testCases(
 
   [
     `{
-      f: (x: :integer.type) =>
-        :object.from_property(a)(:x) ~ { a: :integer.type, b: :integer.type }
+      f: (x: :Integer) =>
+        :object.from_property(a)(:x) ~ { a: :Integer, b: :Integer }
     }`,
     result => {
       assert(either.isLeft(result))
@@ -2355,8 +2355,8 @@ testCases(
 
   [
     `{
-      f: (x: :integer.type) =>
-        :object.overlay({ b: :x })({ a: :x }) ~ { a: :integer.type, b: :integer.type }
+      f: (x: :Integer) =>
+        :object.overlay({ b: :x })({ a: :x }) ~ { a: :Integer, b: :Integer }
     }`,
     result => {
       assert(either.isRight(result))
@@ -2365,8 +2365,8 @@ testCases(
 
   [
     `{
-      f: (x: :integer.type) =>
-        :object.lookup(a)({ a: :x }) ~ { tag: some, value: :integer.type }
+      f: (x: :Integer) =>
+        :object.lookup(a)({ a: :x }) ~ { tag: some, value: :Integer }
     }`,
     result => {
       assert(either.isRight(result))
@@ -2375,7 +2375,7 @@ testCases(
 
   [
     `{
-      f: (x: :integer.type) =>
+      f: (x: :Integer) =>
         :object.lookup(c)({ a: :x }) ~ { tag: none, value: {} }
     }`,
     result => {
@@ -2385,7 +2385,7 @@ testCases(
 
   [
     `{
-      f: (x: :integer.type) =>
+      f: (x: :Integer) =>
         :object.lookup(a)({ a: :x }) ~ { tag: none, value: {} }
     }`,
     result => {
@@ -2396,9 +2396,9 @@ testCases(
 
   [
     `{
-      f: (key: :atom.type) => (x: :integer.type) =>
+      f: (key: :Atom) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
-          { tag: some, value: @union { :integer.type, hello } },
+          { tag: some, value: @union { :Integer, hello } },
           { tag: none, value: {} }
         }
     }`,
@@ -2409,8 +2409,8 @@ testCases(
 
   [
     `{
-      f: (key: :atom.type) => (x: :integer.type) =>
-        :object.lookup(:key)({ a: :x }) ~ { tag: some, value: :integer.type }
+      f: (key: :Atom) => (x: :Integer) =>
+        :object.lookup(:key)({ a: :x }) ~ { tag: some, value: :Integer }
     }`,
     result => {
       assert(either.isLeft(result))
@@ -2420,7 +2420,7 @@ testCases(
 
   [
     `{
-      f: (o: { a: hello }) => (key: :atom.type) =>
+      f: (o: { a: hello }) => (key: :Atom) =>
         :object.lookup(:key)(:o) ~ { tag: some, value: hello }
     }`,
     result => {
@@ -2431,9 +2431,9 @@ testCases(
 
   [
     `{
-      f: (key: @union { a, c }) => (x: :integer.type) =>
+      f: (key: @union { a, c }) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
-          { tag: some, value: :integer.type },
+          { tag: some, value: :Integer },
           { tag: none, value: {} }
         }
     }`,
@@ -2444,8 +2444,8 @@ testCases(
 
   [
     `{
-      f: (stuff: { inner: { [:atom.type]: :integer.type } }) =>
-        :stuff.inner object.lookup a ~ :option.type(:integer.type)
+      f: (stuff: { inner: { [:Atom]: :Integer } }) =>
+        :stuff.inner object.lookup a ~ :Option(:Integer)
     }`,
     result => {
       assert(either.isRight(result))
@@ -2454,8 +2454,8 @@ testCases(
 
   [
     `{
-      f: (g: :atom.type ~> { [:atom.type]: :integer.type }) => (key: :atom.type) =>
-        :g(:key) object.lookup a ~ :option.type(:integer.type)
+      f: (g: :Atom ~> { [:Atom]: :Integer }) => (key: :Atom) =>
+        :g(:key) object.lookup a ~ :Option(:Integer)
     }`,
     result => {
       assert(either.isRight(result))
@@ -2473,13 +2473,13 @@ testCases(
   ],
 
   [
-    `(key: :natural_number.type) =>
+    `(key: :NaturalNumber) =>
       (stuff: {
-        [:natural_number.type]: :integer.type
+        [:NaturalNumber]: :Integer
       } | {
-        [:natural_number.type]: :boolean.type
+        [:NaturalNumber]: :Boolean
       }) =>
-        :stuff object.lookup :key ~ :option.type(:integer.type | :boolean.type)
+        :stuff object.lookup :key ~ :Option(:Integer | :Boolean)
     `,
     result => {
       assert(either.isRight(result))
@@ -2487,9 +2487,9 @@ testCases(
   ],
 
   [
-    `(key: :integer.type) =>
-      (stuff: { [:integer.type]: :integer.type }) =>
-        :stuff object.lookup :key ~ :option.type(:integer.type)
+    `(key: :Integer) =>
+      (stuff: { [:Integer]: :Integer }) =>
+        :stuff object.lookup :key ~ :Option(:Integer)
     `,
     result => {
       assert(either.isRight(result))

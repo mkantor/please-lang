@@ -383,7 +383,7 @@ elaborationSuite('@apply', [
 ])
 
 const stuckApplication =
-  '{ f: (n: :integer.type) => :n, x: @runtime { _context => 1 }, main: :f(:x) }'
+  '{ f: (n: :Integer) => :n, x: @runtime { _context => 1 }, main: :f(:x) }'
 
 const valueAtKeyPath = (
   value: Atom | Molecule,

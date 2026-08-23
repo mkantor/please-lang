@@ -5,7 +5,7 @@
  * Usage: cat ./examples/greatest-common-divisor.plz | ./please --a=12 --b=18
  */
 {
-  gcd: (a: :natural_number.type) => (b: :natural_number.type) => @if {
+  gcd: (a: :NaturalNumber) => (b: :NaturalNumber) => @if {
     :b integer.equals 0
     then: :a
     else: :gcd(:b)(:a % :b)
@@ -18,9 +18,9 @@
 
   output: :input.a match {
     none: _ => "missing or invalid --a argument (must be a natural number)"
-    some: ((a: :natural_number.type) => :input.b match {
+    some: ((a: :NaturalNumber) => :input.b match {
       none: _ => "missing or invalid --b argument (must be a natural number)"
-      some: ((b: :natural_number.type) => :gcd(:a)(:b))
+      some: ((b: :NaturalNumber) => :gcd(:a)(:b))
     })
   }
 }.output

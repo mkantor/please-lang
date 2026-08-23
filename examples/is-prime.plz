@@ -5,7 +5,7 @@
  * Usage: cat ./examples/is-prime.plz | ./please --input=17
  */
 {
-  try_divisor: (n: :natural_number.type) => (divisor: :natural_number.type) =>
+  try_divisor: (n: :NaturalNumber) => (divisor: :NaturalNumber) =>
     @if {
       :divisor * :divisor > :n
       then: true
@@ -16,7 +16,7 @@
       }
     }
 
-  is_prime: (n: :natural_number.type) => @if {
+  is_prime: (n: :NaturalNumber) => @if {
     :n < 2
     then: false
     else: :try_divisor(:n)(2)

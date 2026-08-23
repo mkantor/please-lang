@@ -433,21 +433,20 @@ export const stringifyResolvedTypeForEndUser = (type: Type): string =>
   stringifyTypeForEndUser(withStuckApplicationsResolved(type))
 
 export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
-  makeIndexExpression({
-    query: objectNodeFromOrderedEntries([['0', 'type']]),
-    object: (() => {
+  makeLookupExpression(
+    (() => {
       switch (typeSymbol) {
         case atomTypeSymbol:
-          return makeLookupExpression('atom')
+          return 'Atom'
         case integerTypeSymbol:
-          return makeLookupExpression('integer')
+          return 'Integer'
         case naturalNumberTypeSymbol:
-          return makeLookupExpression('natural_number')
+          return 'NaturalNumber'
         case somethingTypeSymbol:
-          return makeLookupExpression('something')
+          return 'Something'
       }
     })(),
-  })
+  )
 
 const syntaxTreeToSemanticGraph = (
   syntaxTree: Atom | Molecule,
