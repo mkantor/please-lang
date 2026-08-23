@@ -1141,6 +1141,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     `{ a: 1, b: 2 } ~ @union { 0: { [:Atom]: :Nothing, a: :Integer } }`,
     typeMismatch,
   ],
+  [`{ a: 1 } ~ {| a: :Integer |}`, success({ a: '1' })],
+  [`{ a: 1 } ~ {||}`, typeMismatch],
   // Excess clause key types much be a subtype of `atom`.
   [`(a: { [:Something]: a }) => _`, typeMismatch],
   [`(a: { [{}]: b }) => _`, typeMismatch],

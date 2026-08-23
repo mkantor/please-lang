@@ -473,6 +473,39 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
       )
     },
   ],
+  [
+    '{||}',
+    result => {
+      assert.deepEqual(result, parse('{ [:Atom]: :Nothing }'))
+    },
+  ],
+  [
+    '{| a: 1, [:Integer]: :Boolean |}',
+    result => {
+      assert.deepEqual(
+        result,
+        parse('{ a: 1, [:Atom]: :Nothing, [:Integer]: :Boolean }'),
+      )
+    },
+  ],
+  [
+    '{| a: 1 |}.a',
+    result => {
+      assert.deepEqual(result, parse('{ [:Atom]: :Nothing, a: 1 }.a'))
+    },
+  ],
+  [
+    '{| a: 1 }',
+    result => {
+      assert(either.isLeft(result))
+    },
+  ],
+  [
+    '{ a: 1 |}',
+    result => {
+      assert(either.isLeft(result))
+    },
+  ],
 
   // `|`s in atoms must generally be quoted, with a few exceptions.
   [
@@ -483,6 +516,10 @@ testCases(parse, input => `parsing \`${input}\``)('parsing', [
   ],
   ['"|"', either.makeRight(syntaxTree('|'))],
   ['||', either.makeRight(syntaxTree('||'))],
+  // `{|` binds tighter than the exempted `||` atom, which needs room to breathe
+  // within a brace.
+  ['{ || }', either.makeRight(syntaxTree([['0', '||']]))],
+  ['{|>}', either.makeRight(syntaxTree([['0', '|>']]))],
   ['|>', either.makeRight(syntaxTree('|>'))],
   ['<|', either.makeRight(syntaxTree('<|'))],
   [

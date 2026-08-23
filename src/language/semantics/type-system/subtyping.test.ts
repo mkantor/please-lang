@@ -166,7 +166,7 @@ testCases(
       ]),
       makeObjectType({ a: makeUnionType(['c']) }),
     ]),
-    '{ [:Atom]: :Nothing, a: a | b } | { a: c }',
+    '{| a: a | b |} | { a: c }',
   ],
 ])
 typeAssignabilitySuite('prelude types (assignable)', [

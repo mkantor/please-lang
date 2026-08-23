@@ -303,6 +303,40 @@ Function types can be denoted using `~>` instead of `=>` to avoid naming the
 parameter, but this is merely syntax sugar. `a ~> b` is exactly equivalent to
 `(_: a) => b`.
 
+#### Object Types
+
+Object types specify an object's properties. Values with excess properties are
+allowed:
+
+```plz
+{ a: 1, b: 2 } ~ { a: :Integer }
+```
+
+`{| … |}` closes the object type, forbidding excess properties:
+
+```plz
+{
+  a: 1
+  // b: 2 // would trigger a type error since `b` isn't in the below type
+} ~ {| a: :Integer |}
+```
+
+Properties can also be constrained by excess property clauses:
+
+```plz
+{ 1: true, 2: false } ~ { [:NaturalNumber]: :Boolean }
+```
+
+The type `{ [:NaturalNumber]: :Boolean }` says "keys which are `:NaturalNumber`s
+may exist, but only if their values are `:Boolean`s".
+
+Clauses may be used with `{| … |}`, where they re-open the object to their
+specific key type (other properties are still forbidden):
+
+```plz
+{ a: 1, 42: true } ~ {| a: :Integer, [:NaturalNumber]: :Boolean |}
+```
+
 #### Generic Programming
 
 Please functions are generic, even when the parameter type is annotated. For

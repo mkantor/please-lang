@@ -20,6 +20,7 @@ import {
 import {
   atSign,
   closingBrace,
+  closingBraceWithBar,
   closingBracket,
   colon,
   comma,
@@ -27,6 +28,7 @@ import {
   functionArrow,
   newline,
   openingBrace,
+  openingBraceWithBar,
   openingBracket,
   questionMark,
   signatureArrow,
@@ -376,54 +378,85 @@ const moleculeContents: Parser<MoleculeContents> = map(
   },
 )
 
-const sugarFreeMolecule: Parser<SpannedMolecule> = map(
-  sequence([
-    openingBrace,
-    optionalTrivia,
-    moleculeContents,
-    optional(propertyDelimiter),
-    optionalTrivia,
-    closingBrace,
-  ]),
-  ([
-    _openingBrace,
-    _trivia1,
-    { properties, excessClauses },
-    _trailingDelimiter,
-    _trivia2,
-    _closingBrace,
-  ]) => {
-    const enumerate = makeIncrementingIndexer()
-    const propertiesAsMolecule = syntheticMolecule(
-      properties.map(([key, value]) =>
-        // Note that `enumerate()` increments its internal counter as a side
-        // effect.
-        [key ?? enumerate(), value],
-      ),
-    )
-    return excessClauses.length === 0 ?
-        propertiesAsMolecule
-      : syntheticMolecule([
-          ['0', syntheticAtom('@object')],
-          [
-            '1',
-            syntheticMolecule([
-              ['properties', propertiesAsMolecule],
-              [
-                'excess',
-                syntheticMolecule(
-                  excessClauses.map((clause, index) => [
-                    String(index),
-                    syntheticMolecule(
-                      clause.map((value, index) => [String(index), value]),
-                    ),
-                  ]),
-                ),
-              ],
-            ]),
-          ],
-        ])
-  },
+/** A lookup of a prelude type alias (e.g. `:Something`) in desugared form. */
+const preludeTypeAsMolecule = (name: Atom): SpannedMolecule =>
+  syntheticMolecule([
+    ['0', syntheticAtom('@lookup')],
+    ['1', syntheticMolecule([['key', syntheticAtom(name)]])],
+  ])
+
+/** `:Something` in desugared form. */
+const topTypeAsMolecule = preludeTypeAsMolecule('Something')
+
+/** `:Nothing` in desugared form. */
+const bottomTypeAsMolecule = preludeTypeAsMolecule('Nothing')
+
+const makeMoleculeParser = (
+  openingDelimiter: Parser<string>,
+  closingDelimiter: Parser<string>,
+  implicitExcessClauses: readonly ExcessClause[],
+): Parser<SpannedMolecule> =>
+  map(
+    sequence([
+      openingDelimiter,
+      optionalTrivia,
+      moleculeContents,
+      optional(propertyDelimiter),
+      optionalTrivia,
+      closingDelimiter,
+    ]),
+    ([
+      _openingDelimiter,
+      _trivia1,
+      { properties, excessClauses: writtenExcessClauses },
+      _trailingDelimiter,
+      _trivia2,
+      _closingDelimiter,
+    ]) => {
+      const enumerate = makeIncrementingIndexer()
+      const propertiesAsMolecule = syntheticMolecule(
+        properties.map(([key, value]) =>
+          // Note that `enumerate()` increments its internal counter as a side
+          // effect.
+          [key ?? enumerate(), value],
+        ),
+      )
+      const excessClauses = [...implicitExcessClauses, ...writtenExcessClauses]
+      return excessClauses.length === 0 ?
+          propertiesAsMolecule
+        : syntheticMolecule([
+            ['0', syntheticAtom('@object')],
+            [
+              '1',
+              syntheticMolecule([
+                ['properties', propertiesAsMolecule],
+                [
+                  'excess',
+                  syntheticMolecule(
+                    excessClauses.map((clause, index) => [
+                      String(index),
+                      syntheticMolecule(
+                        clause.map((value, index) => [String(index), value]),
+                      ),
+                    ]),
+                  ),
+                ],
+              ]),
+            ],
+          ])
+    },
+  )
+
+const sugarFreeMolecule: Parser<SpannedMolecule> = makeMoleculeParser(
+  openingBrace,
+  closingBrace,
+  [],
+)
+
+const closedMolecule: Parser<SpannedMolecule> = makeMoleculeParser(
+  openingBraceWithBar,
+  closingBraceWithBar,
+  [[preludeTypeAsMolecule('Atom'), bottomTypeAsMolecule]],
 )
 
 type TrailingIndexOrArgument =
@@ -748,20 +781,20 @@ const precededByOpeningParenthesis = map(
 // {}
 // { a: b }
 // { 1, 2, 3 }
+// {| a: b |}
 const precededByOpeningBrace = map(
-  sequence([sugarFreeMolecule, trailingIndexesAndArguments]),
+  sequence([
+    // The closed form must be attempted first, otherwise `{||}` would parse as
+    // an object containing the atom `||` rather than an empty closed object.
+    oneOf([closedMolecule, sugarFreeMolecule]),
+    trailingIndexesAndArguments,
+  ]),
   ([expression, trailingIndexesAndArguments]) =>
     trailingIndexesAndArgumentsToExpression(
       expression,
       trailingIndexesAndArguments,
     ),
 )
-
-/** `:Something` in desugared form. */
-const topTypeAsMolecule = syntheticMolecule([
-  ['0', syntheticAtom('@lookup')],
-  ['1', syntheticMolecule([['key', syntheticAtom('Something')]])],
-])
 
 const makeHoleMolecule = (
   name: SpannedTree,

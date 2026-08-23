@@ -67,9 +67,7 @@ suite('please CLI error reporting', () => {
     ])
     assert.equal(code, 1)
     assert.equal(stdout, '')
-    assert.ok(
-      stderr.startsWith('Error: argument with type `{ [:Atom]: :Nothing }`'),
-    )
+    assert.ok(stderr.startsWith('Error: argument with type `{||}`'))
     assert.ok(stderr.includes('\n<stdin>:1:14\n'))
     assert.ok(stderr.includes('\n1 │ :boolean.not({})\n'))
     assert.ok(stderr.includes('\n  │              ▔▔\n'))

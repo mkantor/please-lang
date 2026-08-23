@@ -915,5 +915,81 @@ testCases(unparsers, input => `unparsing \`${JSON.stringify(input)}\``)(
           '{\n  "0": "@object",\n  "1": {\n    "properties": {},\n    "excess": {\n      "0": {\n        "0": "k",\n        "1": "v"\n      },\n      "1": {\n        "0": {\n          "0": "@index",\n          "1": {\n            "object": {\n              "0": "@lookup",\n              "1": {\n                "key": "atom"\n              }\n            },\n            "query": {\n              "0": "type"\n            }\n          }\n        },\n        "1": "d"\n      }\n    }\n  }\n}\n',
       },
     ],
+
+    [
+      {
+        0: '@object',
+        1: {
+          properties: { a: '1' },
+          excess: {
+            0: {
+              0: { 0: '@lookup', 1: { key: 'Atom' } },
+              1: { 0: '@lookup', 1: { key: 'Nothing' } },
+            },
+          },
+        },
+      },
+      {
+        inlinePlz: '{| a: 1 |}',
+        sugarFreeInlinePlz:
+          '{ 0: "@object", 1: { properties: { a: 1 }, excess: { 0: { 0: { 0: "@lookup", 1: { key: Atom } }, 1: { 0: "@lookup", 1: { key: Nothing } } } } } }',
+        prettyPlz: '{|\n  a: 1\n|}\n',
+        sugarFreePrettyPlz:
+          '{\n  0: "@object"\n  1: {\n    properties: {\n      a: 1\n    }\n    excess: {\n      0: {\n        0: {\n          0: "@lookup"\n          1: {\n            key: Atom\n          }\n        }\n        1: {\n          0: "@lookup"\n          1: {\n            key: Nothing\n          }\n        }\n      }\n    }\n  }\n}\n',
+        prettyJson:
+          '{\n  "0": "@object",\n  "1": {\n    "properties": {\n      "a": "1"\n    },\n    "excess": {\n      "0": {\n        "0": {\n          "0": "@lookup",\n          "1": {\n            "key": "Atom"\n          }\n        },\n        "1": {\n          "0": "@lookup",\n          "1": {\n            "key": "Nothing"\n          }\n        }\n      }\n    }\n  }\n}\n',
+      },
+    ],
+
+    [
+      {
+        0: '@object',
+        1: {
+          properties: {},
+          excess: {
+            0: {
+              0: { 0: '@lookup', 1: { key: 'Atom' } },
+              1: { 0: '@lookup', 1: { key: 'Nothing' } },
+            },
+          },
+        },
+      },
+      {
+        inlinePlz: '{||}',
+        sugarFreeInlinePlz:
+          '{ 0: "@object", 1: { properties: {}, excess: { 0: { 0: { 0: "@lookup", 1: { key: Atom } }, 1: { 0: "@lookup", 1: { key: Nothing } } } } } }',
+        prettyPlz: '{||}\n',
+        sugarFreePrettyPlz:
+          '{\n  0: "@object"\n  1: {\n    properties: {}\n    excess: {\n      0: {\n        0: {\n          0: "@lookup"\n          1: {\n            key: Atom\n          }\n        }\n        1: {\n          0: "@lookup"\n          1: {\n            key: Nothing\n          }\n        }\n      }\n    }\n  }\n}\n',
+        prettyJson:
+          '{\n  "0": "@object",\n  "1": {\n    "properties": {},\n    "excess": {\n      "0": {\n        "0": {\n          "0": "@lookup",\n          "1": {\n            "key": "Atom"\n          }\n        },\n        "1": {\n          "0": "@lookup",\n          "1": {\n            "key": "Nothing"\n          }\n        }\n      }\n    }\n  }\n}\n',
+      },
+    ],
+
+    [
+      {
+        0: '@object',
+        1: {
+          properties: {},
+          excess: {
+            0: { 0: 'k', 1: 'v' },
+            1: {
+              0: { 0: '@lookup', 1: { key: 'Atom' } },
+              1: { 0: '@lookup', 1: { key: 'Nothing' } },
+            },
+          },
+        },
+      },
+      {
+        inlinePlz: '{ [k]: v, [:Atom]: :Nothing }',
+        sugarFreeInlinePlz:
+          '{ 0: "@object", 1: { properties: {}, excess: { 0: { 0: k, 1: v }, 1: { 0: { 0: "@lookup", 1: { key: Atom } }, 1: { 0: "@lookup", 1: { key: Nothing } } } } } }',
+        prettyPlz: '{\n  [k]: v\n  [:Atom]: :Nothing\n}\n',
+        sugarFreePrettyPlz:
+          '{\n  0: "@object"\n  1: {\n    properties: {}\n    excess: {\n      0: {\n        0: k\n        1: v\n      }\n      1: {\n        0: {\n          0: "@lookup"\n          1: {\n            key: Atom\n          }\n        }\n        1: {\n          0: "@lookup"\n          1: {\n            key: Nothing\n          }\n        }\n      }\n    }\n  }\n}\n',
+        prettyJson:
+          '{\n  "0": "@object",\n  "1": {\n    "properties": {},\n    "excess": {\n      "0": {\n        "0": "k",\n        "1": "v"\n      },\n      "1": {\n        "0": {\n          "0": "@lookup",\n          "1": {\n            "key": "Atom"\n          }\n        },\n        "1": {\n          "0": "@lookup",\n          "1": {\n            "key": "Nothing"\n          }\n        }\n      }\n    }\n  }\n}\n',
+      },
+    ],
   ],
 )
