@@ -3,6 +3,8 @@ import {
   anySingleCharacter,
   as,
   butNot,
+  hidden,
+  labeled,
   literal,
   map,
   oneOf,
@@ -10,6 +12,7 @@ import {
   sequence,
   zeroOrMore,
 } from '@matt.kantor/parsing'
+import { notingUnclosedDelimiter } from './delimiters.js'
 import {
   atSign,
   backslash,
@@ -81,59 +84,79 @@ export const atomWithAdditionalQuotationRequirements = (
   additionalQuoteRequiringComponent: Parser<unknown>,
 ) =>
   optionallySurroundedByParentheses(
-    oneOf([
-      ...completeAtomsExemptedFromQuotationRequirements,
-      map(
-        oneOrMore(
-          butNot(
-            anySingleCharacter,
-            oneOf([
-              ...atomComponentsRequiringQuotation,
-              additionalQuoteRequiringComponent,
-            ]),
-            'a character sequence requiring quotation',
+    labeled(
+      oneOf([
+        ...completeAtomsExemptedFromQuotationRequirements,
+        map(
+          oneOrMore(
+            butNot(
+              anySingleCharacter,
+              oneOf([
+                ...atomComponentsRequiringQuotation,
+                additionalQuoteRequiringComponent,
+              ]),
+              'a character sequence requiring quotation',
+            ),
           ),
+          characters => characters.join(''),
         ),
-        characters => characters.join(''),
-      ),
-      quotedAtomParser,
-    ]),
+        quotedAtomParser,
+      ]),
+      'an atom',
+    ),
   )
 
-export const unquotedAtomParser = map(
-  oneOrMore(
-    butNot(
-      anySingleCharacter,
-      oneOf(atomComponentsRequiringQuotation),
-      'a character sequence requiring quotation',
+export const unquotedAtomParser = labeled(
+  map(
+    oneOrMore(
+      butNot(
+        anySingleCharacter,
+        oneOf(atomComponentsRequiringQuotation),
+        'a character sequence requiring quotation',
+      ),
     ),
+    characters => characters.join(''),
   ),
-  characters => characters.join(''),
+  'an atom',
 )
 
-const quotedAtomParser = map(
-  sequence([
-    quote,
-    map(
-      zeroOrMore(
-        oneOf([
-          // `"` and `\` need to be escaped
-          butNot(anySingleCharacter, oneOf([quote, backslash]), '`"` or `\\`'),
-          as(escapedQuote, '"'),
-          as(escapedBackslash, '\\'),
-        ]),
+const quotedAtomParser = notingUnclosedDelimiter(
+  '"',
+  '"',
+)(
+  map(
+    sequence([
+      quote,
+      map(
+        hidden(
+          zeroOrMore(
+            oneOf([
+              // `"` and `\` need to be escaped
+              butNot(
+                anySingleCharacter,
+                oneOf([quote, backslash]),
+                '`"` or `\\`',
+              ),
+              as(escapedQuote, '"'),
+              as(escapedBackslash, '\\'),
+            ]),
+          ),
+        ),
+        output => output.join(''),
       ),
-      output => output.join(''),
-    ),
-    quote,
-  ]),
-  ([_1, contents, _2]) => contents,
+      quote,
+    ]),
+    ([_1, contents, _2]) => contents,
+  ),
 )
 
 export const atom: Parser<Atom> = optionallySurroundedByParentheses(
-  oneOf([
-    ...completeAtomsExemptedFromQuotationRequirements,
-    unquotedAtomParser,
-    quotedAtomParser,
-  ]),
+  labeled(
+    oneOf([
+      ...completeAtomsExemptedFromQuotationRequirements,
+      unquotedAtomParser,
+      quotedAtomParser,
+    ]),
+    'an atom',
+  ),
 )

@@ -2,6 +2,7 @@ import either from '@matt.kantor/either'
 import type { Parser } from '@matt.kantor/parsing'
 import type { OrderedRecord } from '../../ordered-record.js'
 import * as orderedRecord from '../../ordered-record.js'
+import { withPhantomData, type WithPhantomData } from '../../phantom-data.js'
 import {
   stringifyKeyPathForInternalUse,
   type KeyPath,
@@ -11,13 +12,36 @@ import type { Span } from '../source-location.js'
 import type { Atom } from './atom.js'
 import type { SyntaxTree } from './syntax-tree.js'
 
+declare const _isExpressionSpans: unique symbol
+type IsExpressionSpans = {
+  readonly [_isExpressionSpans]: true
+}
+
 /**
  * Maps parsed expressions' key paths to their source spans.
  */
-export type ExpressionSpansByLocation = ReadonlyMap<
-  KeyPathStringifiedForInternalUse,
-  Span
+export type ExpressionSpans = WithPhantomData<
+  ReadonlyMap<KeyPathStringifiedForInternalUse, Span>,
+  IsExpressionSpans
 >
+
+declare const _isPropertyKeySpans: unique symbol
+type IsPropertyKeySpans = {
+  readonly [_isPropertyKeySpans]: true
+}
+
+/**
+ * Maps parsed properties' key paths to the spans of the keys.
+ */
+export type PropertyKeySpans = WithPhantomData<
+  ReadonlyMap<KeyPathStringifiedForInternalUse, Span>,
+  IsPropertyKeySpans
+>
+
+export type SourceSpans = {
+  readonly spans: ExpressionSpans
+  readonly propertyKeySpans: PropertyKeySpans
+}
 
 /**
  * A parse tree in which every node carries its source span. `span` is the
@@ -31,6 +55,7 @@ export type SpannedAtom = {
 export type SpannedMolecule = {
   readonly span: Span | undefined
   readonly value: OrderedRecord<SpannedTree>
+  readonly keySpans: ReadonlyMap<Atom, Span>
 }
 export type SpannedTree = SpannedAtom | SpannedMolecule
 
@@ -42,6 +67,7 @@ export const spannedAtom =
   (input, offset = 0n) =>
     either.map(parser(input, offset), success => ({
       offset: success.offset,
+      furthestFailure: success.furthestFailure,
       output: {
         span: spanFromOffsets(offset, success.offset),
         value: success.output,
@@ -58,6 +84,7 @@ export const recordSpan =
   (input, offset = 0n) =>
     either.map(parser(input, offset), success => ({
       offset: success.offset,
+      furthestFailure: success.furthestFailure,
       output: {
         ...success.output,
         span: spanFromOffsets(offset, success.offset),
@@ -75,6 +102,7 @@ export const recordSpanExtending =
   (input, offset = 0n) =>
     either.map(parser(input, offset), success => ({
       offset: success.offset,
+      furthestFailure: success.furthestFailure,
       output:
         initialNode.span === undefined ?
           success.output
@@ -97,19 +125,57 @@ export const syntheticAtom = (value: Atom): SpannedAtom => ({
  */
 export const syntheticMolecule = (
   entries: Iterable<readonly [string, SpannedTree]>,
-): SpannedMolecule => ({ span: undefined, value: orderedRecord.make(entries) })
+): SpannedMolecule => ({
+  span: undefined,
+  value: orderedRecord.make(entries),
+  keySpans: emptyKeySpans,
+})
+
+export const moleculeWithSpannedKeys = (
+  entries: readonly (readonly [SpannedAtom, SpannedTree])[],
+): SpannedMolecule => {
+  // A key's last occurrence determines its value (see `orderedRecord.make`).
+  const spansOfLastOccurrences = new Map(
+    entries.map(([key]) => [key.value, key.span]),
+  )
+  return {
+    span: undefined,
+    value: orderedRecord.make(
+      entries.map(([key, value]) => [key.value, value]),
+    ),
+    keySpans: new Map(
+      [...spansOfLastOccurrences].flatMap(
+        ([key, span]): readonly (readonly [Atom, Span])[] =>
+          span === undefined ? [] : [[key, span]],
+      ),
+    ),
+  }
+}
 
 /**
  * Drop spans from the syntax tree.
  */
 export const toSyntaxTree = (node: SpannedTree): SyntaxTree =>
-  typeof node.value === 'string' ?
-    node.value
-  : orderedRecord.mapValues(node.value, toSyntaxTree)
+  isSpannedMolecule(node) ?
+    orderedRecord.mapValues(node.value, toSyntaxTree)
+  : node.value
 
-export const spansFromSpannedTree = (
-  tree: SpannedTree,
-): ExpressionSpansByLocation => new Map(spanEntries(tree, []))
+const asExpressionSpans = withPhantomData<IsExpressionSpans>()
+const asPropertyKeySpans = withPhantomData<IsPropertyKeySpans>()
+
+export const spansFromSpannedTree = (tree: SpannedTree): SourceSpans => ({
+  spans: asExpressionSpans(new Map(spanEntries(tree, []))),
+  propertyKeySpans: asPropertyKeySpans(
+    new Map(propertyKeySpanEntries(tree, [])),
+  ),
+})
+
+export const emptyExpressionSpans: ExpressionSpans = asExpressionSpans(
+  new Map(),
+)
+
+/** Shared because the parser builds tons of synthetic molecules. */
+const emptyKeySpans: ReadonlyMap<Atom, Span> = new Map()
 
 const spanFromOffsets = (start: bigint, end: bigint): Span => [
   Number(start),
@@ -118,17 +184,22 @@ const spanFromOffsets = (start: bigint, end: bigint): Span => [
 
 const spanEndingAt = (span: Span, end: bigint): Span => [span[0], Number(end)]
 
+const isSpannedMolecule = (node: SpannedTree): node is SpannedMolecule =>
+  typeof node.value !== 'string'
+
+type SpanEntry = readonly [KeyPathStringifiedForInternalUse, Span]
+
 // Recursively find all spans within the given `node`.
 const spanEntries = (
   node: SpannedTree,
   keyPath: KeyPath,
-): readonly (readonly [KeyPathStringifiedForInternalUse, Span])[] => {
+): readonly SpanEntry[] => {
   const descendantSpanEntries =
-    typeof node.value === 'string' ?
-      []
-    : node.value.entries.flatMap(([key, value]) =>
+    isSpannedMolecule(node) ?
+      node.value.entries.flatMap(([key, value]) =>
         spanEntries(value, [...keyPath, key]),
       )
+    : []
   return node.span === undefined ?
       descendantSpanEntries
     : [
@@ -136,3 +207,23 @@ const spanEntries = (
         ...descendantSpanEntries,
       ]
 }
+
+// Recursively find the spans of all written property keys within `node`.
+const propertyKeySpanEntries = (
+  node: SpannedTree,
+  keyPath: KeyPath,
+): readonly SpanEntry[] =>
+  isSpannedMolecule(node) ?
+    node.value.entries.flatMap(([key, value]) => {
+      const keyPathOfProperty = [...keyPath, key]
+      const keySpan = node.keySpans.get(key)
+      const ownEntries: readonly SpanEntry[] =
+        keySpan === undefined ?
+          []
+        : [[stringifyKeyPathForInternalUse(keyPathOfProperty), keySpan]]
+      return [
+        ...ownEntries,
+        ...propertyKeySpanEntries(value, keyPathOfProperty),
+      ]
+    })
+  : []

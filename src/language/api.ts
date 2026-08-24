@@ -7,6 +7,7 @@ export {
   type ParsedProgram,
 } from './analysis.js'
 export { defaultConfiguration, type Configuration } from './configuration.js'
+export { type RelatedSpan } from './errors.js'
 export {
   lineAndColumnAtOffset,
   offsetAtLineAndColumn,

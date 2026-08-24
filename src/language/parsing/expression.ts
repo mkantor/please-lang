@@ -1,5 +1,6 @@
 import {
   flatMap,
+  labeled,
   lazy,
   map,
   nothing,
@@ -17,6 +18,7 @@ import {
   unquotedAtomParser,
   type Atom,
 } from './atom.js'
+import { notingUnclosedDelimiter } from './delimiters.js'
 import {
   atSign,
   closingBrace,
@@ -40,6 +42,7 @@ import {
   surroundedByParentheses,
 } from './parentheses.js'
 import {
+  moleculeWithSpannedKeys,
   recordSpan,
   recordSpanExtending,
   spannedAtom,
@@ -73,6 +76,12 @@ const makeIncrementingIndexer = (): Indexer => {
 const optional = <Output>(
   parser: Parser<NonNullable<Output>>,
 ): Parser<Output | undefined> => oneOf([parser, nothing])
+
+const expectedAfter = <Output>(
+  parser: Parser<Output>,
+  what: string,
+  precedingSigil: string,
+): Parser<Output> => labeled(parser, `${what} after \`${precedingSigil}\``)
 
 const spannedArrayToMolecule = (
   elements: readonly SpannedTree[],
@@ -249,13 +258,23 @@ const infixTokensToExpression = (operation: InfixOperation): SpannedTree => {
   }
 }
 
-const atomRequiringDotQuotation: Parser<SpannedAtom> = spannedAtom(
-  atomWithAdditionalQuotationRequirements(dot),
+const atomRequiringDotQuotation: Parser<SpannedAtom> = labeled(
+  spannedAtom(atomWithAdditionalQuotationRequirements(dot)),
+  'an atom',
 )
 
 const namedProperty = map(
-  sequence([atom, colon, optionalTrivia, lazy(() => expression)]),
-  ([key, _colon, _trivia, value]) => [key.value, value] as const,
+  sequence([
+    atom,
+    colon,
+    optionalTrivia,
+    expectedAfter(
+      lazy(() => expression),
+      'a value',
+      ':',
+    ),
+  ]),
+  ([key, _colon, _trivia, value]) => [key, value] as const,
 )
 
 const propertyWithOptionalKey = optionallySurroundedByParentheses(
@@ -276,43 +295,52 @@ const propertyDelimiter = oneOf([
 type ExcessClause = readonly [keys: SpannedTree, values: SpannedTree]
 
 // [a]: b
-const excessClause: Parser<ExcessClause> = map(
-  sequence([
-    openingBracket,
-    lazy(() => expression),
-    closingBracket,
-    colon,
-    optionalTrivia,
-    lazy(() => expression),
-  ]),
-  ([_openingBracket, keys, _closingBracket, _colon, _trivia, values]) => [
-    keys,
-    values,
-  ],
+const excessClause: Parser<ExcessClause> = notingUnclosedDelimiter(
+  '[',
+  ']',
+)(
+  map(
+    sequence([
+      openingBracket,
+      lazy(() => expression),
+      closingBracket,
+      colon,
+      optionalTrivia,
+      lazy(() => expression),
+    ]),
+    ([_openingBracket, keys, _closingBracket, _colon, _trivia, values]) => [
+      keys,
+      values,
+    ],
+  ),
 )
 
 const argument = surroundedByParentheses(lazy(() => expression))
 
-const dottedKeyPathKey = recordSpan(
-  oneOf([
-    // (a)
-    // (1 + 1)
-    // (:a.b.c)
-    // (:f(x)(y))
-    surroundedByParentheses(lazy(() => expression)),
+const dottedKeyPathKey = expectedAfter(
+  recordSpan(
+    oneOf([
+      // (a)
+      // (1 + 1)
+      // (:a.b.c)
+      // (:f(x)(y))
+      surroundedByParentheses(lazy(() => expression)),
 
-    // :a
-    map(sequence([colon, atomRequiringDotQuotation]), ([_colon, key]) =>
-      syntheticMolecule([
-        ['0', syntheticAtom('@lookup')],
-        ['1', syntheticMolecule([['key', key]])],
-      ]),
-    ),
+      // :a
+      map(sequence([colon, atomRequiringDotQuotation]), ([_colon, key]) =>
+        syntheticMolecule([
+          ['0', syntheticAtom('@lookup')],
+          ['1', syntheticMolecule([['key', key]])],
+        ]),
+      ),
 
-    // 1
-    // "a.b"
-    atomRequiringDotQuotation,
-  ]),
+      // 1
+      // "a.b"
+      atomRequiringDotQuotation,
+    ]),
+  ),
+  'a key',
+  '.',
 )
 
 const compactDottedKeyPathComponent = map(
@@ -325,15 +353,18 @@ const dottedKeyPathComponent = map(
   ([_trivia1, _dot, _trivia2, key]) => key,
 )
 
+/** A property's key is `undefined` until enumeration assigns it an index. */
+type Property = readonly [SpannedAtom | undefined, SpannedTree]
+
 type MoleculeContents = {
-  readonly properties: readonly (readonly [Atom | undefined, SpannedTree])[]
+  readonly properties: readonly Property[]
   readonly excessClauses: readonly ExcessClause[]
 }
 
 type MoleculeEntry =
   | {
       readonly kind: 'property'
-      readonly property: readonly [Atom | undefined, SpannedTree]
+      readonly property: Property
     }
   | {
       readonly kind: 'excessClause'
@@ -414,11 +445,11 @@ const makeMoleculeParser = (
       _closingDelimiter,
     ]) => {
       const enumerate = makeIncrementingIndexer()
-      const propertiesAsMolecule = syntheticMolecule(
+      const propertiesAsMolecule = moleculeWithSpannedKeys(
         properties.map(([key, value]) =>
           // Note that `enumerate()` increments its internal counter as a side
           // effect.
-          [key ?? enumerate(), value],
+          [key ?? syntheticAtom(enumerate()), value],
         ),
       )
       const excessClauses = [...implicitExcessClauses, ...writtenExcessClauses]
@@ -447,16 +478,18 @@ const makeMoleculeParser = (
     },
   )
 
-const sugarFreeMolecule: Parser<SpannedMolecule> = makeMoleculeParser(
-  openingBrace,
-  closingBrace,
-  [],
-)
+const sugarFreeMolecule: Parser<SpannedMolecule> = notingUnclosedDelimiter(
+  '{',
+  '}',
+)(makeMoleculeParser(openingBrace, closingBrace, []))
 
-const closedMolecule: Parser<SpannedMolecule> = makeMoleculeParser(
-  openingBraceWithBar,
-  closingBraceWithBar,
-  [[preludeTypeAsMolecule('Atom'), bottomTypeAsMolecule]],
+const closedMolecule: Parser<SpannedMolecule> = notingUnclosedDelimiter(
+  '{|',
+  '|}',
+)(
+  makeMoleculeParser(openingBraceWithBar, closingBraceWithBar, [
+    [preludeTypeAsMolecule('Atom'), bottomTypeAsMolecule],
+  ]),
 )
 
 type TrailingIndexOrArgument =
@@ -493,40 +526,43 @@ const compactTrailingIndexesAndArguments: Parser<
 )
 
 const infixOperator = sequence([
-  atomRequiringDotQuotation,
+  labeled(atomRequiringDotQuotation, 'an operator'),
   compactTrailingIndexesAndArguments,
 ])
 
-const compactExpression: Parser<SpannedTree> = recordSpan(
-  oneOf([
-    // (a)
-    // (1 + 1)
-    // (a => :b)(c)
-    // ({ a: 1 } |> :identity).a
-    map(
-      sequence([
-        surroundedByParentheses(lazy(() => expression)),
-        compactTrailingIndexesAndArguments,
-      ]),
-      ([expression, trailingIndexesAndArguments]) =>
-        trailingIndexesAndArgumentsToExpression(
-          expression,
-          trailingIndexesAndArguments,
-        ),
-    ),
-    // :a.b
-    // :a.b(1).c
-    // :f(x)
-    // :a.b(1)(2)
-    lazy(() => precededByColonThenAtom),
-    // @runtime { x => :x }
-    // @panic
-    lazy(() => precededByAtSign),
-    // {}
-    lazy(() => precededByOpeningBrace),
-    // 1
-    atom,
-  ]),
+const compactExpression: Parser<SpannedTree> = labeled(
+  recordSpan(
+    oneOf([
+      // (a)
+      // (1 + 1)
+      // (a => :b)(c)
+      // ({ a: 1 } |> :identity).a
+      map(
+        sequence([
+          surroundedByParentheses(lazy(() => expression)),
+          compactTrailingIndexesAndArguments,
+        ]),
+        ([expression, trailingIndexesAndArguments]) =>
+          trailingIndexesAndArgumentsToExpression(
+            expression,
+            trailingIndexesAndArguments,
+          ),
+      ),
+      // :a.b
+      // :a.b(1).c
+      // :f(x)
+      // :a.b(1)(2)
+      lazy(() => precededByColonThenAtom),
+      // @runtime { x => :x }
+      // @panic
+      lazy(() => precededByAtSign),
+      // {}
+      lazy(() => precededByOpeningBrace),
+      // 1
+      atom,
+    ]),
+  ),
+  'an expression',
 )
 
 // ~> a
@@ -541,11 +577,24 @@ const trailingSignatureTokens = map(
     trivia,
     zeroOrMore(
       map(
-        sequence([lazy(() => expression), trivia, signatureArrow, trivia]),
+        sequence([
+          expectedAfter(
+            lazy(() => expression),
+            'a type',
+            '~>',
+          ),
+          trivia,
+          signatureArrow,
+          trivia,
+        ]),
         ([parameter, _trivia1, _arrow, _trivia2]) => parameter,
       ),
     ),
-    lazy(() => expression),
+    expectedAfter(
+      lazy(() => expression),
+      'a type',
+      '~>',
+    ),
   ]),
   ([_trivia1, _arrow, _trivia2, trailingParameterTypes, returnType]) =>
     [...trailingParameterTypes, returnType] as const,
@@ -568,12 +617,16 @@ const trailingUnionTokens = map(
           // a flat union rather than `a | (b | c)`; these are semantically
           // equivalent but are distinct syntax trees which can cause
           // bugs/confusion.
-          flatMap(
-            lazy(() => expressionWhichMayHaveTrailingExpressions),
-            initialExpression =>
-              withTrailingExpressions({ unionsMayFollow: false })(
-                initialExpression,
-              ),
+          expectedAfter(
+            flatMap(
+              lazy(() => expressionWhichMayHaveTrailingExpressions),
+              initialExpression =>
+                withTrailingExpressions({ unionsMayFollow: false })(
+                  initialExpression,
+                ),
+            ),
+            'a union member',
+            '|',
           ),
           trivia,
           unionBar,
@@ -582,7 +635,11 @@ const trailingUnionTokens = map(
         ([member, _trivia1, _bar, _trivia2]) => member,
       ),
     ),
-    lazy(() => expression),
+    expectedAfter(
+      lazy(() => expression),
+      'a union member',
+      '|',
+    ),
   ]),
   ([_trivia1, _bar, _trivia2, trailingMembers, lastMember]) =>
     [...trailingMembers, lastMember] as const,
@@ -593,7 +650,12 @@ const trailingUnionTokens = map(
 // ~ (:Boolean | :Integer)
 // ~ (a ~> b)
 const trailingCheckToken = map(
-  sequence([trivia, tilde, trivia, compactExpression]),
+  sequence([
+    trivia,
+    tilde,
+    trivia,
+    expectedAfter(compactExpression, 'a type', '~'),
+  ]),
   ([_trivia1, _tilde, _trivia2, type]) => type,
 )
 
@@ -656,14 +718,14 @@ const typedFunctionParameter: Parser<SpannedMolecule> = surroundedByParentheses(
       lazy(() => expression),
     ]),
     ([name, _trivia1, _colon, _trivia2, type]) =>
-      syntheticMolecule([[name.value, type]]),
+      moleculeWithSpannedKeys([[name, type]]),
   ),
 )
 
-const functionParameter: Parser<SpannedTree> = oneOf([
-  typedFunctionParameter,
-  atom,
-])
+const functionParameter: Parser<SpannedTree> = labeled(
+  oneOf([typedFunctionParameter, atom]),
+  'a parameter',
+)
 
 // a => :b
 // a => {}
@@ -684,7 +746,11 @@ const precededByAtomThenFunctionArrow = map(
         ([parameter, _trivia1, _arrow, _trivia2]) => parameter,
       ),
     ),
-    lazy(() => expression),
+    expectedAfter(
+      lazy(() => expression),
+      "the function's body",
+      '=>',
+    ),
   ]),
   ([
     initialParameter,
@@ -731,7 +797,7 @@ const precededByAtomThenFunctionArrow = map(
 const precededByAtSign = map(
   sequence([
     atSign,
-    unquotedAtomParser,
+    expectedAfter(unquotedAtomParser, 'a keyword name', '@'),
     optionalTrivia,
     optional(lazy(() => compactExpression)),
   ]),
@@ -748,7 +814,11 @@ const precededByAtSign = map(
 // :f(x)
 // :a.b(1)(2)
 const precededByColonThenAtom = map(
-  sequence([colon, atomRequiringDotQuotation, trailingIndexesAndArguments]),
+  sequence([
+    colon,
+    expectedAfter(atomRequiringDotQuotation, 'a name', ':'),
+    trailingIndexesAndArguments,
+  ]),
   ([_colon, key, trailingIndexesAndArguments]) =>
     trailingIndexesAndArgumentsToExpression(
       syntheticMolecule([
@@ -907,9 +977,12 @@ const withTrailingExpressions =
     ])
   }
 
-export const expression: Parser<SpannedTree> = recordSpan(
-  flatMap(
-    expressionWhichMayHaveTrailingExpressions,
-    withTrailingExpressions({ unionsMayFollow: true }),
+export const expression: Parser<SpannedTree> = labeled(
+  recordSpan(
+    flatMap(
+      expressionWhichMayHaveTrailingExpressions,
+      withTrailingExpressions({ unionsMayFollow: true }),
+    ),
   ),
+  'an expression',
 )

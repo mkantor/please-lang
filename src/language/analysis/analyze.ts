@@ -4,7 +4,8 @@ import { compileWithContext } from '../compiling.js'
 import type { Configuration } from '../configuration.js'
 import {
   parseWithSpans,
-  type ExpressionSpansByLocation,
+  type ExpressionSpans,
+  type PropertyKeySpans,
   type SyntaxTree,
 } from '../parsing.js'
 import type { ExpressionContext } from '../semantics.js'
@@ -18,7 +19,8 @@ export type Analysis = {
 
 export type ParsedProgram = {
   readonly tree: SyntaxTree
-  readonly spans: ExpressionSpansByLocation
+  readonly spans: ExpressionSpans
+  readonly propertyKeySpans: PropertyKeySpans
   readonly context: ExpressionContext
 }
 
@@ -36,7 +38,7 @@ export const analyze =
         diagnostics: [diagnosticFromError(error)],
         parsed: option.none,
       }),
-      right: ({ tree, spans }) => {
+      right: ({ tree, spans, propertyKeySpans }) => {
         const { context, output } = compileWithContext(configuration)(
           tree,
           spans,
@@ -46,7 +48,7 @@ export const analyze =
             left: error => [diagnosticFromError(error)],
             right: _ => [],
           }),
-          parsed: option.makeSome({ tree, spans, context }),
+          parsed: option.makeSome({ tree, spans, propertyKeySpans, context }),
         }
       },
     })

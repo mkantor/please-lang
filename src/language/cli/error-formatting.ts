@@ -1,15 +1,18 @@
 import { styleText } from 'node:util'
+import type { RelatedSpan } from '../errors.js'
 import { snippetAtSpan, type Span } from '../source-location.js'
 
 export type FormattableError = {
   readonly message: string
   readonly span?: Span | undefined
+  readonly relatedSpans?: readonly RelatedSpan[] | undefined
 }
 
 /**
  * Render an error for a human reading in a terminal. When both `source` and a
  * `span` are available the `Error: <message>` header is followed by a framed,
  * underline-annotated source snippet; otherwise just the header is returned.
+ * Any `relatedSpans` follow as further frames.
  */
 export const formatError = (
   error: FormattableError,
@@ -21,9 +24,16 @@ export const formatError = (
   const errorLabel = styleText(['red', 'bold', 'underline'], 'Error')
   const styledMessage = `${styleText('bold', ':')} ${error.message}`
   const header = `${errorLabel}${styledMessage}`
-  return context.source === undefined || error.span === undefined ?
+  const source = context.source
+  return source === undefined || error.span === undefined ?
       header
-    : `${header}\n\n${renderFrame(context.source, error.span, context.filename)}`
+    : [
+        `${header}\n\n${renderFrame(source, error.span, context.filename)}`,
+        ...(error.relatedSpans ?? []).map(
+          related =>
+            `${styleText('bold', 'note')}${styleText('bold', ':')} ${related.message}\n${renderFrame(source, related.span, context.filename)}`,
+        ),
+      ].join('\n\n')
 }
 
 const renderFrame = (source: string, span: Span, filename: string): string => {
