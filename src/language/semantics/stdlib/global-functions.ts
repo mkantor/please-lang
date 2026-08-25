@@ -18,7 +18,10 @@ import {
   type Type,
 } from '../type-system.js'
 import { typeFromSemanticGraph } from '../type-system/literal-type.js'
-import { asUnionWithLiteralAtomMembers } from '../type-system/subtyping.js'
+import {
+  asUnionWithLiteralAtomMembers,
+  excessBoundForKey,
+} from '../type-system/subtyping.js'
 import {
   applyKeyPathToType,
   applyTypeToArgumentType,
@@ -175,7 +178,7 @@ export const globalFunctions = {
             isFunctionNode(relevantCase) ?
               applyValidatingParameterType(
                 relevantCase,
-                argument.value,
+                argument.value ?? unitValue,
                 contextOfApplication,
               )
             : either.makeRight(relevantCase),
@@ -184,6 +187,12 @@ export const globalFunctions = {
     computeMatchReturnType,
   ),
 } as const
+
+/**
+ * Handed to a `match` case whose variant carries no `value` (e.g. `option`'s
+ * `none`). This is the inhabitant of `types._`.
+ */
+const unitValue: Atom = '_'
 
 const enumerateTaggedVariants = (
   type: Type,
@@ -209,12 +218,12 @@ const enumerateTaggedVariants = (
       ),
     object: type => {
       const tagType = type.children['tag']
-      const valueType = type.children['value']
-      return (
-          tagType === undefined ||
-            valueType === undefined ||
-            tagType.kind !== 'union'
-        ) ?
+      // An unlisted `value` may be absent (making the variant's payload
+      // `unitValue`) or present within whatever bound the excess clauses allow.
+      const valueType =
+        type.children['value'] ??
+        unionOfTypes([types._, excessBoundForKey('value', type.excess)])
+      return tagType?.kind !== 'union' ?
           option.none
         : option.map(asUnionWithLiteralAtomMembers(tagType), tags => [
             ...tags.members.values().map(tag => ({ tag, value: valueType })),

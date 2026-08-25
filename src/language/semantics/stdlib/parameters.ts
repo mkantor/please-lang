@@ -36,24 +36,23 @@ export type BooleanNode = 'true' | 'false'
 export const nodeIsBoolean = (node: SemanticGraph) =>
   node === 'true' || node === 'false'
 
-export type OptionLikeNode = ObjectNode & {
-  readonly tag: 'some' | 'none'
-  readonly value: SemanticGraph
-}
+export type OptionLikeNode = ObjectNode &
+  (
+    | { readonly tag: 'some'; readonly value: SemanticGraph }
+    | { readonly tag: 'none'; readonly value?: undefined }
+  )
 
 export const nodeIsOptionLike = (node: SemanticGraph): node is OptionLikeNode =>
   isObjectNode(node) &&
-  (node['tag'] === 'some' || node['tag'] === 'none') &&
-  node['value'] !== undefined
+  ((node['tag'] === 'some' && node['value'] !== undefined) ||
+    (node['tag'] === 'none' && node['value'] === undefined))
 
 export type TaggedNode = ObjectNode & {
   readonly tag: Atom
-  readonly value: SemanticGraph
+  readonly value?: SemanticGraph
 }
 export const nodeIsTagged = (node: SemanticGraph): node is TaggedNode =>
-  isObjectNode(node) &&
-  typeof node['tag'] === 'string' &&
-  node['value'] !== undefined
+  isObjectNode(node) && typeof node['tag'] === 'string'
 
 export const atomParameter: Parameter<Atom> = {
   type: types.atom,
@@ -131,10 +130,7 @@ export const optionParameter = (
 })
 
 export const taggedParameter: Parameter<TaggedNode> = {
-  type: makeObjectType({
-    tag: types.atom,
-    value: types.something,
-  }),
+  type: makeObjectType({ tag: types.atom }),
   asExpected: value =>
     nodeIsTagged(value) ? option.makeSome(value) : option.none,
   expected: 'a tagged value',
