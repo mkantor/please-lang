@@ -585,27 +585,38 @@ const unparseSugaredLookup =
       ),
     )
 
-// Serialization spells the top type as the prelude alias `:Something`, but the
-// `:something.type` property that alias points at is equally valid to write by
-// hand, so both spellings have to be recognized here.
+// Accepts both `:Alias` and `:module.type`.
+const isPreludeTypeSpelling =
+  (aliasName: Atom, moduleName: Atom) =>
+  (value: SemanticGraph): boolean =>
+    isLookupOf(aliasName)(value) ||
+    either.match(readIndexExpression(value), {
+      right: ({ 1: { object, query } }) =>
+        query[0] === 'type' &&
+        Object.keys(query).length === 1 &&
+        isLookupOf(moduleName)(object),
+      left: _ => false,
+    })
+
+const isLookupOf =
+  (key: Atom) =>
+  (value: SemanticGraph): boolean =>
+    either.match(readLookupExpression(value), {
+      right: lookupExpression => lookupExpression[1].key === key,
+      left: _ => false,
+    })
+
 const isTopType = (value: SemanticGraph): boolean =>
   value === types.somethingTypeSymbol ||
-  isTopTypeAliasLookup(value) ||
-  either.match(
-    either.flatMap(readIndexExpression(value), ({ 1: { object, query } }) =>
-      query[0] === 'type' && Object.keys(query).length === 1 ?
-        readLookupExpression(object)
-      : either.makeLeft(undefined),
-    ),
-    {
-      right: lookupExpression => lookupExpression[1].key === 'something',
-      left: _ => false,
-    },
-  )
+  isPreludeTypeSpelling('Something', 'something')(value)
 
-const isTopTypeAliasLookup = (value: SemanticGraph): boolean =>
-  either.match(readLookupExpression(value), {
-    right: lookupExpression => lookupExpression[1].key === 'Something',
+const isAtomType = (value: SemanticGraph): boolean =>
+  value === types.atomTypeSymbol || isPreludeTypeSpelling('Atom', 'atom')(value)
+
+const isBottomType = (value: SemanticGraph): boolean =>
+  isPreludeTypeSpelling('Nothing', 'nothing')(value) ||
+  either.match(readUnionExpression(value), {
+    right: unionExpression => Object.keys(unionExpression[1]).length === 0,
     left: _ => false,
   })
 
@@ -706,11 +717,20 @@ const unparseExcessPropertyClause =
     )
   }
 
+const isClosingClause = (clause: ExcessClause): boolean =>
+  isAtomType(clause[0]) && isBottomType(clause[1])
+
 const unparseSugaredObjectType =
   (options: Options) =>
   (context: Context) =>
   (expression: ObjectTypeExpression) => {
-    const { openBrace, closeBrace, comma } = punctuation(styleText)
+    const {
+      openBrace,
+      closeBrace,
+      openBraceWithBar,
+      closeBraceWithBar,
+      comma,
+    } = punctuation(styleText)
     return either.flatMap(
       either.flatMapLeft(
         readExcessClauses(expression),
@@ -720,8 +740,21 @@ const unparseSugaredObjectType =
             message: error.message,
           }),
       ),
-      clauses =>
-        either.flatMap(
+      writtenClauses => {
+        const [firstClause, ...clausesAfterFirst] = writtenClauses
+        const { openDelimiter, closeDelimiter, clauses } =
+          firstClause !== undefined && isClosingClause(firstClause) ?
+            {
+              openDelimiter: openBraceWithBar,
+              closeDelimiter: closeBraceWithBar,
+              clauses: clausesAfterFirst,
+            }
+          : {
+              openDelimiter: openBrace,
+              closeDelimiter: closeBrace,
+              clauses: writtenClauses,
+            }
+        return either.flatMap(
           serializeIfNeeded(expression[1].properties),
           serializedProperties =>
             typeof serializedProperties === 'string' ?
@@ -738,36 +771,36 @@ const unparseSugaredObjectType =
                     either.sequence(
                       clauses.map(unparseExcessPropertyClause(context)),
                     ),
-                    refinementClausesAsStrings => {
-                      switch (options.flow) {
-                        case 'inline':
-                          return openBrace.concat(
-                            ' ',
-                            [
-                              ...refinementClausesAsStrings,
-                              ...propertyPairsAsStrings,
-                            ].join(comma.concat(' ')),
-                            ' ',
-                            closeBrace,
-                          )
-                        case 'multiline':
-                          return openBrace.concat(
-                            '\n',
-                            indent(
-                              2,
-                              [
-                                ...refinementClausesAsStrings,
-                                ...propertyPairsAsStrings,
-                              ].join('\n'),
-                            ),
-                            '\n',
-                            closeBrace,
-                          )
+                    excessClausesAsStrings => {
+                      const entriesAsStrings = [
+                        ...excessClausesAsStrings,
+                        ...propertyPairsAsStrings,
+                      ]
+                      if (entriesAsStrings.length === 0) {
+                        return openDelimiter.concat(closeDelimiter)
+                      } else {
+                        switch (options.flow) {
+                          case 'inline':
+                            return openDelimiter.concat(
+                              ' ',
+                              entriesAsStrings.join(comma.concat(' ')),
+                              ' ',
+                              closeDelimiter,
+                            )
+                          case 'multiline':
+                            return openDelimiter.concat(
+                              '\n',
+                              indent(2, entriesAsStrings.join('\n')),
+                              '\n',
+                              closeDelimiter,
+                            )
+                        }
                       }
                     },
                   ),
               ),
-        ),
+        )
+      },
     )
   }
 

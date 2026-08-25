@@ -36,6 +36,8 @@ export const punctuation = (styleText: typeof util.styleText) => ({
   unionBar: styleText('dim', '|'),
   openBrace: styleText('dim', '{'),
   closeBrace: styleText('dim', '}'),
+  openBraceWithBar: styleText('dim', '{|'),
+  closeBraceWithBar: styleText('dim', '|}'),
   openGroupingParenthesis: styleText('dim', '('),
   closeGroupingParenthesis: styleText('dim', ')'),
 

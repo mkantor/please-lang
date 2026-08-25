@@ -51,7 +51,7 @@ suite('stuck applications are resolved in error messages', () => {
   test('applications within a stdlib return type are resolved', () => {
     assertMessageContains(
       '(f: :Atom ~> :Integer) => (x: :Atom) => :object.overlay({ a: :f(:x) })({ b: true }) ~ :Nothing',
-      '`{ [:Atom]: :Nothing, b: true, a: (?"f.#return": :Integer) }`',
+      '`{| b: true, a: (?"f.#return": :Integer) |}`',
     )
   })
 })
