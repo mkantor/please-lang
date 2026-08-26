@@ -93,16 +93,18 @@ const makeFunctionFromElaboratedExpression = (
           })
         } else {
           return either.makeRight(
-            makeFunctionNode(
-              inferredType.signature,
-              () => either.makeRight(functionExpression),
-              option.makeSome(getParameterName(functionExpression)),
-              (argument, applySiteContext) =>
+            makeFunctionNode({
+              signature: inferredType.signature,
+              serialize: () => either.makeRight(functionExpression),
+              parameterName: option.makeSome(
+                getParameterName(functionExpression),
+              ),
+              call: (argument, applySiteContext) =>
                 apply(functionExpression, inferredType.signature, argument, {
                   functionDefinitionContext: context,
                   applySiteContext,
                 }),
-            ),
+            }),
           )
         }
       }),
@@ -271,11 +273,11 @@ const apply = (
                     // Include the function itself to allow recursion.
                     [
                       ownKey,
-                      makeFunctionNode(
+                      makeFunctionNode({
                         signature,
-                        () => either.makeRight(expression),
-                        option.makeSome(parameterName),
-                        (argument, applySiteContextOfNestedApplication) =>
+                        serialize: () => either.makeRight(expression),
+                        parameterName: option.makeSome(parameterName),
+                        call: (argument, applySiteContextOfNestedApplication) =>
                           apply(expression, signature, argument, {
                             functionDefinitionContext,
                             applySiteContext: withDynamicEvaluationState(
@@ -283,7 +285,7 @@ const apply = (
                               applySiteContextOfNestedApplication,
                             ),
                           }),
-                      ),
+                      }),
                     ],
                     // Put the argument in scope.
                     [parameterName, argument],

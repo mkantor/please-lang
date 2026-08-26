@@ -40,15 +40,20 @@ export type FunctionNodeWithSignature<
 export const isFunctionNode = (node: SemanticGraph) =>
   typeof node === 'function'
 
-export const makeFunctionNode = <Signature extends FunctionType['signature']>(
-  signature: Signature,
-  serialize: FunctionNode['serialize'],
-  parameterName: Option<Atom>,
-  f: FunctionNodeCallSignature,
-): FunctionNodeWithSignature<Signature> => {
+export const makeFunctionNode = <Signature extends FunctionType['signature']>({
+  signature,
+  serialize,
+  parameterName,
+  call,
+}: {
+  readonly signature: Signature
+  readonly serialize: FunctionNode['serialize']
+  readonly parameterName: Option<Atom>
+  readonly call: FunctionNodeCallSignature
+}): FunctionNodeWithSignature<Signature> => {
   const node: FunctionNodeCallSignature &
     Writable<FunctionNodeWithSignature<Signature>> = (argument, context) =>
-    f(argument, context)
+    call(argument, context)
   node[nodeTag] = 'function'
   node.parameterName = parameterName
   node.signature = signature

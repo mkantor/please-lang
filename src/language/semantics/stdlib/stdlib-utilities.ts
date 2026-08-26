@@ -170,11 +170,11 @@ export const preludeFunction = <const Parameters extends NonEmptyParameters>(
       ),
     computeRefinedReturnType,
   )
-  return makeFunctionNode(
-    liftedSignature,
-    () => either.makeRight(keyPathToLookupExpression(keyPath)),
-    option.none,
-    handleUnavailableDependencies(
+  return makeFunctionNode({
+    signature: liftedSignature,
+    serialize: () => either.makeRight(keyPathToLookupExpression(keyPath)),
+    parameterName: option.none,
+    call: handleUnavailableDependencies(
       acceptArgument(definition)({
         remainingParameters: parameters,
         argumentsSoFar: [],
@@ -182,7 +182,7 @@ export const preludeFunction = <const Parameters extends NonEmptyParameters>(
         stage: definition.body,
       }),
     ),
-  )
+  })
 }
 
 type BodyStage = (
@@ -333,14 +333,14 @@ const acceptArgument =
                         argument,
                       ),
                       refinedReturn =>
-                        makeFunctionNode(
-                          refinedReturn.signature,
-                          serializeAppliedFunction(
+                        makeFunctionNode({
+                          signature: refinedReturn.signature,
+                          serialize: serializeAppliedFunction(
                             definition.keyPath,
                             argumentsSoFar,
                           ),
-                          option.none,
-                          handleUnavailableDependencies(
+                          parameterName: option.none,
+                          call: handleUnavailableDependencies(
                             acceptArgument(definition)({
                               remainingParameters: restParameters,
                               argumentsSoFar,
@@ -348,7 +348,7 @@ const acceptArgument =
                               stage: nextStage,
                             }),
                           ),
-                        ),
+                        }),
                     ),
                   )
             },
