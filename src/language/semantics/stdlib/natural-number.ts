@@ -41,10 +41,7 @@ export const natural_number = {
             ['tag', 'some'],
             ['value', argument],
           ])
-        : objectNodeFromOrderedEntries([
-            ['tag', 'none'],
-            ['value', objectNodeFromOrderedEntries([])],
-          ]),
+        : objectNodeFromOrderedEntries([['tag', 'none']]),
       ),
     computeFromReturnType(types.naturalNumber),
   ),

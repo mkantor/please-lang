@@ -143,9 +143,6 @@ const optionType = ({
         makeObjectType(
           {
             tag: makeUnionType(['none']),
-            value: makeObjectType({}, [
-              { keys: types.atom, values: types.nothing },
-            ]),
           },
           [{ keys: types.atom, values: types.nothing }],
         ),
@@ -324,10 +321,7 @@ export const object = {
               ['tag', 'some'],
               ['value', propertyValue],
             ])
-          : objectNodeFromOrderedEntries([
-              ['tag', 'none'],
-              ['value', objectNodeFromOrderedEntries([])],
-            ]),
+          : objectNodeFromOrderedEntries([['tag', 'none']]),
         )
       }),
     computeLookupReturnType,
@@ -344,10 +338,7 @@ export const object = {
             ['tag', 'some'],
             ['value', argument],
           ])
-        : objectNodeFromOrderedEntries([
-            ['tag', 'none'],
-            ['value', objectNodeFromOrderedEntries([])],
-          ]),
+        : objectNodeFromOrderedEntries([['tag', 'none']]),
       ),
     computeFromReturnType(types.object),
   ),

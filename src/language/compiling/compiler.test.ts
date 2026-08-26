@@ -2376,7 +2376,7 @@ testCases(
   [
     `{
       f: (x: :Integer) =>
-        :object.lookup(c)({ a: :x }) ~ { tag: none, value: {} }
+        :object.lookup(c)({ a: :x }) ~ { tag: none }
     }`,
     result => {
       assert(either.isRight(result))
@@ -2386,7 +2386,7 @@ testCases(
   [
     `{
       f: (x: :Integer) =>
-        :object.lookup(a)({ a: :x }) ~ { tag: none, value: {} }
+        :object.lookup(a)({ a: :x }) ~ { tag: none }
     }`,
     result => {
       assert(either.isLeft(result))
@@ -2399,7 +2399,7 @@ testCases(
       f: (key: :Atom) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
           { tag: some, value: @union { :Integer, hello } },
-          { tag: none, value: {} }
+          { tag: none }
         }
     }`,
     result => {
@@ -2434,7 +2434,7 @@ testCases(
       f: (key: @union { a, c }) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
           { tag: some, value: :Integer },
-          { tag: none, value: {} }
+          { tag: none }
         }
     }`,
     result => {

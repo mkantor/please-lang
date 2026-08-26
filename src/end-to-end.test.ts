@@ -233,7 +233,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     }`,
     success({
       'static data': 'blah blah blah',
-      'evaluated data': { tag: 'none', value: {} },
+      'evaluated data': { tag: 'none' },
     }),
   ],
   ['(a => :a)(A)', success('A')],
@@ -342,7 +342,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [':flow(:atom.append(b))(:atom.append(a))(z)', success('zab')],
   [
     `@runtime { :object.lookup("key which does not exist in runtime context") }`,
-    success({ tag: 'none', value: {} }),
+    success({ tag: 'none' }),
   ],
   [
     `:object.lookup(output)({
@@ -638,6 +638,13 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [
     '((a: :Atom) => (:option.make_some(:a) option.get_or_else other) ~ :Atom)(hello)',
     success('hello'),
+  ],
+  [
+    `:option.none match {
+      none: (unit: :Atom) => :unit
+      some: :identity
+    }`,
+    success('_'),
   ],
   [':option.is_some(:option.make_some(7))', success('true')],
   [':option.is_some(:option.none)', success('false')],
@@ -1055,7 +1062,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [
     `(o: :Object) => {
       first: :o object.lookup 0
-      return: :identity(:first.value)
+      return: :identity(:first.tag)
     }.return`,
     assertSuccess,
   ],
@@ -1069,16 +1076,26 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [
     `(o: :Object) => {
       first: :o object.lookup 0
-      return: :first.value + 1
+      // the none branch will give _, which can't be added
+      return: :first match { some: :identity, none: :identity } + 1
     }.return`,
     typeMismatch,
   ],
   [
     `(o: :Object) => {
       first: :o object.lookup 0
-      return: :first.value(1)
+      return: (:first match { some: :identity, none: :identity })(1)
     }.return`,
     invalidExpression,
+  ],
+  [
+    `(o: :Object) => {
+      first: :o object.lookup 0
+      // \`none\` has no \`value\`; an option's payload is reachable only by
+      // matching on the tag
+      return: :first.value
+    }.return`,
+    typeMismatch,
   ],
   [
     `(x: { a: :Atom }) => (y: { b: :Atom }) =>
@@ -1167,8 +1184,8 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success({
       from_start: { tag: 'some', value: '60' },
       from_middle: { tag: 'some', value: '50' },
-      past_end: { tag: 'none', value: {} },
-      empty: { tag: 'none', value: {} },
+      past_end: { tag: 'none' },
+      empty: { tag: 'none' },
     }),
   ],
   [

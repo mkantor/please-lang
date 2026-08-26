@@ -12,8 +12,8 @@ import { atom } from './opaque-types.js'
 
 export const nothing = makeUnionType([]) // the bottom type
 
-// `null` unfortunately can't be a variable name
-export const nullType = makeUnionType(['null'])
+// The canonical unit type.
+export const _ = makeUnionType(['_'])
 
 export const boolean = makeUnionType(['false', 'true'])
 
@@ -46,13 +46,12 @@ const makeExactObjectType = <Children extends Readonly<Record<Atom, Type>>>(
 
 export const option = (value: Type) =>
   makeUnionType([
-    makeExactObjectType({
+    makeObjectType({
       tag: makeUnionType(['some']),
       value,
     }),
-    makeExactObjectType({
+    makeObjectType({
       tag: makeUnionType(['none']),
-      value: makeExactObjectType({}),
     }),
   ])
 

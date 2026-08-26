@@ -79,7 +79,6 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
               return either.makeRight(
                 makeObjectNode({
                   tag: 'none',
-                  value: makeObjectNode({}),
                 }),
               )
             } else {
@@ -114,7 +113,6 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
               return either.makeRight(
                 makeObjectNode({
                   tag: 'none',
-                  value: makeObjectNode({}),
                 }),
               )
             } else {

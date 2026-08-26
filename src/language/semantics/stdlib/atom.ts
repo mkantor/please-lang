@@ -48,10 +48,7 @@ export const atom = {
             ['tag', 'some'],
             ['value', argument],
           ])
-        : objectNodeFromOrderedEntries([
-            ['tag', 'none'],
-            ['value', objectNodeFromOrderedEntries([])],
-          ]),
+        : objectNodeFromOrderedEntries([['tag', 'none']]),
       ),
     computeFromReturnType(types.atom),
   ),

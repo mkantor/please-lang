@@ -38,22 +38,13 @@ export const option = {
                 ['value', value],
               ]),
             ],
-            [
-              '1',
-              objectNodeFromOrderedEntries([
-                ['tag', 'none'],
-                ['value', objectNodeFromOrderedEntries([])],
-              ]),
-            ],
+            ['1', objectNodeFromOrderedEntries([['tag', 'none']])],
           ]),
         ),
       ),
   ),
 
-  none: objectNodeFromOrderedEntries([
-    ['tag', 'none'],
-    ['value', objectNodeFromOrderedEntries([])],
-  ]),
+  none: objectNodeFromOrderedEntries([['tag', 'none']]),
 
   make_some: preludeFunction(
     ['option', 'make_some'],
