@@ -288,7 +288,7 @@ testCases(endToEnd, code => code)('end-to-end tests', [
   [':boolean.and(false)(true)', success('false')],
   [':boolean.and(true)(false)', success('false')],
   [':boolean.and(true)(true)', success('true')],
-  [':match({ a: A })({ tag: a, value: {} })', success('A')],
+  [':match({ a: _ => A })({ tag: a, value: {} })', success('A')],
   [':atom.prepend(a)(b)', success('ab')],
   [
     `{
@@ -374,10 +374,10 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     `@runtime {
       :flow(
         :match({
-          none: "environment does not exist"
+          none: _ => "environment does not exist"
           some: :flow(
             :match({
-              none: "environment.lookup does not exist"
+              none: _ => "environment.lookup does not exist"
               some: :apply(PATH)
             })
           )(
@@ -619,13 +619,13 @@ testCases(endToEnd, code => code)('end-to-end tests', [
         }
       }
       output: :nested_option match {
-        none: unreachable
+        none: _ => unreachable
         some: :identity
       } match {
-        none: unreachable
+        none: _ => unreachable
         some: :identity
       } match {
-        none: unreachable
+        none: _ => unreachable
         some: :identity
       }
     }.output`,
