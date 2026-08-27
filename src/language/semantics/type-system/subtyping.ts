@@ -267,6 +267,9 @@ export const isAssignable = ({
               // irrelevant to subtyping.
               const sourceExcess = effectiveExcessClauses(source.excess)
               const targetExcess = effectiveExcessClauses(target.excess)
+              const keysListedBySource = makeUnionType(
+                Object.keys(source.children),
+              )
               const excessClausesAreSatisfied = sourceExcess.every(
                 (sourceClause, sourceIndex) =>
                   targetExcess.every((targetClause, targetIndex) => {
@@ -286,6 +289,10 @@ export const isAssignable = ({
                       isAssignable({
                         source: targetClause.keys,
                         target: laterDomains,
+                      }) ||
+                      isAssignable({
+                        source: targetClause.keys,
+                        target: keysListedBySource,
                       })
                     return (
                       pairIsUnreachable ||

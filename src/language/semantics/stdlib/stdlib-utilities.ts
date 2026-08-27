@@ -31,6 +31,7 @@ import {
   makeTypeParameter,
   type FunctionType,
   type Type,
+  type TypeParameter,
 } from '../type-system.js'
 import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import { isAssignable } from '../type-system/subtyping.js'
@@ -40,10 +41,12 @@ import {
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArguments,
 } from '../type-system/type-substitution.js'
-import type {
-  AnyParameter,
-  NonEmptyParameters,
-  Parameter,
+import {
+  parameterTypeDependsOnPrecedingParameters,
+  typeOfParameter,
+  type AnyParameter,
+  type NonEmptyParameters,
+  type Parameter,
 } from './parameters.js'
 
 const handleUnavailableDependencies =
@@ -162,8 +165,9 @@ export const preludeFunction = <const Parameters extends NonEmptyParameters>(
     parameters,
     body,
   }
-  const liftedSignature = liftIntrinsicSignature(
-    signatureFromParameters(parameters, returnType),
+  const liftedSignature = genericizeIntrinsicSignature(
+    parameters,
+    returnType,
     argumentValues =>
       either.flatMap(applyBody(definition)(argumentValues), resultValue =>
         typeFromSemanticGraph(resultValue, { objectsAreExact: true }),
@@ -203,10 +207,13 @@ const signatureFromParameters = (
 ): FunctionType['signature'] => {
   const [firstParameter, ...restParameters] = parameters
   return {
-    parameter: firstParameter.type,
+    parameter: typeOfParameter(firstParameter, []),
     return: restParameters.reduceRight(
       (returnSoFar, parameter) =>
-        makeFunctionType({ parameter: parameter.type, return: returnSoFar }),
+        makeFunctionType({
+          parameter: typeOfParameter(parameter, []),
+          return: returnSoFar,
+        }),
       returnType,
     ),
   }
@@ -378,33 +385,22 @@ const synthesizeTypeParameterName = (index: number) => {
   }
 }
 
-type SignatureParts = {
-  // The constraint at each curried parameter position, in application order.
-  readonly parameterConstraints: readonly Type[]
-  // The innermost (non-function) return type.
-  readonly finalReturn: Type
-}
-
-const signatureParts = (
-  signature: FunctionType['signature'],
-): SignatureParts => {
-  const prependParameter = (
-    parameter: Type,
-    { parameterConstraints, finalReturn }: SignatureParts,
-  ): SignatureParts => ({
-    parameterConstraints: [parameter, ...parameterConstraints],
-    finalReturn,
-  })
-  const partsFromReturn = (returnType: Type): SignatureParts =>
-    returnType.kind === 'function' ?
-      prependParameter(
-        returnType.signature.parameter,
-        partsFromReturn(returnType.signature.return),
-      )
-    : { parameterConstraints: [], finalReturn: returnType }
-  return prependParameter(
-    signature.parameter,
-    partsFromReturn(signature.return),
+const synthesizedTypeParameters = (
+  parameters: NonEmptyParameters,
+): readonly [TypeParameter, ...TypeParameter[]] => {
+  const [firstParameter, ...restParameters] = parameters
+  return restParameters.reduce<readonly [TypeParameter, ...TypeParameter[]]>(
+    (mintedSoFar, parameter, index) => [
+      ...mintedSoFar,
+      makeTypeParameter(synthesizeTypeParameterName(index + 1), {
+        assignableTo: typeOfParameter(parameter, mintedSoFar),
+      }),
+    ],
+    [
+      makeTypeParameter(synthesizeTypeParameterName(0), {
+        assignableTo: typeOfParameter(firstParameter, []),
+      }),
+    ],
   )
 }
 
@@ -413,12 +409,10 @@ const signatureParts = (
  * parameters and return an `IntrinsicApplicationType`. This lets the type
  * system compute precise return types from singleton argument types via
  * `reduce` (which should apply the function itself).
- *
- * Functions whose return already contains a type parameter (e.g. `identity`)
- * don't need extra precision, so their signature is left unchanged.
  */
-const liftIntrinsicSignature = (
-  signature: FunctionType['signature'],
+const genericizeIntrinsicSignature = (
+  parameters: NonEmptyParameters,
+  returnType: Type,
   reduce: (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
@@ -426,28 +420,30 @@ const liftIntrinsicSignature = (
   // Defaults to the function's (concrete) declared return type.
   computeRefinedReturnType?: (argumentTypes: readonly Type[]) => Type,
 ): FunctionType['signature'] => {
-  if (containedTypeParameters(makeFunctionType(signature)).size > 0) {
-    return signature
+  const declaredSignature = signatureFromParameters(parameters, returnType)
+  // The signature doesn't need adjustment if it's already generic, unless its
+  // type parameters depend on one another.
+  if (
+    !parameters.some(parameterTypeDependsOnPrecedingParameters) &&
+    containedTypeParameters(makeFunctionType(declaredSignature)).size > 0
+  ) {
+    return declaredSignature
   } else {
-    const { parameterConstraints, finalReturn } = signatureParts(signature)
     // Make signatures implicitly generic, just like userland functions.
-    const parameterTypes = parameterConstraints.map((constraint, index) =>
-      makeTypeParameter(synthesizeTypeParameterName(index), {
-        assignableTo: constraint,
-      }),
-    )
-    const liftedFunctionType = parameterTypes.reduceRight<Type>(
-      (returnSoFar, parameter) =>
-        makeFunctionType({ parameter, return: returnSoFar }),
-      makeIntrinsicApplicationType(
-        parameterTypes,
-        reduce,
-        computeRefinedReturnType ?? (() => finalReturn),
+    const [firstParameterType, ...restParameterTypes] =
+      synthesizedTypeParameters(parameters)
+    return {
+      parameter: firstParameterType,
+      return: restParameterTypes.reduceRight<Type>(
+        (returnSoFar, parameter) =>
+          makeFunctionType({ parameter, return: returnSoFar }),
+        makeIntrinsicApplicationType(
+          [firstParameterType, ...restParameterTypes],
+          reduce,
+          computeRefinedReturnType ?? (() => returnType),
+        ),
       ),
-    )
-    return liftedFunctionType.kind === 'function' ?
-        liftedFunctionType.signature
-      : signature
+    }
   }
 }
 

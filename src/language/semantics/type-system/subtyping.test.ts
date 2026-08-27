@@ -1198,6 +1198,27 @@ typeAssignabilitySuite('excess clauses', [
     ],
     false,
   ],
+  [
+    [
+      makeObjectType({ a: atom }),
+      makeObjectType({}, [{ keys: makeUnionType(['a']), values: atom }]),
+    ],
+    true,
+  ],
+  [
+    [
+      makeObjectType({ a: atom }),
+      makeObjectType({}, [{ keys: makeUnionType(['a', 'b']), values: atom }]),
+    ],
+    false,
+  ],
+  [
+    [
+      makeObjectType({ a: something }),
+      makeObjectType({}, [{ keys: makeUnionType(['a']), values: atom }]),
+    ],
+    false,
+  ],
 ])
 
 typeAssignabilitySuite('generic function types (assignable)', [

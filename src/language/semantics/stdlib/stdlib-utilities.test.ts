@@ -18,9 +18,14 @@ import {
   type FunctionNode,
   type SemanticGraph,
 } from '../../semantics.js'
+import { makeTypeParameter } from '../type-system.js'
 import { globalFunctions } from './global-functions.js'
 import { option as optionModule } from './option.js'
-import { emptyContextForStdlibApplications } from './stdlib-utilities.js'
+import { anyValue } from './parameters.js'
+import {
+  emptyContextForStdlibApplications,
+  preludeFunction,
+} from './stdlib-utilities.js'
 
 const applicationChain: readonly ApplicationChainEntry[] = [
   {
@@ -103,6 +108,30 @@ suite('evaluation state across host-driven applications', _ => {
     assert.deepEqual(contextSeenByCase?.applicationChain, applicationChain)
     assert.deepEqual(contextSeenByCase?.applicationsAreSpeculative, true)
   })
+})
+
+test('a computed parameter bound forces lifting', _ => {
+  const first = makeTypeParameter('a', { assignableTo: types.something })
+  const { signature } = preludeFunction(
+    ['test_function'],
+    [
+      anyValue(first),
+      {
+        ...anyValue(types.something),
+        type: ([preceding]) => preceding ?? types.something,
+      },
+    ],
+    first,
+    _firstArgument =>
+      either.makeRight(secondArgument => either.makeRight(secondArgument)),
+  )
+  assert(signature.return.kind === 'function')
+  const secondMintedParameter = signature.return.signature.parameter
+  assert(secondMintedParameter.kind === 'parameter')
+  assert.equal(
+    secondMintedParameter.constraint.assignableTo,
+    signature.parameter,
+  )
 })
 
 const compileAndRun = testCases(
