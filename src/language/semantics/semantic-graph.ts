@@ -47,6 +47,7 @@ import {
   atomTypeSymbol,
   integerTypeSymbol,
   naturalNumberTypeSymbol,
+  pendingTypeSymbol,
   somethingTypeSymbol,
 } from './type-system/prelude-types.js'
 
@@ -54,6 +55,7 @@ export type TypeSymbol =
   | typeof atomTypeSymbol
   | typeof integerTypeSymbol
   | typeof naturalNumberTypeSymbol
+  | typeof pendingTypeSymbol
   | typeof somethingTypeSymbol
 
 export type SemanticGraph = Atom | TypeSymbol | FunctionNode | ObjectNode
@@ -442,6 +444,12 @@ export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
           return 'Integer'
         case naturalNumberTypeSymbol:
           return 'NaturalNumber'
+        case pendingTypeSymbol:
+          // There isn't actually a user-facing thing named `:Unresolved`.
+          // TODO: Maybe there should be? Or alternatively this could return a
+          // special internal value that serialization knows to emit as a
+          // non-utterable expression (e.g. `#Unresolved` without quotes).
+          return 'Unresolved'
         case somethingTypeSymbol:
           return 'Something'
       }

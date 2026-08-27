@@ -1,9 +1,15 @@
-import { atom, integer, naturalNumber } from './prelude-types/opaque-types.js'
+import {
+  atom,
+  integer,
+  naturalNumber,
+  pending,
+} from './prelude-types/opaque-types.js'
 import { something } from './prelude-types/transparent-types.js'
 import {
   atomTypeSymbol,
   integerTypeSymbol,
   naturalNumberTypeSymbol,
+  pendingTypeSymbol,
   somethingTypeSymbol,
 } from './prelude-types/type-symbols.js'
 
@@ -15,5 +21,6 @@ export const typesBySymbol = {
   [atomTypeSymbol]: atom,
   [integerTypeSymbol]: integer,
   [naturalNumberTypeSymbol]: naturalNumber,
+  [pendingTypeSymbol]: pending,
   [somethingTypeSymbol]: something,
 }

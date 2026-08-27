@@ -1,11 +1,23 @@
 import optionAdt from '@matt.kantor/option'
-import { makeOpaqueType } from '../type-formats/opaque-type.js'
+import { makeOpaqueType, type OpaqueType } from '../type-formats/opaque-type.js'
 import { upperBoundOfStuckType } from '../type-substitution.js'
 import {
   atomTypeSymbol,
   integerTypeSymbol,
   naturalNumberTypeSymbol,
+  pendingTypeSymbol,
 } from './type-symbols.js'
+
+/**
+ * The type of an expression whose real type isn't known yet, which can happen
+ * during analysis of recursive definitions.
+ */
+export const pending: OpaqueType = {
+  symbol: pendingTypeSymbol,
+  kind: 'opaque',
+  isAssignableFrom: _source => true,
+  isAssignableTo: _target => true,
+}
 
 // The current type hierarchy for opaque types is:
 //  - atom
