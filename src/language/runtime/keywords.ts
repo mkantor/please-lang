@@ -53,14 +53,14 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
   )
   return makeObjectNode({
     arguments: makeObjectNode({
-      lookup: makeFunctionNode(
-        {
+      lookup: makeFunctionNode({
+        signature: {
           parameter: types.atom,
           return: types.option(types.atom),
         },
-        serializeRuntimeContextFunction(['arguments', 'lookup']),
-        option.none,
-        key => {
+        serialize: serializeRuntimeContextFunction(['arguments', 'lookup']),
+        parameterName: option.none,
+        call: key => {
           if (typeof key !== 'string') {
             return either.makeLeft({
               kind: 'panic',
@@ -91,17 +91,17 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
             }
           }
         },
-      ),
+      }),
     }),
     environment: makeObjectNode({
-      lookup: makeFunctionNode(
-        {
+      lookup: makeFunctionNode({
+        signature: {
           parameter: types.atom,
           return: types.option(types.atom),
         },
-        serializeRuntimeContextFunction(['environment', 'lookup']),
-        option.none,
-        key => {
+        serialize: serializeRuntimeContextFunction(['environment', 'lookup']),
+        parameterName: option.none,
+        call: key => {
           if (typeof key !== 'string') {
             return either.makeLeft({
               kind: 'panic',
@@ -125,16 +125,16 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
             }
           }
         },
-      ),
+      }),
     }),
-    log: makeFunctionNode(
-      {
+    log: makeFunctionNode({
+      signature: {
         parameter: A,
         return: A,
       },
-      serializeRuntimeContextFunction(['log']),
-      option.none,
-      output => {
+      serialize: serializeRuntimeContextFunction(['log']),
+      parameterName: option.none,
+      call: output => {
         const serializationResult = serialize(output)
         if (either.isLeft(serializationResult)) {
           return either.makeLeft({
@@ -146,7 +146,7 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
           return either.makeRight(output)
         }
       },
-    ),
+    }),
     program: makeObjectNode({
       start_time: new Date().toISOString(),
     }),

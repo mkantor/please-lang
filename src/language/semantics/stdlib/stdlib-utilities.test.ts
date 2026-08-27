@@ -52,15 +52,16 @@ const contextSeenByAppliedFunction = (
   secondArgument: SemanticGraph,
 ): ExpressionContext | undefined => {
   let contextSeenByRecordingFunction: ExpressionContext | undefined = undefined
-  const recordingFunction = makeFunctionNode(
-    { parameter: types.something, return: types.something },
-    () => either.makeRight(makeFunctionExpression('parameter', 'body')),
-    option.none,
-    (recordedArgument, contextOfRecordedApplication) => {
+  const recordingFunction = makeFunctionNode({
+    signature: { parameter: types.something, return: types.something },
+    serialize: () =>
+      either.makeRight(makeFunctionExpression('parameter', 'body')),
+    parameterName: option.none,
+    call: (recordedArgument, contextOfRecordedApplication) => {
       contextSeenByRecordingFunction = contextOfRecordedApplication
       return either.makeRight(recordedArgument)
     },
-  )
+  })
   const result = either.flatMap(
     hostFunction(
       firstArgument(recordingFunction),

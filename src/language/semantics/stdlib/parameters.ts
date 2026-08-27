@@ -54,6 +54,17 @@ export type TaggedNode = ObjectNode & {
 export const nodeIsTagged = (node: SemanticGraph): node is TaggedNode =>
   isObjectNode(node) && typeof node['tag'] === 'string'
 
+export type ObjectNodeOfFunctions = ObjectNode &
+  Readonly<Record<Atom, FunctionNode>>
+
+export const nodeIsObjectOfFunctions = (
+  node: SemanticGraph,
+): node is ObjectNodeOfFunctions =>
+  isObjectNode(node) &&
+  orderedEntriesOfObjectNode(node).every(([_key, value]) =>
+    isFunctionNode(value),
+  )
+
 export const atomParameter: Parameter<Atom> = {
   type: types.atom,
   asExpected: value =>
@@ -80,6 +91,13 @@ export const objectOfAtomsParameter: Parameter<ObjectNode> = {
       option.makeSome(value)
     : option.none,
   expected: 'an object whose property values are atoms',
+}
+
+export const objectOfFunctionsParameter: Parameter<ObjectNodeOfFunctions> = {
+  type: makeObjectType({}, [{ keys: types.atom, values: types.functionType }]),
+  asExpected: value =>
+    nodeIsObjectOfFunctions(value) ? option.makeSome(value) : option.none,
+  expected: 'an object whose property values are functions',
 }
 
 export const booleanParameter: Parameter<BooleanNode> = {

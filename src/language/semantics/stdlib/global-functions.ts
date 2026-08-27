@@ -2,8 +2,6 @@ import either from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { withDynamicEvaluationState } from '../expression-elaboration.js'
-import { isFunctionNode } from '../function-node.js'
-import { lookupPropertyOfObjectNode } from '../object-node.js'
 import {
   stringifyResolvedTypeForEndUser,
   stringifySemanticGraphForEndUser,
@@ -29,7 +27,7 @@ import {
 import {
   anyValue,
   functionParameter,
-  objectParameter,
+  objectOfFunctionsParameter,
   taggedParameter,
 } from './parameters.js'
 import {
@@ -164,26 +162,22 @@ export const globalFunctions = {
   //  - Case functions with incorrect parameter types.
   match: preludeFunction(
     ['match'],
-    [objectParameter, taggedParameter],
+    [objectOfFunctionsParameter, taggedParameter],
     types.something,
     cases =>
-      either.makeRight((argument, contextOfApplication) =>
-        option.match(lookupPropertyOfObjectNode(argument.tag, cases), {
-          none: _ =>
+      either.makeRight((argument, contextOfApplication) => {
+        const relevantCase = cases[argument.tag]
+        return relevantCase === undefined ?
             either.makeLeft({
               kind: 'panic',
               message: `case for tag '${argument.tag}' was not defined`,
-            }),
-          some: relevantCase =>
-            isFunctionNode(relevantCase) ?
-              applyValidatingParameterType(
-                relevantCase,
-                argument.value ?? unitValue,
-                contextOfApplication,
-              )
-            : either.makeRight(relevantCase),
-        }),
-      ),
+            })
+          : applyValidatingParameterType(
+              relevantCase,
+              argument.value ?? unitValue,
+              contextOfApplication,
+            )
+      }),
     computeMatchReturnType,
   ),
 } as const

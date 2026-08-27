@@ -559,7 +559,7 @@ exports[`examples > kitchen-sink.plz > stdout 1`] = `
 exports[`examples > lookup-environment-variable.plz > roundtripped syntax tree 1`] = `
 @runtime {
   context => :context.arguments.lookup(variable) match {
-    none: {}
+    none: _ => {}
     some: :context.environment.lookup >> :option.get_or_else({})
   }
 }

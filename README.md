@@ -145,8 +145,7 @@ Lookups can "look ahead" to properties defined later in the program:
 ```
 
 `_` is a special name used for ignored properties/parameters and can't be
-directly looked up (`:_` is an error). It's legal to drill into properties named
-`_` via indexing, though (`:a._` is fine).
+directly looked up (`:_` is an error).
 
 #### Functions
 
@@ -305,33 +304,39 @@ parameter, but this is merely syntax sugar. `a ~> b` is exactly equivalent to
 
 #### Object Types
 
-Object types specify an object's properties. Values with excess properties are
-allowed:
+Object types specify the properties an object may have:
 
 ```plz
-{ a: 1, b: 2 } ~ { a: :Integer }
+{ a: 1 } ~ { a: :Integer }
 ```
 
-`{| … |}` closes the object type, forbidding excess properties:
+Excess properties are allowed:
+
+```plz
+{ a: 1, b: legal } ~ { a: :Integer }
+```
+
+`{| … |}` closes an object type, forbidding excess properties:
 
 ```plz
 {
   a: 1
-  // b: 2 // would trigger a type error since `b` isn't in the below type
+  // b: illegal // would trigger a type error since `b` isn't in the below type
 } ~ {| a: :Integer |}
 ```
 
-Properties can also be constrained by excess property clauses:
+Optional properties can be constrained using excess property clauses, which are
+denoted by a key in square brackets:
 
 ```plz
 { 1: true, 2: false } ~ { [:NaturalNumber]: :Boolean }
 ```
 
-The type `{ [:NaturalNumber]: :Boolean }` says "keys which are `:NaturalNumber`s
-may exist, but only if their values are `:Boolean`s".
+The type `{ [:NaturalNumber]: :Boolean }` says "keys which are natural numbers
+may exist, but only if their values are booleans".
 
-Clauses may be used with `{| … |}`, where they re-open the object to their
-specific key type (other properties are still forbidden):
+Excess clauses may be used with `{| … |}`, where they open the object for a
+specific key type (other excess properties are still forbidden):
 
 ```plz
 { a: 1, 42: true } ~ {| a: :Integer, [:NaturalNumber]: :Boolean |}

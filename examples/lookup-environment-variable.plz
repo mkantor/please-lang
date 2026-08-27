@@ -5,7 +5,7 @@
   */
 @runtime { context =>
   :context.arguments.lookup(variable) match {
-    none: {}
+    none: _ => {}
     some: :context.environment.lookup >> :option.get_or_else({})
   }
 }
