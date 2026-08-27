@@ -26,6 +26,7 @@ import { matchTypeFormat } from './type-formats/match-type-format.js'
 import { makeObjectType, type ObjectType } from './type-formats/object-type.js'
 import {
   makeTypeParameter,
+  typeParameterWithConstraint,
   type TypeParameter,
 } from './type-formats/type-parameter-type.js'
 import {
@@ -295,6 +296,7 @@ const upperBoundOfResolvableStuckType = (
  * assignability to `argument`. Callers should use `supplyTypeArguments` to
  * create a concrete type and then perform any needed checks.
  */
+// TODO: Key the return with identity symbols instead of full `TypeParameter`s.
 export const getTypesForTypeParameters = ({
   parameterType,
   argumentType,
@@ -829,7 +831,18 @@ export const supplyTypeArgument = (
       },
       opaque: type => type,
       parameter: type =>
-        type.identity === typeParameter.identity ? typeArgument : type,
+        type.identity === typeParameter.identity ?
+          typeArgument
+        : typeParameterWithConstraint(
+            type,
+            // A parameter which isn't the one being supplied may still mention
+            // it in the constraint.
+            supplyTypeArgument(
+              type.constraint.assignableTo,
+              typeParameter,
+              typeArgument,
+            ),
+          ),
       union: type =>
         makeUnionType(
           [...type.members].flatMap(member => {
