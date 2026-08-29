@@ -284,8 +284,9 @@ const inferTypeImplementation = (
         return either.makeRight(types.something)
       }
     } else {
-      // Fall back to the top type.
-      return either.makeRight(types.something)
+      // Inference has re-entered a key it is already resolving, so this is a
+      // recursive definition whose type isn't known yet.
+      return either.makeRight(types.pending)
     }
   }
 

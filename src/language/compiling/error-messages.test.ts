@@ -59,8 +59,17 @@ suite('stuck applications are resolved in error messages', () => {
 suite('the top type is reported as itself', () => {
   test('a union which contains it collapses to it', () => {
     assertMessageContains(
-      '{ recurse: (k: :Atom) => (:object.lookup(:k)({ a: :recurse, b: true }) ~ :Nothing) }',
+      '(k: :Atom) => (:object.lookup(:k)({ a: :Something, b: true }) ~ :Nothing)',
       'value: :Something',
+    )
+  })
+})
+
+suite('a not-yet-known type is distinguished from the top type', () => {
+  test('a recursive definition reports the type it does not know', () => {
+    assertMessageContains(
+      '{ recurse: (k: :Atom) => (:object.lookup(:k)({ a: :recurse, b: true }) ~ :Nothing) }',
+      'value: :Unresolved | true',
     )
   })
 })

@@ -1757,3 +1757,38 @@ typeAssignabilitySuite('union to type parameter (not assignable)', [
   // `?a | ?b` is not assignable to `?a`
   [[makeUnionType([A, B]), A], false],
 ])
+
+typeAssignabilitySuite('object source split over a union-valued property', [
+  // `{ tag: a | b, value: :Atom }` is assignable to `{ tag: a, value: :Atom } | { tag: b, value: :Atom }`
+  [
+    [
+      makeObjectType({ tag: makeUnionType(['a', 'b']), value: atom }),
+      makeUnionType([
+        makeObjectType({ tag: makeUnionType(['a']), value: atom }),
+        makeObjectType({ tag: makeUnionType(['b']), value: atom }),
+      ]),
+    ],
+    true,
+  ],
+
+  // `{ tag: a | b, value: :Atom }` is not assignable to `{ tag: a, value: :Atom } | { tag: b, value: :Integer }`
+  [
+    [
+      makeObjectType({ tag: makeUnionType(['a', 'b']), value: atom }),
+      makeUnionType([
+        makeObjectType({ tag: makeUnionType(['a']), value: atom }),
+        makeObjectType({ tag: makeUnionType(['b']), value: integer }),
+      ]),
+    ],
+    false,
+  ],
+
+  // `{ tag: a | b, value: :Atom }` is not assignable to `{ value: :Atom }`
+  [
+    [
+      makeObjectType({ tag: makeUnionType(['a', 'b']) }),
+      makeUnionType([makeObjectType({ value: atom })]),
+    ],
+    false,
+  ],
+])

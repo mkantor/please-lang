@@ -403,9 +403,83 @@ const isNonUnionAssignableToUnion = ({
         return true
       }
     }
-    return false
+    return decomposedObjectIsAssignableToUnion({ source, target })
   }
 }
+
+/**
+ * The dual of `simplifyUnionType`'s merging.
+ *
+ * `{ a | b, :A }` is be checked against `{ a, :A } | { b, :B }` by first
+ * decomposing the source to `{ a, :A } | { b, :A }`.
+ *
+ * Only one property is decomposed at a time. The recursive `isAssignable` call
+ * will make sure multiple get handled as needed.
+ */
+const decomposedObjectIsAssignableToUnion = ({
+  source,
+  target,
+}: {
+  readonly source: Exclude<Type, UnionType>
+  readonly target: UnionType
+}): boolean => {
+  if (source.kind !== 'object') {
+    return false
+  } else {
+    const [discriminant] = relevantDiscriminantsOfObjectType(source, target)
+    return discriminant === undefined ? false : (
+        discriminant.possibleValues.every(possibleValue =>
+          isAssignable({
+            source: makeObjectType(
+              {
+                ...source.children,
+                [discriminant.key]: makeUnionType([possibleValue]),
+              },
+              source.excess,
+            ),
+            target,
+          }),
+        )
+      )
+  }
+}
+
+type ObjectTypeDiscriminant = {
+  readonly key: Atom
+  readonly possibleValues: readonly Atom[]
+}
+
+/**
+ * Properties of `source` potentially worth splitting on for assignability
+ * checks: unions of literal atoms which some member of `target` also requires.
+ * Splitting on anything else would be wasted work.
+ */
+const relevantDiscriminantsOfObjectType = (
+  source: ObjectType,
+  target: UnionType,
+): readonly ObjectTypeDiscriminant[] =>
+  Object.entries(source.children).flatMap(
+    ([key, child]): readonly ObjectTypeDiscriminant[] =>
+      child.kind !== 'union' || !someMemberOfUnionRequiresKey(key, target) ?
+        []
+      : option.match(asUnionWithLiteralAtomMembers(child), {
+          none: _ => [],
+          some: atoms =>
+            atoms.members.size > 1 ?
+              [{ key, possibleValues: [...atoms.members] }]
+            : [],
+        }),
+  )
+
+const someMemberOfUnionRequiresKey = (key: Atom, union: UnionType): boolean =>
+  union.members
+    .values()
+    .some(
+      member =>
+        typeof member !== 'string' &&
+        member.kind === 'object' &&
+        member.children[key] !== undefined,
+    )
 
 const isUnionAssignableToNonUnion = ({
   source,

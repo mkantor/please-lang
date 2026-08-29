@@ -20,6 +20,22 @@ export const makeTypeParameter = (
   constraint,
 })
 
+/**
+ * A copy of `typeParameter` with its constraint replaced, preserving the
+ * `TypeParameter`'s `identity`.
+ */
+export const typeParameterWithConstraint = (
+  typeParameter: TypeParameter,
+  assignableTo: Type,
+): TypeParameter =>
+  assignableTo === typeParameter.constraint.assignableTo ?
+    // Avoid an unnecessary allocation.
+    typeParameter
+  : {
+      ...typeParameter,
+      constraint: { ...typeParameter.constraint, assignableTo },
+    }
+
 export const isTypeParameter = (value: unknown): value is TypeParameter => {
   // This doesn't exhaustively validate (it doesn't look inside `constraint`),
   // but something very weird would have to be going on for this to have a false

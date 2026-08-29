@@ -18,6 +18,7 @@ import {
   makeObjectType,
   makeTypeParameter,
   makeUnionType,
+  typeParameterWithConstraint,
   type Type,
   type TypeParameter,
 } from '../type-system.js'
@@ -761,6 +762,35 @@ supplyTypeArgumentSuite('supplying type arguments within excess bounds', [
 
   [[object, A, atom], object],
 ])
+
+const boundedByA = makeTypeParameter('m', {
+  assignableTo: makeObjectType({ tag: A }),
+})
+
+supplyTypeArgumentSuite(
+  'supplying type arguments within parameter constraints',
+  [
+    [
+      [boundedByA, A, atom],
+      typeParameterWithConstraint(boundedByA, makeObjectType({ tag: atom })),
+    ],
+
+    [
+      [makeFunctionType({ parameter: A, return: boundedByA }), A, atom],
+      makeFunctionType({
+        parameter: atom,
+        return: typeParameterWithConstraint(
+          boundedByA,
+          makeObjectType({ tag: atom }),
+        ),
+      }),
+    ],
+
+    [[boundedByA, B, atom], boundedByA],
+
+    [[boundedByA, boundedByA, atom], atom],
+  ],
+)
 
 const containedTypeParametersSuite = testCases(
   (type: Type) => [
