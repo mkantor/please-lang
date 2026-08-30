@@ -371,22 +371,15 @@ testCases(endToEnd, code => code)('end-to-end tests', [
     success({ true: 'true', false: 'false' }),
   ],
   [
-    `@runtime {
-      :flow(
-        :match({
-          none: _ => "environment does not exist"
-          some: :flow(
-            :match({
-              none: _ => "environment.lookup does not exist"
-              some: :apply(PATH)
-            })
-          )(
-            :object.lookup(lookup)
-          )
-        })
-      )(
-        :object.lookup(environment)
-      )
+    `@runtime { context =>
+      :context |> :object.lookup(environment) |> :match({
+        none: _ => "environment does not exist"
+        some: (environment: { lookup: :Atom ~> :Option(:Atom) }) =>
+          (:environment |> :object.lookup(lookup) |> :match({
+            none: _ => "environment.lookup does not exist"
+            some: (lookup: :Atom ~> :Option(:Atom)) => :lookup(PATH)
+          }))
+      })
     }`,
     output => {
       if (either.isLeft(output)) {
@@ -645,6 +638,13 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       some: :identity
     }`,
     success('_'),
+  ],
+  [
+    `:option.none match {
+      none: (n: :Integer) => :n
+      some: :identity
+    }`,
+    typeMismatch,
   ],
   [':option.is_some(:option.make_some(7))', success('true')],
   [':option.is_some(:option.none)', success('false')],
@@ -1204,6 +1204,20 @@ testCases(endToEnd, code => code)('end-to-end tests', [
       output: :numbers sum :start
     }.output`,
     success({ tag: 'some', value: '60' }),
+  ],
+  [
+    `{
+      needs_integer: (n: :Integer) => _
+      input: @runtime { context =>
+        :context.arguments.lookup(input)
+      }
+      output: :input
+        option.flat_map :boolean.from match {
+          none: _ => nothing_to_do
+          some: :needs_integer
+        }
+    }.output`,
+    typeMismatch,
   ],
   [
     `{

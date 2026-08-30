@@ -9,7 +9,10 @@ import {
 import {
   isAssignable,
   makeFunctionType,
+  makeIntrinsicApplicationType,
+  makeObjectType,
   makeTypeParameter,
+  makeUnionType,
   matchTypeFormat,
   types,
   unionOfTypes,
@@ -21,14 +24,20 @@ import {
   excessBoundForKey,
 } from '../type-system/subtyping.js'
 import {
+  applicableFunctionSignatures,
   applyKeyPathToType,
   applyTypeToArgumentType,
+  concreteUpperBound,
+  replaceAllTypeParametersWithTheirConstraints,
 } from '../type-system/type-substitution.js'
 import {
   anyValue,
   functionParameter,
   objectOfFunctionsParameter,
   taggedParameter,
+  typeOfParameter,
+  type Parameter,
+  type TaggedNode,
 } from './parameters.js'
 import {
   applyValidatingParameterType,
@@ -54,14 +63,16 @@ const computeMatchReturnType = (parameterTypes: readonly Type[]): Type => {
     // For every statically-known tag of the matchee, look up the case for that
     // tag and apply its type to the matchee's `value` type.
     return option.match(
-      option.flatMap(enumerateTaggedVariants(matcheeType), variants =>
-        option.sequence(
-          variants.map(({ tag, value }) =>
-            option.flatMap(applyKeyPathToType(casesType, [tag]), caseType =>
-              applyTypeToArgumentType(caseType, value),
+      option.flatMap(
+        enumerateTaggedVariants(matcheeUpperBound(matcheeType)),
+        variants =>
+          option.sequence(
+            variants.map(({ tag, value }) =>
+              option.flatMap(applyKeyPathToType(casesType, [tag]), caseType =>
+                applyTypeToArgumentType(caseType, value),
+              ),
             ),
           ),
-        ),
       ),
       {
         none: _ =>
@@ -72,6 +83,35 @@ const computeMatchReturnType = (parameterTypes: readonly Type[]): Type => {
       },
     )
   }
+}
+
+const anyTaggedValue = typeOfParameter(taggedParameter, [])
+
+const matcheeParameter: Parameter<TaggedNode> = {
+  ...taggedParameter,
+  // The `matchee`'s type is constrained by the cases object supplied to `match`
+  // parameter.
+  type: ([casesType]) =>
+    casesType === undefined ? anyTaggedValue : (
+      makeIntrinsicApplicationType(
+        [casesType],
+        ([cases]) =>
+          cases === undefined ?
+            either.makeLeft({
+              kind: 'bug',
+              message:
+                "`match`'s matchee type was computed without cases being known",
+            })
+          : either.map(
+              typeFromSemanticGraph(cases, { objectsAreExact: true }),
+              matcheeTypeForCases,
+            ),
+        ([casesType]) =>
+          casesType === undefined ? anyTaggedValue : (
+            matcheeTypeForCases(casesType)
+          ),
+      )
+    ),
 }
 
 export const globalFunctions = {
@@ -157,12 +197,9 @@ export const globalFunctions = {
       ),
   ),
 
-  // TODO: Tighten this up, rejecting:
-  //  - Non-exhaustive cases.
-  //  - Case functions with incorrect parameter types.
   match: preludeFunction(
     ['match'],
-    [objectOfFunctionsParameter, taggedParameter],
+    [objectOfFunctionsParameter, matcheeParameter],
     types.something,
     cases =>
       either.makeRight((argument, contextOfApplication) => {
@@ -188,14 +225,61 @@ export const globalFunctions = {
  */
 const unitValue: Atom = '_'
 
+/**
+ * The widest matchee type the given cases can handle.
+ */
+const matcheeTypeForCases = (casesType: Type): Type =>
+  casesType.kind !== 'object' ?
+    anyTaggedValue
+  : unionOfTypes(
+      Object.entries(casesType.children).map(([tag, caseType]) => {
+        const acceptedPayloadType = option.match(
+          payloadTypeAcceptedByCase(caseType),
+          {
+            // A case whose type isn't a single function type (see
+            // `payloadTypeAcceptedByCase`) doesn't constrain its payload.
+            // `match` validates payloads against the applied case, so a bad
+            // payload type is still rejected, just later.
+            none: _ => types.something,
+            some: payloadType => payloadType,
+          },
+        )
+        // A variant with no `value` passes the unit value, so `value` is only
+        // required when unit wouldn't satisfy the case.
+        return isAssignable({ source: types._, target: acceptedPayloadType }) ?
+            makeObjectType({ tag: makeUnionType([tag]) }, [
+              { keys: makeUnionType(['value']), values: acceptedPayloadType },
+            ])
+          : makeObjectType({
+              tag: makeUnionType([tag]),
+              value: acceptedPayloadType,
+            })
+      }),
+    )
+
+const payloadTypeAcceptedByCase = (caseType: Type): Option<Type> =>
+  option.flatMap(
+    applicableFunctionSignatures(caseType),
+    // TODO: Satisfying multiple signatures would require intersection types.
+    ([signature, ...additionalSignatures]) =>
+      signature === undefined || additionalSignatures.length > 0 ?
+        option.none
+      : option.makeSome(
+          replaceAllTypeParametersWithTheirConstraints(signature.parameter),
+        ),
+  )
+
+type TaggedVariant = {
+  readonly tag: Atom
+  readonly value: Type
+}
+
+const matcheeUpperBound = (matcheeType: Type): Type =>
+  concreteUpperBound(replaceAllTypeParametersWithTheirConstraints(matcheeType))
+
 const enumerateTaggedVariants = (
   type: Type,
-): Option<
-  readonly {
-    readonly tag: Atom
-    readonly value: Type
-  }[]
-> =>
+): Option<readonly TaggedVariant[]> =>
   matchTypeFormat(type, {
     union: type =>
       option.map(

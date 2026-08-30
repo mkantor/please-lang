@@ -12,6 +12,7 @@ import {
   makeUnionType,
   types,
   type Type,
+  type TypeParameter,
 } from '../type-system.js'
 
 /**
@@ -20,12 +21,28 @@ import {
  * `Parameter<Atom>`s).
  */
 export type Parameter<Value extends SemanticGraph> = {
-  readonly type: Type
+  readonly type: Type | ParameterTypeFromPrecedingParameters
   readonly asExpected: (value: SemanticGraph) => Option<Value>
   readonly expected: string
 }
 
+export type ParameterTypeFromPrecedingParameters = (
+  precedingTypeParameters: readonly TypeParameter[],
+) => Type
+
 export type AnyParameter = Parameter<SemanticGraph>
+
+export const typeOfParameter = (
+  parameter: AnyParameter,
+  precedingTypeParameters: readonly TypeParameter[],
+): Type =>
+  typeof parameter.type === 'function' ?
+    parameter.type(precedingTypeParameters)
+  : parameter.type
+
+export const parameterTypeDependsOnPrecedingParameters = (
+  parameter: AnyParameter,
+): boolean => typeof parameter.type === 'function'
 
 export type NonEmptyParameters = readonly [
   AnyParameter,

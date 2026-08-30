@@ -2138,22 +2138,21 @@ testCases(
   ],
 
   [
-    // TODO: This should be rejected by static analysis (the `match` object is
-    // not exhaustive).
     `{
       test: a =>
         :integer.from(:a) match {
+          // missing the none case
           some: _ => 1
         }
     }`,
     result => {
-      assert(either.isRight(result))
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
 
   [
-    // TODO: This should be rejected by static analysis (a case has an incorrect
-    // parameter type).
     `{
       test: a =>
         :integer.from(:a) match {
@@ -2162,13 +2161,13 @@ testCases(
         }
     }`,
     result => {
-      assert(either.isRight(result))
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
 
   [
-    // TODO: This should be rejected by static analysis (`:a` may have arbitrary
-    // tags).
     `{
       test: (a: { tag: :Atom, value: :Something }) =>
         :a match {
@@ -2177,7 +2176,58 @@ testCases(
         }
     }`,
     result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      test: (a: { tag: some | none }) =>
+        :a match {
+          some: _ => 1
+          none: _ => 2
+        }
+    }`,
+    result => {
       assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      test: (a: { tag: some, value: :Integer }) =>
+        (:a match { some: (b: :Integer) => :b }) ~ :Integer
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      test: (a: :Atom) => :apply(:integer.from(:a))(:match({ some: _ => 1 }))
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      test: (a: :Atom) =>
+        :option.make_some(:integer.from(:a)) option.map :match({
+          some: (b: :Boolean) => 1
+          none: _ => 2
+        })
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
 
