@@ -1,7 +1,11 @@
+import assert from 'node:assert'
+import test from 'node:test'
 import { testCases } from '../test-utilities.test.js'
 import {
   lineAndColumnAtOffset,
+  offsetAtLineAndColumn,
   snippetAtSpan,
+  type LineAndColumn,
   type Span,
 } from './source-location.js'
 
@@ -20,6 +24,32 @@ testCases(
   // even with bogus offsets like this?
   [['hello', 7], { line: 1, column: 8 }],
 ])
+
+testCases(
+  ([source, lineAndColumn]: readonly [string, LineAndColumn]) =>
+    offsetAtLineAndColumn(source, lineAndColumn),
+  ([source, { line, column }]) =>
+    `${JSON.stringify(source)} @ ${line}:${column}`,
+)('offsetAtLineAndColumn', [
+  [['a\nbc\nd', { line: 2, column: 3 }], 4],
+  // Positions outside the source are clamped.
+  [['ab\ncd', { line: 1, column: 99 }], 2],
+  [['ab\ncd', { line: 99, column: 1 }], 3],
+  [['ab\ncd', { line: 2, column: 99 }], 5],
+  [['ab\ncd', { line: 0, column: 0 }], 0],
+  [['', { line: 1, column: 1 }], 0],
+])
+
+test('offsetAtLineAndColumn inverts lineAndColumnAtOffset', () => {
+  const source = 'a\nbb\n\nccc\n'
+  const offsets = Array.from({ length: source.length + 1 }, (_, index) => index)
+  assert.deepEqual(
+    offsets.map(offset =>
+      offsetAtLineAndColumn(source, lineAndColumnAtOffset(source, offset)),
+    ),
+    offsets,
+  )
+})
 
 testCases(
   ([source, span]: readonly [string, Span]) => snippetAtSpan(source, span),

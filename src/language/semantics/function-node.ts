@@ -16,10 +16,7 @@ import { serialize, type Output, type SemanticGraph } from './semantic-graph.js'
 import type { FunctionType } from './type-system.js'
 
 export type FunctionNodeCallError =
-  | DependencyUnavailable
-  | TypeMismatchError
-  | Panic
-  | Bug
+  DependencyUnavailable | TypeMismatchError | Panic | Bug
 
 export type FunctionNodeCallSignature = (
   value: SemanticGraph,

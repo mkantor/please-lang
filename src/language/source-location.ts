@@ -33,6 +33,19 @@ export const lineAndColumnAtOffset = (
   }
 }
 
+export const offsetAtLineAndColumn = (
+  source: string,
+  { line, column }: LineAndColumn,
+): number => {
+  const lines = source.split('\n')
+  const lineIndex = clamp(line, 1, lines.length) - 1
+  const lineText = lines[lineIndex] ?? ''
+  const lineStartOffset = lines
+    .slice(0, lineIndex)
+    .reduce((offset, precedingLine) => offset + precedingLine.length + 1, 0)
+  return lineStartOffset + clamp(column, 1, lineText.length + 1) - 1
+}
+
 export const snippetAtSpan = (
   source: string,
   [start, end]: Span,
@@ -49,3 +62,6 @@ export const snippetAtSpan = (
     highlightLength: Math.max(1, Math.min(end, lineEndOffset) - start),
   }
 }
+
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.min(Math.max(value, minimum), maximum)

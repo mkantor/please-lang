@@ -1,0 +1,70 @@
+{
+  "name": "please-vscode",
+  "displayName": "Please",
+  "description": "Language support for the Please programming language.",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.100.0",
+    "node": ">=22.18"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "plz",
+        "aliases": [
+          "Please",
+          "plz"
+        ],
+        "extensions": [
+          ".plz"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "plz",
+        "scopeName": "source.plz",
+        "path": "./syntaxes/please.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "please.restartServer",
+        "title": "Restart Language Server",
+        "category": "Please"
+      }
+    ],
+    "configuration": {
+      "title": "Please",
+      "properties": {
+        "please.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "please-prototype": "file:../..",
+    "vscode-languageclient": "^10.1.0",
+    "vscode-languageserver": "^10.1.0",
+    "vscode-languageserver-textdocument": "^1.0.13"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.100.0"
+  }
+}

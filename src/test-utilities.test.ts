@@ -25,6 +25,37 @@ import type { JsonValue } from './utility-types.js'
 delete process.env['FORCE_COLOR']
 process.env['NO_COLOR'] = 'true'
 
+type EnvironmentOverrides = Readonly<Record<string, string | undefined>>
+
+/**
+ * Run `check` with `overrides` applied to `process.env`, restoring it after.
+ * Anything rendered with `styleText` consults these at call time.
+ */
+export const withEnvironmentVariables = (
+  overrides: EnvironmentOverrides,
+  check: () => void,
+): void => {
+  const apply = (values: EnvironmentOverrides): void => {
+    Object.entries(values).forEach(([name, value]) => {
+      if (value === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete process.env[name]
+      } else {
+        process.env[name] = value
+      }
+    })
+  }
+  const originals = Object.fromEntries(
+    Object.keys(overrides).map(name => [name, process.env[name]]),
+  )
+  apply(overrides)
+  try {
+    check()
+  } finally {
+    apply(originals)
+  }
+}
+
 const testNameLengthLimit = 100
 
 export const testCases =

@@ -1,0 +1,54 @@
+{
+  "comments": {
+    "lineComment": {
+      "comment": "//"
+    },
+    "blockComment": ["/*", "*/"]
+  },
+  "brackets": [
+    ["{|", "|}"],
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "//autoClosingPairs": "There is deliberately no `{|` pair: `{` has already auto-closed by the time the bar is typed, so adding one would leave a stray `}` behind.",
+  "autoClosingPairs": [
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
+    { "open": "/*", "close": " */", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["{|", "|}"],
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""]
+  ],
+  "//wordPattern": "A word is a bare atom. This must stay identical to the grammar's `unquoted-atom` pattern.",
+  "wordPattern": "(?:(?!//|/\\*|\\*/)[^\\s{}\\[\\](),:@?~|\"\\\\=#;])+",
+  "indentationRules": {
+    "increaseIndentPattern": "(?:\\{\\||[{\\[(])\\s*$",
+    "decreaseIndentPattern": "^\\s*(?:\\|\\}|[}\\])])"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*/\\*\\*(?!/)([^\\*]|\\*(?!/))*$",
+      "afterText": "^\\s*\\*/$",
+      "action": { "indent": "indentOutdent", "appendText": " * " }
+    },
+    {
+      "beforeText": "^\\s*/\\*\\*(?!/)([^\\*]|\\*(?!/))*$",
+      "action": { "indent": "none", "appendText": " * " }
+    },
+    {
+      "beforeText": "^(\\t|[ ])*[ ]\\*([ ]([^\\*]|\\*(?!/))*)?$",
+      "action": { "indent": "none", "appendText": "* " }
+    },
+    {
+      "beforeText": "^(\\t|[ ])*[ ]\\*/\\s*$",
+      "action": { "indent": "none", "removeText": 1 }
+    }
+  ]
+}

@@ -203,15 +203,14 @@ const findKeyPathsToTypeParameterImplementation = (
       union: ({ members }) =>
         members
           .values()
-          .map(
-            (member): Set<TypeKeyPath> =>
-              typeof member === 'string' ?
-                new Set()
-              : findKeyPathsToTypeParameterImplementation(
-                  member,
-                  typeParameterToFind,
-                  root,
-                ),
+          .map((member): Set<TypeKeyPath> =>
+            typeof member === 'string' ?
+              new Set()
+            : findKeyPathsToTypeParameterImplementation(
+                member,
+                typeParameterToFind,
+                root,
+              ),
           )
           .reduce(
             (accumulator, paths) => new Set([...accumulator, ...paths]),

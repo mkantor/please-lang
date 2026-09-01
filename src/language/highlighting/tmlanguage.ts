@@ -1,0 +1,531 @@
+/**
+ * Generate a TextMate grammar for `plz`.
+ *
+ * TextMate grammars match one line at a time, so the rules below only
+ * approximate the real syntax.
+ */
+
+export type TmGrammar = {
+  readonly '//': string
+  readonly $schema: string
+  readonly name: string
+  readonly scopeName: string
+  readonly patterns: readonly TmRule[]
+  readonly repository: Readonly<Record<string, TmRule>>
+}
+
+export type TmRule = {
+  readonly include?: string
+  readonly name?: string
+  readonly match?: string
+  readonly begin?: string
+  readonly end?: string
+  readonly captures?: TmCaptures
+  readonly beginCaptures?: TmCaptures
+  readonly endCaptures?: TmCaptures
+  readonly patterns?: readonly TmRule[]
+}
+
+export type TmCaptures = Readonly<Record<string, TmCapture>>
+
+export type TmCapture = {
+  readonly name?: string
+  readonly patterns?: readonly TmRule[]
+}
+
+/**
+ * The single-character elements of `atomComponentsRequiringQuotation`, as a
+ * regular expression.
+ */
+const atomCharactersRequiringQuotation = String.raw`\s{}\[\](),:@?~|"\\=#;`
+
+const atomCharacter = `[^${atomCharactersRequiringQuotation}]`
+
+const atomCharacterExceptDot = `[^${atomCharactersRequiringQuotation}.]`
+
+const notCommentDelimiter = String.raw`(?!//|/\*|\*/)`
+
+const runOf = (characterClass: string, quantifier: '*' | '+'): string =>
+  `(?:${notCommentDelimiter}${characterClass})${quantifier}`
+
+const atom = runOf(atomCharacter, '+')
+
+// Dots are legal in unquoted atoms in some locations (`{a.b:1}` has key `a.b`),
+// but not key path components.
+const keyPathComponent = runOf(atomCharacterExceptDot, '+')
+const keyPath = String.raw`${keyPathComponent}(?:\.${keyPathComponent})*`
+
+/**
+ * The `completeAtomsExemptedFromQuotationRequirements` parsers as a regular
+ * expression.
+ */
+const completeAtomsExemptedFromQuotationRequirements = String.raw`\|>|<\||\|\|`
+
+const unquotedAtomOrKeyPath = `(?:${completeAtomsExemptedFromQuotationRequirements}|${keyPath})`
+
+// The atomic group (`?>`) is important here: without it the `:` guard would
+// push the match to backtrack, and object keys could match as operands.
+const unquotedAtomOperand = String.raw`((?>${unquotedAtomOrKeyPath}))(?!:)`
+
+/**
+ * Where an operand begins. Whitespace before is required: `f(1)` is an operator
+ * in `a f(1) b`, but `f (1)` isn't in `a f (1) b _`.
+ */
+const operandEnd = String.raw`(?<![^\s])(?:${unquotedAtomOperand}|(?=${notCommentDelimiter}[^\s]))`
+
+/** An operand on the same line as its preceding operator. */
+const sameLineOperand = String.raw`[ \t]+${notCommentDelimiter}[^\s,;)}\]|~=]`
+
+/**
+ * What a left operand may end with, on the same line.
+ */
+const leftOperandEnd = String.raw`[^\s,:{\[(|~=@?;#>]`
+
+const scopedRule = (scopeName: string, match: string): TmRule => ({
+  name: `${scopeName}.plz`,
+  match,
+})
+
+const keyPathComponents = (scopeName: string): TmCapture => ({
+  patterns: [
+    scopedRule('punctuation.accessor', String.raw`\.`),
+    scopedRule(scopeName, String.raw`[^.]+`),
+  ],
+})
+
+const quotedAtomEscapePatterns: readonly TmRule[] = [
+  // A leading `@@` denotes a literal `@`. It can only appear quoted, since `@`
+  // requires quotation.
+  { name: 'constant.character.escape.plz', match: '(?<=")@@' },
+  { name: 'constant.character.escape.plz', match: String.raw`\\["\\]` },
+  { name: 'invalid.illegal.unknown-escape.plz', match: String.raw`\\.` },
+]
+
+/**
+ * A quoted atom in three groups, so rules can scope each part separately.
+ */
+const quotedAtomGroups = String.raw`(")((?:[^"\\]|\\.)*)(")`
+
+const quotedAtomCaptures = (
+  scopeName: string,
+  firstGroup: number,
+): TmCaptures => ({
+  [String(firstGroup)]: {
+    name: 'punctuation.definition.quoted-atom.begin.plz',
+  },
+  [String(firstGroup + 1)]: {
+    name: `${scopeName}.plz`,
+    patterns: quotedAtomEscapePatterns,
+  },
+  [String(firstGroup + 2)]: {
+    name: 'punctuation.definition.quoted-atom.end.plz',
+  },
+})
+
+/**
+ * A name which may be quoted, with three capture groups for the quoted form and
+ * one for unquoted.
+ */
+const nameGroups = String.raw`(?:${quotedAtomGroups}|(${atom}))`
+
+const nameCaptures = (scopeName: string, firstGroup: number): TmCaptures => ({
+  ...quotedAtomCaptures(scopeName, firstGroup),
+  [String(firstGroup + 3)]: { name: `${scopeName}.plz` },
+})
+
+/**
+ * An infix operator with the operand it applies to. Pairing them in a
+ * `begin`/`end` lets them straddle lines and comments.
+ */
+const infixOperatorRule = (
+  begin: string,
+  beginCaptures: TmCaptures = {
+    '1': keyPathComponents('entity.name.function'),
+  },
+): TmRule => ({
+  begin,
+  beginCaptures,
+  end: operandEnd,
+  endCaptures: { '1': { name: 'string.unquoted.plz' } },
+  patterns: [
+    { include: '#comment-block' },
+    { include: '#comment-line' },
+    { include: '#compact-arguments' },
+    { include: '#compact-index' },
+    { include: '#lookup' },
+    { include: '#quoted-atom' },
+    { include: '#exempted-atom' },
+  ],
+})
+
+export const tmLanguageGrammar: TmGrammar = {
+  '//': 'Generated by `npm run build:grammar`. Do not edit directly.',
+  $schema:
+    'https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json',
+  name: 'Please',
+  scopeName: 'source.plz',
+  patterns: [{ include: '#expression' }],
+  repository: {
+    expression: {
+      patterns: [
+        { include: '#comment-block' },
+        { include: '#comment-line' },
+        { include: '#quoted-property-key' },
+        { include: '#quoted-parameter' },
+        { include: '#quoted-atom' },
+        { include: '#keyword' },
+        { include: '#hole' },
+        { include: '#parenthesized-property-key' },
+        { include: '#typed-function-parameter' },
+        { include: '#property-key' },
+        { include: '#bare-parameter' },
+        { include: '#document-start' },
+        { include: '#expression-start' },
+        { include: '#quoted-infix-operator' },
+        { include: '#parenthesized-infix-operator' },
+        { include: '#infix-operator-continuing-line' },
+        { include: '#infix-operator' },
+        { include: '#quoted-lookup' },
+        { include: '#parenthesized-lookup' },
+        { include: '#lookup-applied' },
+        { include: '#lookup' },
+        { include: '#trailing-index' },
+        { include: '#function-arrow' },
+        { include: '#closed-object-braces' },
+        { include: '#exempted-atom' },
+        { include: '#operator' },
+        { include: '#excess-clause-separator' },
+        { include: '#punctuation' },
+        { include: '#unquoted-atom' },
+      ],
+    },
+
+    'comment-block': {
+      name: 'comment.block.plz',
+      begin: String.raw`/\*`,
+      beginCaptures: {
+        '0': { name: 'punctuation.definition.comment.begin.plz' },
+      },
+      end: String.raw`\*/`,
+      endCaptures: {
+        '0': { name: 'punctuation.definition.comment.end.plz' },
+      },
+    },
+
+    'comment-line': {
+      name: 'comment.line.double-slash.plz',
+      begin: '//',
+      beginCaptures: {
+        '0': { name: 'punctuation.definition.comment.plz' },
+      },
+      end: '$',
+    },
+
+    'quoted-atom': {
+      name: 'string.quoted.plz',
+      begin: '"',
+      beginCaptures: {
+        '0': { name: 'punctuation.definition.quoted-atom.begin.plz' },
+      },
+      end: '"',
+      endCaptures: {
+        '0': { name: 'punctuation.definition.quoted-atom.end.plz' },
+      },
+      patterns: quotedAtomEscapePatterns,
+    },
+
+    /**
+     * A keyword and the whitespace before its argument.
+     */
+    keyword: {
+      match: String.raw`(@${atom})[ \t]*`,
+      captures: { '1': { name: 'storage.modifier.plz' } },
+    },
+
+    /**
+     * An infix expression's first element is an operand. The expression itself
+     * may be opened by punctuation (e.g. `:`, `{`, `(`, `,`, `~`, `|`, `=>`,
+     * `~>`, `{|`).
+     *
+     * On the opener's line that token is safe: `#infix-operator` must be be
+     * preceded by a left operand, and `leftOperandEnd` excludes characters an
+     * opener could end with. But line breaks make things ambiguous, since a
+     * line-initial atom followed by an operand is also matched by
+     * `#infix-operator-continuing-line`. Without this rule, `x:\na f b` would
+     * highlight `a` as an operator.
+     */
+    'expression-start': {
+      begin: String.raw`(?<=[:{(,~|]|[=~]>)(?=[ \t]*(?:$|//|/\*))`,
+      end: operandEnd,
+      endCaptures: { '1': { name: 'string.unquoted.plz' } },
+      patterns: [{ include: '#comment-block' }, { include: '#comment-line' }],
+    },
+
+    /**
+     * The document's first token is an operand too.
+     */
+    'document-start': {
+      match: String.raw`\A[ \t]*${unquotedAtomOperand}`,
+      captures: { '1': { name: 'string.unquoted.plz' } },
+    },
+
+    /**
+     * `?name`, `?`, and the `?name:` of a constrained `(?name: T)`.
+     */
+    hole: {
+      match: String.raw`(\?)(${runOf(atomCharacterExceptDot, '*')})(?:[ \t]*(:))?`,
+      captures: {
+        '1': { name: 'punctuation.definition.type-parameter.plz' },
+        '2': { name: 'entity.name.type.plz' },
+        '3': { name: 'punctuation.separator.key-value.plz' },
+      },
+    },
+
+    /**
+     * `(name: T)`, whose name may be quoted.
+     */
+    'typed-function-parameter': {
+      match: String.raw`(\()[ \t]*${nameGroups}[ \t]*(:)`,
+      captures: {
+        '1': { name: 'punctuation.section.parens.plz' },
+        ...nameCaptures('variable.parameter', 2),
+        '6': { name: 'punctuation.separator.key-value.plz' },
+      },
+    },
+
+    /**
+     * A key's colon must immediately follow the key (to distinguish `{ a: b }`
+     * from the infix application `_ a :b`). Keys mustn't start with dots to
+     * avoid confusion with dynamic indexes like `:a.:b`.
+     */
+    'property-key': {
+      match: String.raw`(?<![.:])((?:${completeAtomsExemptedFromQuotationRequirements}|${notCommentDelimiter}${atomCharacterExceptDot}${runOf(atomCharacter, '*')}))(:)`,
+      captures: {
+        '1': { name: 'variable.parameter.plz' },
+        '2': { name: 'punctuation.separator.key-value.plz' },
+      },
+    },
+
+    /**
+     * A quoted key, as in `{ "a b": 1 }`. Its colon must immediately follow the
+     *  key (`{ "a" : 1 }` is illegal).
+     */
+    'quoted-property-key': {
+      match: String.raw`${quotedAtomGroups}(:)`,
+      captures: {
+        ...quotedAtomCaptures('variable.parameter', 1),
+        '4': { name: 'punctuation.separator.key-value.plz' },
+      },
+    },
+
+    /**
+     * A parenthesized key, as in `{ (a): 1 }`.
+     */
+    'parenthesized-property-key': {
+      match: String.raw`(\()[ \t]*${nameGroups}[ \t]*(\))(:)`,
+      captures: {
+        '1': { name: 'punctuation.section.parens.plz' },
+        ...nameCaptures('variable.parameter', 2),
+        '6': { name: 'punctuation.section.parens.plz' },
+        '7': { name: 'punctuation.separator.key-value.plz' },
+      },
+    },
+
+    'bare-parameter': {
+      name: 'variable.parameter.plz',
+      match: String.raw`${atom}(?=\s*=>)`,
+    },
+
+    'quoted-parameter': {
+      match: String.raw`${quotedAtomGroups}(?=\s*=>)`,
+      captures: quotedAtomCaptures('variable.parameter', 1),
+    },
+
+    /**
+     * An operator may begin a line if followed by an operand (as in the second
+     * line of `1\n+ 1`), as long as it's not an expression's first token (which
+     * `#expression-start` and `#document-start` have already covered).
+     *
+     * The operand has to be on the operator's line (a line break may fall on
+     * one side of an operator but not both; `a\nf\nb` is invalid).
+     *
+     * A quoted operator only reaches this rule when the line is indented. At
+     * column zero `#quoted-atom` matches at the same position and wins by
+     * coming first, leaving the operator scoped as an ordinary string.
+     */
+    'infix-operator-continuing-line': infixOperatorRule(
+      String.raw`^[ \t]*(?:(${unquotedAtomOrKeyPath})|${quotedAtomGroups})(?=[(.]|${sameLineOperand})`,
+      {
+        '1': keyPathComponents('entity.name.function'),
+        ...quotedAtomCaptures('entity.name.function', 2),
+      },
+    ),
+
+    /**
+     * An operator may end a line if preceded by an operand (as in the first
+     * line of `1 +\n1`).
+     */
+    'infix-operator': infixOperatorRule(
+      String.raw`(?<=${leftOperandEnd})(?<!\s\.)[ \t]+(${unquotedAtomOrKeyPath})`,
+    ),
+
+    /**
+     * An operator may also be a quoted atom. It may contain a line break, in
+     * which case the `begin` won't match and the operator falls back to being
+     * scoped as an ordinary string.
+     */
+    'quoted-infix-operator': infixOperatorRule(
+      String.raw`(?<=${leftOperandEnd})[ \t]+${quotedAtomGroups}`,
+      quotedAtomCaptures('entity.name.function', 1),
+    ),
+
+    /**
+     * Operators may also be parenthesized, as in `a (f) b`. Parentheses wrap
+     * one atom one layer deep (`a (f.g) b`, `a ((f)) b` and `a (1 + 1) b` are
+     * invalid), so the whole thing fits in the `begin`.
+     */
+    'parenthesized-infix-operator': infixOperatorRule(
+      String.raw`(?<=${leftOperandEnd})[ \t]+(\()[ \t]*${nameGroups}[ \t]*(\))`,
+      {
+        '1': { name: 'punctuation.section.parens.plz' },
+        ...nameCaptures('entity.name.function', 2),
+        '6': { name: 'punctuation.section.parens.plz' },
+      },
+    ),
+
+    /**
+     * An operator's compact arguments, as in `f(1)`, `f(1)(2)` or `f(1).c`.
+     * Stepping over them leaves the following operand to `operandEnd`.
+     *
+     * The rule includes itself so nested parentheses balance.
+     */
+    'compact-arguments': {
+      begin: String.raw`\(`,
+      beginCaptures: { '0': { name: 'punctuation.section.parens.plz' } },
+      end: String.raw`(\))((?:\.${keyPathComponent})*)`,
+      endCaptures: {
+        '1': { name: 'punctuation.section.parens.plz' },
+        '2': keyPathComponents('variable.other.constant'),
+      },
+      patterns: [{ include: '#compact-arguments' }, { include: '#expression' }],
+    },
+
+    /**
+     * The `.` of an operator's compact index, plus the key when it's a bare
+     * atom. `dottedKeyPathKey` also allows a lookup, a quoted atom or a
+     * parenthesized expression, which `#infix-operator`'s other patterns pick
+     * up once this rule has taken the dot.
+     */
+    'compact-index': {
+      match: String.raw`(\.)(${keyPathComponent})?`,
+      captures: {
+        '1': { name: 'punctuation.accessor.plz' },
+        '2': { name: 'variable.other.constant.plz' },
+      },
+    },
+
+    /**
+     * A lookup whose key is quoted or parenthesized, as in `:"a b"` or `:(a)`.
+     * Only an atom may appear there (`:(1 + 1)` is invalid).
+     *
+     * The lookbehind keeps these off a quoted or parenthesized key's colon:
+     * `{ "a": "b" }` is a property, not a lookup of `b`.
+     */
+    'quoted-lookup': {
+      match: String.raw`(?<!["\)])(:)${quotedAtomGroups}`,
+      captures: {
+        '1': { name: 'punctuation.definition.variable.plz' },
+        ...quotedAtomCaptures('variable.other.constant', 2),
+      },
+    },
+
+    'parenthesized-lookup': {
+      match: String.raw`(?<!["\)])(:)(\()[ \t]*${nameGroups}[ \t]*(\))`,
+      captures: {
+        '1': { name: 'punctuation.definition.variable.plz' },
+        '2': { name: 'punctuation.section.parens.plz' },
+        ...nameCaptures('variable.other.constant', 3),
+        '7': { name: 'punctuation.section.parens.plz' },
+      },
+    },
+
+    /**
+     * A lookup which is immediately applied, as in `:f(1)` or `:a.b.c.d(true)`.
+     */
+    'lookup-applied': {
+      match: String.raw`(:)(${unquotedAtomOrKeyPath})(?=\()`,
+      captures: {
+        '1': { name: 'punctuation.definition.variable.plz' },
+        '2': keyPathComponents('entity.name.function'),
+      },
+    },
+
+    lookup: {
+      match: String.raw`(:)(${unquotedAtomOrKeyPath})`,
+      captures: {
+        '1': { name: 'punctuation.definition.variable.plz' },
+        '2': keyPathComponents('variable.other.constant'),
+      },
+    },
+
+    /**
+     * A non-compact index may be separated by trivia, including line breaks,
+     * so it may also begin a line.
+     */
+    'trailing-index': {
+      match: String.raw`(?:(?<=[)}]|\*/)|^)[ \t]*((?:\.${keyPathComponent})+)`,
+      captures: { '1': keyPathComponents('variable.other.constant') },
+    },
+
+    'function-arrow': scopedRule('storage.type.function.arrow', '[=~]>'),
+
+    /**
+     * `{|` and `|}` delimit a closed object type. This has to precede
+     * `#operator`, which would otherwise claim the bar.
+     */
+    'closed-object-braces': scopedRule(
+      'punctuation.section.braces',
+      String.raw`\{\||\|\}`,
+    ),
+
+    /**
+     * `|>`, `<|` and `||` are atoms despite their bars, so they have to be
+     * claimed before `#operator` gets to one.
+     */
+    'exempted-atom': scopedRule(
+      'string.unquoted',
+      completeAtomsExemptedFromQuotationRequirements,
+    ),
+
+    operator: scopedRule('keyword.operator', '[~|]'),
+
+    /**
+     * An excess clause's colon, as in `{ [:Atom]: :Boolean }`. This is Please's
+     * only use of square brackets, so a colon after `]` always separates a key
+     * and value.
+     */
+    'excess-clause-separator': {
+      match: String.raw`(?<=\])(:)`,
+      captures: { '1': { name: 'punctuation.separator.key-value.plz' } },
+    },
+
+    punctuation: {
+      patterns: [
+        scopedRule('punctuation.section.braces', '[{}]'),
+        scopedRule('punctuation.section.brackets', String.raw`[\[\]]`),
+        scopedRule('punctuation.section.parens', String.raw`[()]`),
+        // A dot reaching this rule is an index into whatever precedes it (e.g.
+        // `(1 + 1).greeting`, `{ … }.output`).
+        scopedRule('punctuation.accessor', String.raw`\.`),
+        scopedRule('punctuation.separator', '[,:]'),
+      ],
+    },
+
+    /**
+     * Anything not covered by a rule above is an unquoted atom. Constructs
+     * above which happen to be spelled with atoms (keys, lookups, operators,
+     * parameters, keywords, etc) take precedence.
+     */
+    'unquoted-atom': scopedRule('string.unquoted', atom),
+  },
+}
