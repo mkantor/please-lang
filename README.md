@@ -24,7 +24,12 @@ on the way to an official release.
 
 Enough pieces exist to write runnable programs, but the standard library is
 anemic and documentation is lacking. Editor tooling is a work in progress—the
-[VS Code extension](./editors/vscode) is a start.
+[VS Code extension](./editors/vscode) is a start:
+
+<!-- This screenshot is double-sized and shrank for HiDPI screens. -->
+<p align="center">
+  <img width="712" src="media/screenshot.png" alt="Screenshot" />
+</p>
 
 The current runtime is an interpreter, but the plan is to eventually add one or
 more backends to allow building native executables.
