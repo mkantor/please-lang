@@ -1813,3 +1813,29 @@ typeAssignabilitySuite('object source split over a union-valued property', [
     false,
   ],
 ])
+
+// The upper bound is `atom | object`, which is assignable to `something` but
+// not to any of its individual members.
+const stuckIntrinsicApplicationSpanningTopTypeMembers =
+  makeIntrinsicApplicationType(
+    [object],
+    _argumentValues => either.makeRight(something),
+    _parameterTypes => makeUnionType(['an atom', makeObjectType({})]),
+  )
+
+typeAssignabilitySuite('union member standing for an unresolved type', [
+  [[stuckIntrinsicApplicationSpanningTopTypeMembers, something], true],
+
+  [
+    [
+      makeUnionType([stuckIntrinsicApplicationSpanningTopTypeMembers]),
+      something,
+    ],
+    true,
+  ],
+
+  [
+    [makeUnionType([stuckIntrinsicApplicationSpanningTopTypeMembers]), atom],
+    false,
+  ],
+])

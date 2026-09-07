@@ -363,13 +363,13 @@ export const isAssignable = ({
                       }
                     }
                   }
-                  // A type parameter member can be assignable to the target
-                  // union while matching no single member, e.g. a parameter
-                  // constrained to `something` is assignable to `something`
-                  // even though `something` is itself a union.
+                  // A stuck member can be assignable to the target union even
+                  // if it's not assignable to any single member of it, e.g. the
+                  // stuck type's upper bound could itself be a union which
+                  // spans multiple members.
                   return (
                     typeof sourceMember !== 'string' &&
-                    sourceMember.kind === 'parameter' &&
+                    isStuck(sourceMember) &&
                     isAssignable({ source: sourceMember, target })
                   )
                 })()
@@ -384,6 +384,12 @@ export const isAssignable = ({
       }))
   )
 }
+
+const isStuck = (type: Exclude<Type, UnionType>): boolean =>
+  type.kind === 'parameter' ||
+  type.kind === 'application' ||
+  type.kind === 'indexedAccess' ||
+  type.kind === 'intrinsicApplication'
 
 const isNonUnionAssignableToUnion = ({
   source,
