@@ -14,6 +14,7 @@ import {
   TextDocumentSyncKind,
   type InitializeResult,
   type Diagnostic as LspDiagnostic,
+  type DiagnosticRelatedInformation,
   type Position,
   type Range,
 } from 'vscode-languageserver/node'
@@ -63,13 +64,19 @@ const lspSeverities: Readonly<
 }
 
 const toLspDiagnostic =
-  (source: string) =>
+  (uri: string, source: string) =>
   (diagnostic: Diagnostic): LspDiagnostic => ({
     severity: lspSeverities[diagnostic.severity],
     range: rangeOfSpan(source, diagnostic.span),
     message: diagnostic.message,
     code: diagnostic.code,
     source: 'please',
+    relatedInformation: diagnostic.relatedSpans.map(
+      (related): DiagnosticRelatedInformation => ({
+        location: { uri, range: rangeOfSpan(source, related.span) },
+        message: related.message,
+      }),
+    ),
   })
 
 const diagnosticsForDocument = (
@@ -79,7 +86,7 @@ const diagnosticsForDocument = (
   // A program which crashes the compiler degrades to "no diagnostics" rather
   // than taking down the process.
   try {
-    return diagnoseSource(source).map(toLspDiagnostic(source))
+    return diagnoseSource(source).map(toLspDiagnostic(document.uri, source))
   } catch (error) {
     connection.console.error(
       `analysis of ${document.uri} failed: ${String(error)}`,

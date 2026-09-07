@@ -3,6 +3,7 @@ import assert from 'node:assert'
 import test, { suite } from 'node:test'
 import { toSyntaxTree } from '../../test-utilities.test.js'
 import { defaultConfiguration } from '../configuration.js'
+import { emptyExpressionSpans } from '../parsing.js'
 import { parseWithSpans } from '../parsing/parser.js'
 import type { Span } from '../source-location.js'
 import { compile } from './compiler.js'
@@ -84,7 +85,7 @@ suite('compile attaches source spans to elaboration errors', () => {
     })
     const resultWithoutSpans = compile(defaultConfiguration)(
       lookupNonexistentKey,
-      new Map(),
+      emptyExpressionSpans,
     )
     assert(either.isLeft(resultWithoutSpans))
     assert.equal(resultWithoutSpans.value.span, undefined)

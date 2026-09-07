@@ -38,12 +38,18 @@ suite('please CLI error reporting', () => {
     assert.equal(
       stderr,
       [
-        'Error: expected `}`',
+        'Error: expected one of: a value after `:`, `,`, `\n`, `}`',
         '',
         '<stdin>:1:7',
         '  │',
         '1 │ { a: 1',
         '  │       ▔',
+        '',
+        'note: unclosed `{`',
+        '<stdin>:1:1',
+        '  │',
+        '1 │ { a: 1',
+        '  │ ▔',
         '',
       ].join('\n'),
     )
