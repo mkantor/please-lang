@@ -47,7 +47,7 @@ testCases(diagnoseSource, source => `diagnosing \`${source}\``)('diagnose', [
       {
         severity: 'error',
         code: 'typeMismatch',
-        message: 'the value `{}` is not assignable to the type `false | true`',
+        message: 'the value `{}` is not assignable to the type `:Boolean`',
         span: [0, 2],
         relatedSpans: [],
       },

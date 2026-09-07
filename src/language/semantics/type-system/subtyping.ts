@@ -693,10 +693,10 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
   )
 }
 
-const isPendingType = (member: Atom | Exclude<Type, UnionType>): boolean =>
-  typeof member !== 'string' &&
-  member.kind === 'opaque' &&
-  member.symbol === pendingTypeSymbol
+export const isPendingType = (type: Atom | Type): boolean =>
+  typeof type !== 'string' &&
+  type.kind === 'opaque' &&
+  type.symbol === pendingTypeSymbol
 
 const excludeRedundantUnionTypeMembers = (type: UnionType) => {
   const membersAsArray = [...type.members]

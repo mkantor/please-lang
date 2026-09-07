@@ -40,6 +40,7 @@ import {
 } from './object-node.js'
 import { nodeTag } from './semantic-graph-node-tag.js'
 import {
+  canonicalSpellingOf,
   functionParameterKey,
   functionReturnKey,
   isCanonicalTopType,
@@ -444,134 +445,151 @@ const typeToSemanticGraphImplementation = (
       })
     : recurseWithSameTypeParameters(condition)
 
-  return matchTypeFormat(type, {
-    application: type =>
-      makeApplyExpression({
-        function: recurseWithSameTypeParameters(type.function),
-        argument: recurseWithSameTypeParameters(type.argument),
-      }),
-    function: type =>
-      makeFunctionExpression(
-        objectNodeFromOrderedEntries([
-          [ignoredKey, recurseWithSameTypeParameters(type.signature.parameter)],
-        ]),
-        recurseWithSameTypeParameters(type.signature.return),
-      ),
-    indexedAccess: type =>
-      option.match(conditionalBranches(type), {
-        // Convert conditional indexed access types to `@if` expressions.
-        some: branches =>
-          makeIfExpression({
-            condition: conditionAsWritten(type.key),
-            then: recurseWithSameTypeParameters(branches.then),
-            else: recurseWithSameTypeParameters(branches.else),
+  return option.match(canonicalSpellingOf(type), {
+    none: _ =>
+      matchTypeFormat(type, {
+        application: type =>
+          makeApplyExpression({
+            function: recurseWithSameTypeParameters(type.function),
+            argument: recurseWithSameTypeParameters(type.argument),
           }),
-        none: _ =>
-          makeIndexExpression({
-            object: recurseWithSameTypeParameters(type.object),
-            query: objectNodeFromOrderedEntries([
-              ['0', recurseWithSameTypeParameters(type.key)],
+        function: type =>
+          makeFunctionExpression(
+            objectNodeFromOrderedEntries([
+              [
+                ignoredKey,
+                recurseWithSameTypeParameters(type.signature.parameter),
+              ],
             ]),
+            recurseWithSameTypeParameters(type.signature.return),
+          ),
+        indexedAccess: type =>
+          option.match(conditionalBranches(type), {
+            // Convert conditional indexed access types to `@if` expressions.
+            some: branches =>
+              makeIfExpression({
+                condition: conditionAsWritten(type.key),
+                then: recurseWithSameTypeParameters(branches.then),
+                else: recurseWithSameTypeParameters(branches.else),
+              }),
+            none: _ =>
+              makeIndexExpression({
+                object: recurseWithSameTypeParameters(type.object),
+                query: objectNodeFromOrderedEntries([
+                  ['0', recurseWithSameTypeParameters(type.key)],
+                ]),
+              }),
           }),
-      }),
-    object: type => {
-      const properties = objectNodeFromOrderedEntries(
-        Object.entries(type.children).map(([key, value]) => [
-          key,
-          recurseWithSameTypeParameters(value),
-        ]),
-      )
-      // Open objects become plain literals; excess bounds are written as
-      // `@object` expressions.
-      const [firstClause, ...remainingClauses] = type.excess
-      const isOpen =
-        firstClause === undefined ||
-        (remainingClauses.length === 0 &&
-          firstClause.keys === types.atom &&
-          isCanonicalTopType(firstClause.values))
-      return isOpen ? properties : (
-          makeObjectTypeExpression(
-            properties,
-            objectNodeFromOrderedEntries(
-              type.excess.map((clause, index) => [
-                String(index),
-                objectNodeFromOrderedEntries([
-                  ['0', recurseWithSameTypeParameters(clause.keys)],
-                  ['1', recurseWithSameTypeParameters(clause.values)],
-                ]),
-              ]),
-            ),
+        object: type => {
+          const properties = objectNodeFromOrderedEntries(
+            Object.entries(type.children).map(([key, value]) => [
+              key,
+              recurseWithSameTypeParameters(value),
+            ]),
           )
-        )
-    },
-    // A stuck intrinsic application is displayed as its (concrete) upper bound,
-    // which is also how it behaves for assignability.
-    intrinsicApplication: type =>
-      recurseWithSameTypeParameters(
-        type.computeUpperBound(type.parameterTypes),
-      ),
-    opaque: type => typeSymbolToSemanticGraph(type.symbol),
-    parameter: type => {
-      if (alreadyIntroducedTypeParameterIdentities.has(type.identity)) {
-        rememberReferenceToTypeParameter(type.identity)
-        return isIntroducible(type) ?
-            makeLookupExpression(type.name)
-          : referenceToTypeParameterBoundOutsideType(type)
-      } else if (isIntroducible(type) && !isReferredTo(type)) {
-        // Type parameters occurring only once are shown as their constraints.
-        return recurseWithSameTypeParameters(type.constraint.assignableTo)
-      } else {
-        // Side effect: remember the type parameter. This is a direct mutation
-        // because it needs to be visible to usages not in this call stack.
-        alreadyIntroducedTypeParameterIdentities.add(type.identity)
-        if (!isIntroducible(type)) {
-          return makeCheckExpression({
-            value: referenceToTypeParameterBoundOutsideType(type),
-            type: recurseWithSameTypeParameters(type.constraint.assignableTo),
-          })
-        } else {
-          return makeHoleExpressionWithExtantTypeParameter(
-            type.name,
-            makeObjectNode({
-              assignableTo: recurseWithSameTypeParameters(
-                type.constraint.assignableTo,
-              ),
-            }),
-            type,
-          )
-        }
-      }
-    },
-    union: type => {
-      if (isCanonicalTopType(type)) {
-        return typeSymbolToSemanticGraph(somethingTypeSymbol)
-      } else {
-        const [firstMember, ...remainingMembers] = type.members
-        if (firstMember !== undefined && remainingMembers.length === 0) {
-          // Unwrap singleton unions.
-          return typeof firstMember === 'string' ? firstMember : (
-              recurseWithSameTypeParameters(firstMember)
+          // Open objects become plain literals; excess bounds are written as
+          // `@object` expressions.
+          const [firstClause, ...remainingClauses] = type.excess
+          const isOpen =
+            firstClause === undefined ||
+            (remainingClauses.length === 0 &&
+              firstClause.keys === types.atom &&
+              isCanonicalTopType(firstClause.values))
+          return isOpen ? properties : (
+              makeObjectTypeExpression(
+                properties,
+                objectNodeFromOrderedEntries(
+                  type.excess.map((clause, index) => [
+                    String(index),
+                    objectNodeFromOrderedEntries([
+                      ['0', recurseWithSameTypeParameters(clause.keys)],
+                      ['1', recurseWithSameTypeParameters(clause.values)],
+                    ]),
+                  ]),
+                ),
+              )
             )
-        } else {
-          return makeUnionExpression(
-            objectNodeFromOrderedEntries(
-              [...type.members]
-                .flatMap(member =>
-                  membersOfRenderedType(
-                    typeof member === 'string' ? member : (
-                      recurseWithSameTypeParameters(member)
-                    ),
+        },
+        // A stuck intrinsic application is displayed as its (concrete) upper bound,
+        // which is also how it behaves for assignability.
+        intrinsicApplication: type =>
+          recurseWithSameTypeParameters(
+            type.computeUpperBound(type.parameterTypes),
+          ),
+        opaque: type => typeSymbolToSemanticGraph(type.symbol),
+        parameter: type => {
+          if (alreadyIntroducedTypeParameterIdentities.has(type.identity)) {
+            rememberReferenceToTypeParameter(type.identity)
+            return isIntroducible(type) ?
+                makeLookupExpression(type.name)
+              : referenceToTypeParameterBoundOutsideType(type)
+          } else if (isIntroducible(type) && !isReferredTo(type)) {
+            // Type parameters occurring only once are shown as their constraints.
+            return recurseWithSameTypeParameters(type.constraint.assignableTo)
+          } else {
+            // Side effect: remember the type parameter. This is a direct mutation
+            // because it needs to be visible to usages not in this call stack.
+            alreadyIntroducedTypeParameterIdentities.add(type.identity)
+            if (!isIntroducible(type)) {
+              return makeCheckExpression({
+                value: referenceToTypeParameterBoundOutsideType(type),
+                type: recurseWithSameTypeParameters(
+                  type.constraint.assignableTo,
+                ),
+              })
+            } else {
+              return makeHoleExpressionWithExtantTypeParameter(
+                type.name,
+                makeObjectNode({
+                  assignableTo: recurseWithSameTypeParameters(
+                    type.constraint.assignableTo,
                   ),
+                }),
+                type,
+              )
+            }
+          }
+        },
+        union: type => {
+          if (isCanonicalTopType(type)) {
+            return typeSymbolToSemanticGraph(somethingTypeSymbol)
+          } else {
+            const [firstMember, ...remainingMembers] = type.members
+            if (firstMember !== undefined && remainingMembers.length === 0) {
+              // Unwrap singleton unions.
+              return typeof firstMember === 'string' ? firstMember : (
+                  recurseWithSameTypeParameters(firstMember)
                 )
-                .map((renderedMember, index) => [
-                  String(index),
-                  renderedMember,
-                ]),
-            ),
-          )
-        }
-      }
-    },
+            } else {
+              return makeUnionExpression(
+                objectNodeFromOrderedEntries(
+                  [...type.members]
+                    .flatMap(member =>
+                      membersOfRenderedType(
+                        typeof member === 'string' ? member : (
+                          recurseWithSameTypeParameters(member)
+                        ),
+                      ),
+                    )
+                    .map((renderedMember, index) => [
+                      String(index),
+                      renderedMember,
+                    ]),
+                ),
+              )
+            }
+          }
+        },
+      }),
+    some: ({ name, typeArguments }) =>
+      typeArguments.reduce<SemanticGraph>(
+        (partiallyApplied, typeArgument) =>
+          makeApplyExpression({
+            function: partiallyApplied,
+            argument: recurseWithSameTypeParameters(typeArgument),
+          }),
+        makeLookupExpression(name),
+      ),
   })
 }
 
