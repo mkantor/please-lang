@@ -23,7 +23,13 @@ on the way to an official release.
 ### Current State
 
 Enough pieces exist to write runnable programs, but the standard library is
-anemic, documentation is lacking, and editor tooling is nonexistent.
+anemic and documentation is lacking. Editor tooling is a work in progress—the
+[VS Code extension](./editors/vscode) is a start:
+
+<!-- This screenshot is double-sized and shrank for HiDPI screens. -->
+<p align="center">
+  <img width="712" src="media/screenshot.png" alt="Screenshot" />
+</p>
 
 The current runtime is an interpreter, but the plan is to eventually add one or
 more backends to allow building native executables.
@@ -43,7 +49,7 @@ data representation implied by the fact that a value is an atom (e.g. the atom
 `2` may be an integer in memory).
 
 Bare words not containing any
-[reserved character sequences](./src/language/parsing/atom.ts#L41-L67) are
+[reserved character sequences](./src/language/parsing/atom.ts#L43-L69) are
 atoms:
 
 ```plz

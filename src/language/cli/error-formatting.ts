@@ -1,18 +1,18 @@
 import { styleText } from 'node:util'
 import { snippetAtSpan, type Span } from '../source-location.js'
 
-export type DiagnosticError = {
+export type FormattableError = {
   readonly message: string
   readonly span?: Span | undefined
 }
 
 /**
- * Render an error as a friendly diagnostic. When both `source` and a `span`
- * are available the `Error: <message>` header is followed by a framed,
+ * Render an error for a human reading in a terminal. When both `source` and a
+ * `span` are available the `Error: <message>` header is followed by a framed,
  * underline-annotated source snippet; otherwise just the header is returned.
  */
 export const formatError = (
-  error: DiagnosticError,
+  error: FormattableError,
   context: {
     readonly filename: string
     readonly source?: string

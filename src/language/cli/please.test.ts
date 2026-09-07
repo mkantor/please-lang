@@ -31,7 +31,7 @@ const runPlease = (
   })
 
 suite('please CLI error reporting', () => {
-  test('renders a framed diagnostic for a syntax error', async () => {
+  test('renders a framed source snippet for a syntax error', async () => {
     const { stdout, stderr, code } = await runPlease('{ a: 1', ['--no-color'])
     assert.equal(code, 1)
     assert.equal(stdout, '')

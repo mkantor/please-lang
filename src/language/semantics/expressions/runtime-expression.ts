@@ -23,12 +23,10 @@ export const readRuntimeExpression = (
     either.flatMap(
       readArgumentsFromExpression(node, ['function']),
       ([runtimeFunction]) => {
-        if (
-          !(
-            isFunctionNode(runtimeFunction) ||
-            containsAnyUnelaboratedNodes(runtimeFunction)
-          )
-        ) {
+        if (!(
+          isFunctionNode(runtimeFunction) ||
+          containsAnyUnelaboratedNodes(runtimeFunction)
+        )) {
           return either.makeLeft({
             kind: 'invalidExpression',
             message: 'runtime functions must compute something',

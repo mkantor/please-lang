@@ -38,6 +38,8 @@ import { whitespace } from './trivia.js'
 
 export type Atom = string
 
+// The TextMate grammar mirrors this as `atomCharactersRequiringQuotation`;
+// tests check that the two agree.
 const atomComponentsRequiringQuotation = [
   functionArrow,
   signatureArrow,

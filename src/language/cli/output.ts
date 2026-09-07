@@ -8,13 +8,13 @@ import {
   unparse,
   type Notation,
 } from '../unparsing.js'
-import { formatError, type DiagnosticError } from './error-formatting.js'
+import { formatError, type FormattableError } from './error-formatting.js'
 
 export const handleOutput = async (
   process: NodeJS.Process,
   command: () =>
-    | Either<DiagnosticError, SyntaxTree>
-    | Promise<Either<DiagnosticError, SyntaxTree>>,
+    | Either<FormattableError, SyntaxTree>
+    | Promise<Either<FormattableError, SyntaxTree>>,
   defaultOutputNotation?: Notation,
   source?: string,
 ): Promise<undefined> => {

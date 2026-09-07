@@ -7,10 +7,10 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   {
-    ignores: ['dist', 'dist-test', 'hidden-from-claude', '*.tsbuildinfo'],
+    ignores: ['dist', 'dist-test', 'editors/*/dist', '*.tsbuildinfo'],
   },
   {
-    files: ['src/**/*.ts'],
+    files: ['src/**/*.ts', 'editors/*/src/**/*.ts'],
     extends: [
       eslint.configs.recommended,
       ...tseslint.configs.strictTypeChecked,

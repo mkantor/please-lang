@@ -8,6 +8,7 @@
     "noUncheckedIndexedAccess": true,
     "rootDir": "./src",
     "skipLibCheck": true,
+    "sourceMap": true,
     "target": "es2025",
     "types": ["node"],
     "verbatimModuleSyntax": true
