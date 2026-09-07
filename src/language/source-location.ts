@@ -1,5 +1,5 @@
 /**
- * An `end`-inclusive character offset range (i.e. `[start, end)`) into a source
+ * An `end`-exclusive character offset range (i.e. `[start, end)`) into a source
  * string. A zero-width span (i.e. `start === end`) marks a single point.
  */
 export type Span = readonly [start: number, end: number]

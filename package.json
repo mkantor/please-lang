@@ -1,5 +1,5 @@
 {
-  "name": "please-prototype",
+  "name": "@matt.kantor/please",
   "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -28,7 +28,7 @@
     "build": "tsc --build tsconfig.app.json --force",
     "build:all": "tsc --build --force",
     "build:grammar": "npm run build && node ./dist/language/highlighting/write-tmlanguage.js editors/vscode/syntaxes/please.tmLanguage.json",
-    "build:tests": "tsc --project tsconfig.app.json --outDir dist-test --declarationDir dist && tsc --build tsconfig.test.json",
+    "build:tests": "tsc --project tsconfig.app.json && rm -rf dist-test && cp -R dist dist-test && rm -f tsconfig.test.tsbuildinfo && tsc --build tsconfig.test.json",
     "clean": "rm -rf dist* *.tsbuildinfo editors/*/dist editors/*/*.tsbuildinfo",
     "lint": "eslint .; prettier --check .",
     "lint:fix": "eslint --fix .; prettier --write .",

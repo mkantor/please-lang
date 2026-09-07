@@ -5,7 +5,7 @@ import {
   type Diagnostic,
   type DiagnosticSeverity,
   type Span,
-} from 'please-prototype'
+} from '@matt.kantor/please'
 import { TextDocument } from 'vscode-languageserver-textdocument'
 import {
   createConnection,
