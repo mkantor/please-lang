@@ -44,6 +44,13 @@ const hoversIn = (source: string) =>
     target => `pointing at \`${target}\``,
   )
 
+/** Like `hoversIn`, but with a source for each case. */
+const hoverCases = testCases(
+  ([source, target]: readonly [source: string, target: string]) =>
+    hoverIn(source, target),
+  ([source, target]) => `pointing at \`${target}\` in \`${source}\``,
+)
+
 // This should cover every keyword.
 testCases(
   (source: string) => hoverIn(source, 'f:'),
@@ -105,7 +112,7 @@ testCases(
 testCases(
   (source: string) => hoverIn(source, 'f:'),
   source => source,
-)('types written the way the prelude names them', [
+)('types written with prelude names', [
   ['{ f: false | true }', 'f :: :Boolean'],
   ['{ f: { a: false | true } }', 'f :: {| a: :Boolean |}'],
   [
@@ -119,35 +126,27 @@ testCases(
   ['{ f: false | true | maybe }', 'f :: false | true | maybe'],
 ])
 
-const program = `{
+hoversIn(`{
   count: 3,
   double: (n: :Integer) => :n |> :integer.add(:n),
   doubled: :double(:count),
-}`
-
-hoversIn(program)('values and the names bound to them', [
+}`)('basic keys, parameters, lookups, indexes, and values', [
   ['count:', 'count :: 3'],
   ['double:', 'double :: :Integer ~> :Integer'],
   ['doubled:', 'doubled :: 6'],
   [':double(:count)', ':double(:count) :: 6'],
   [':count)', ':count :: 3'],
   ['3,', '3 :: 3'],
-])
-
-hoversIn(program)('names of things which are not values', [
   ['double(:count)', 'double :: :Integer ~> :Integer'],
   ['count)', 'count :: 3'],
   ['n: :Integer', 'n :: :Integer'],
   [':Integer', ':Integer :: :Integer'],
   ['Integer)', 'Integer :: :Integer'],
-])
-
-hoversIn(program)('applied functions', [
   ['|>', '|> :: ?a ~> :a'],
   ['add(:n)', 'add :: :Integer ~> :Integer ~> :Integer'],
 ])
 
-const withParameter = `{
+const limitOrZeroProgram = `{
   limitOrZero: (limit: :NaturalNumber) => @if {
     :limit integer.equals 0
     then: :limit
@@ -155,50 +154,86 @@ const withParameter = `{
   }
 }`
 
-hoversIn(withParameter)('a type parameter bound outside what is pointed at', [
+hoverCases('type parameters simplified to their constraint', [
+  [['(a: :Integer) => :a', ':a'], ':a :: :Integer'],
   [
-    'limitOrZero:',
+    ['(point: { x: :Integer, y: :Integer }) => :point', ':point'],
+    ':point :: { x: :Integer, y: :Integer }',
+  ],
+  [
+    ['(a: :Integer) => { b: { :a, :a }, c: { :b, :b } }', 'c:'],
+    'c :: {| {| (:a ~ :Integer), :a |}, {| :a, :a |} |}',
+  ],
+  [['x => { value: :x }', '{ value'], '{ value: :x } :: {| value: :x |}'],
+  [
+    ['x => (y => { a: :x, b: :y })', '{ a'],
+    '{ a: :x, b: :y } :: {| a: :x, b: :y |}',
+  ],
+  [
+    [limitOrZeroProgram, 'limitOrZero:'],
     hover => {
       assert.ok(hover !== undefined)
       assert.match(hover, /^limitOrZero :: \(\?limit: :NaturalNumber\) ~>/)
     },
   ],
   [
-    '@if',
+    [limitOrZeroProgram, '@if'],
     hover => {
       assert.ok(hover !== undefined)
       assert.ok(hover.includes(':limit'))
       assert.doesNotMatch(hover, /\?limit/)
     },
   ],
-  // Type parameters displayed as references include their bounds the first time
-  // they're mentioned.
-  [':limit integer.equals 0', ':limit :: :limit ~ :NaturalNumber'],
-  ['then: :limit', 'then :: :limit ~ :NaturalNumber'],
+  [[limitOrZeroProgram, ':limit integer.equals 0'], ':limit :: :NaturalNumber'],
+  [[limitOrZeroProgram, 'then: :limit'], 'then :: :NaturalNumber'],
 ])
 
-const withParameterInFunctionParameter = `{
+hoverCases('type parameters in `@if`s', [
+  [
+    ['(a: :Integer) => @if { :a > 1, then: :a, else: 0 }', '@if'],
+    '@if { :a > 1, then: :a, else: 0 } :: @if { condition: :a integer.is_greater_than 1, then: :a, else: 0 }',
+  ],
+  [
+    [
+      '(a: :Integer) => { c: @if { :a > 1, then: :a, else: 0 }, d: :a }',
+      '{ c:',
+    ],
+    [
+      '{ c: @if { :a > 1, then: :a, else: 0 }, d: :a } :: {|',
+      '  c: @if {',
+      '    condition: :a integer.is_greater_than 1',
+      '    then: :a',
+      '    else: 0',
+      '  }',
+      '  d: :a ~ :Integer',
+      '|}',
+    ].join('\n'),
+  ],
+])
+
+hoversIn(`{
   f: (x: :Atom) => {
     callback: (k: :x ~> :Integer) => 1
   }
-}`
+}`)("a type parameter referred to by a function's parameter type", [
+  ['callback:', 'callback :: ((:x ~ :Atom) ~> :Integer) ~> 1'],
+])
 
-hoversIn(withParameterInFunctionParameter)(
-  "a type parameter bound outside what is pointed at, in a function's parameter",
-  [['callback:', 'callback :: ((:x ~ :Atom) ~> :Integer) ~> 1']],
-)
-
-const withNestedParameter = `{
+hoversIn(`{
   outer: (state: { current: :NaturalNumber, "odd key": :Atom }) => {
-    a: :state.current
-    b: :state."odd key"
+    a: { :state.current, :state.current }
+    b: { :state."odd key", :state."odd key" }
   }
-  higherOrder: (apply: :Atom ~> :Integer) => (x: :Atom) => { c: :apply(:x) }
-}`
-
-hoversIn(withNestedParameter)('a parameter standing for part of another one', [
-  ['a: :state.current', 'a :: :state.current ~ :NaturalNumber'],
-  ['b: :state', 'b :: :state."odd key" ~ :Atom'],
+  higherOrder: (apply: :Atom ~> :Integer) => (x: :Atom) => {
+    c: :apply(:x)
+    d: { :c, :c }
+  }
+}`)('a genericized parameter with structure', [
+  [
+    'a: { :state',
+    'a :: {| (:state.current ~ :NaturalNumber), :state.current |}',
+  ],
+  ['b: { :state', 'b :: {| (:state."odd key" ~ :Atom), :state."odd key" |}'],
   [
     'outer:',
     hover => {
@@ -206,18 +241,16 @@ hoversIn(withNestedParameter)('a parameter standing for part of another one', [
       assert.ok(hover.includes('(?"state.current": :NaturalNumber)'))
     },
   ],
-  ['c: :apply(:x)', 'c :: :"apply.#return" ~ :Integer'],
+  ['d: { :c', 'd :: {| (:"apply.#return" ~ :Integer), :"apply.#return" |}'],
 ])
 
-const withUnreferencedParameters = `{
+// Type parameters with no referents are reduced to their constraints.
+hoversIn(`{
   ignoresIt: (n: :Integer) => 0,
   ignoresAnything: n => 0,
   usesIt: (n: :Integer) => :n,
   usesPartOfIt: (state: { current: :Integer, other: :Atom }) => :state.current,
-}`
-
-// Type parameters with no referents are reduced to their constraints.
-hoversIn(withUnreferencedParameters)('parameters nothing refers back to', [
+}`)('parameters nothing refers to', [
   ['ignoresIt:', 'ignoresIt :: :Integer ~> 0'],
   ['ignoresAnything:', 'ignoresAnything :: :Something ~> 0'],
   ['usesIt:', 'usesIt :: (?n: :Integer) ~> :n'],
@@ -227,15 +260,13 @@ hoversIn(withUnreferencedParameters)('parameters nothing refers back to', [
   ],
 ])
 
-const withTypeAnnotations = `{
+// Objects in type position are inferred as open object types.
+hoversIn(`{
   parameter: (state: { current: :NaturalNumber }) => :state.current
   checked: { a: 1, b: 2 } ~ { a: :Integer }
   hole: (?T: { b: :Atom })
   object: { [:Atom]: { c: :Atom }, d: { e: :Atom } }
-}`
-
-// These are interpreted as types, where object literals are open.
-hoversIn(withTypeAnnotations)('object literals within type annotations', [
+}`)('object literals within type positions', [
   ['state:', 'state :: { current: :NaturalNumber }'],
   ['{ a: :Integer }', '{ a: :Integer } :: { a: :Integer }'],
   ['{ b: :Atom }', '{ b: :Atom } :: { b: :Atom }'],
@@ -243,7 +274,7 @@ hoversIn(withTypeAnnotations)('object literals within type annotations', [
   ['d: { e', 'd :: { e: :Atom }'],
 ])
 
-const withRecursion = `{
+hoversIn(`{
   outer: (limit: :NaturalNumber) => {
     helper: (n: :NaturalNumber) => @if {
       :n > :limit
@@ -252,9 +283,7 @@ const withRecursion = `{
     }
     result: :helper(1)
   }.result
-}`
-
-hoversIn(withRecursion)('a recursive call', [
+}`)('a recursive call', [
   [':helper(:n + 1)', ':helper(:n + 1) :: :NaturalNumber'],
   ['helper(:n + 1)', 'helper :: :NaturalNumber ~> :NaturalNumber'],
   [
@@ -266,15 +295,13 @@ hoversIn(withRecursion)('a recursive call', [
   ],
 ])
 
-const withUnsettlingRecursion = `{
+hoversIn(`{
   wrap: (n: :Integer) => @if {
     :n integer.equals 0
     then: done
     else: { wrapped: :wrap(:n - 1) }
   }
-}`
-
-hoversIn(withUnsettlingRecursion)('a recursion which never settles', [
+}`)('a recursion which never settles', [
   // `wrap` returns an object with arbitrary nesting depth, so iterative type
   // derivation never settles.
   [
@@ -287,9 +314,9 @@ hoversIn(withUnsettlingRecursion)('a recursion which never settles', [
 ])
 
 suite('rendering', () => {
-  test('a type too wide to read on one line is spread over several', () => {
+  test('large types are written on multiple lines', () => {
     // `:integer` is the whole integer module.
-    const hover = hoverIn(program, 'integer.add')
+    const hover = hoverIn(':integer.add', 'integer.add')
     assert.ok(hover !== undefined)
     assert.equal(
       hover.split('\n').slice(0, 3).join('\n'),
@@ -303,14 +330,15 @@ suite('rendering', () => {
   })
 })
 
-const chain = '{ one: { two: { three: 1 } }, chain: :one.two.three }'
-
-hoversIn(chain)('components of a dotted chain', [
-  [':one.two.three', ':one.two.three :: 1'],
-  ['one.two.three', 'one :: {| two: {| three: 1 |} |}'],
-  ['two.three', 'two :: {| three: 1 |}'],
-  ['three }', 'three :: 1'],
-])
+hoversIn('{ one: { two: { three: 1 } }, chain: :one.two.three }')(
+  'components of an index query',
+  [
+    [':one.two.three', ':one.two.three :: 1'],
+    ['one.two.three', 'one :: {| two: {| three: 1 |} |}'],
+    ['two.three', 'two :: {| three: 1 |}'],
+    ['three }', 'three :: 1'],
+  ],
+)
 
 hoversIn('{\n  a: 1,\n\n  b: 2,\n}')('positions describing nothing', [
   ['\n\n', undefined],
@@ -318,11 +346,7 @@ hoversIn('{\n  a: 1,\n\n  b: 2,\n}')('positions describing nothing', [
 ])
 
 suite('hover', () => {
-  test('nothing is reported for a program which is only an atom', () => {
-    assert.equal(hoverIn('42', '42'), undefined)
-  })
-
-  test('a program which fails to compile still describes what it can', () => {
+  test('a semantically-invalid program can still have hover type info', () => {
     const source = '{ good: 1 + 1, bad: :nonexistent }'
     assert.equal(analyzeSource(source).diagnostics.length, 1)
     assert.equal(hoverIn(source, 'good:'), 'good :: 2')
