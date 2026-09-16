@@ -8,7 +8,12 @@ import type {
   ParseError,
   RuntimeError,
 } from './language/errors.js'
-import type { Atom, Molecule, SyntaxTree } from './language/parsing.js'
+import {
+  emptyExpressionSpans,
+  type Atom,
+  type Molecule,
+  type SyntaxTree,
+} from './language/parsing.js'
 import { parse } from './language/parsing/parser.js'
 import { evaluate } from './language/runtime.js'
 import {
@@ -106,7 +111,7 @@ export const toSyntaxTree = (input: JsonValue): SyntaxTree =>
     )
 
 export const compileWithoutSpans = (syntaxTree: SyntaxTree) =>
-  compile(defaultConfiguration)(syntaxTree, new Map())
+  compile(defaultConfiguration)(syntaxTree, emptyExpressionSpans)
 
 export const parseAndCompileAndRun = (input: string): ProgramResult => {
   const syntaxTree = parse(input)

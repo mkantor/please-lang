@@ -4,12 +4,7 @@ import { withPhantomData, type WithPhantomData } from '../../phantom-data.js'
 import type { Writable } from '../../utility-types.js'
 import type { Configuration } from '../configuration.js'
 import type { ElaborationError, InvalidSyntaxTreeError } from '../errors.js'
-import type {
-  Atom,
-  ExpressionSpansByLocation,
-  Molecule,
-  SyntaxTree,
-} from '../parsing.js'
+import type { Atom, ExpressionSpans, Molecule, SyntaxTree } from '../parsing.js'
 import {
   asSemanticGraph,
   isSemanticGraph,
@@ -78,7 +73,7 @@ export type ExpressionContext = {
    * path (matching `location`). This is used to attach spans to errors. It's
    * absent when elaborating from a sourceless origin.
    */
-  readonly sourceSpans?: ExpressionSpansByLocation | undefined
+  readonly sourceSpans?: ExpressionSpans | undefined
   /**
    * `location` is typically both the origin for `@lookup`s and the prefix for
    * cache keys, but a few inference sites run with `location` pointing at a
@@ -160,7 +155,7 @@ export const elaborate =
   (
     program: SyntaxTree,
     keywordHandlers: KeywordHandlers,
-    spans?: ExpressionSpansByLocation,
+    spans?: ExpressionSpans,
   ): Either<ElaborationError, ElaboratedSemanticGraph> =>
     elaborateWithContext(
       program,
@@ -179,7 +174,7 @@ export const makeInitialElaborationContext = (
   configuration: Configuration,
   program: SyntaxTree,
   keywordHandlers: KeywordHandlers,
-  spans?: ExpressionSpansByLocation,
+  spans?: ExpressionSpans,
 ): ExpressionContext => ({
   configuration,
   keywordHandlers,
@@ -558,7 +553,7 @@ export const attachSpanIfAbsent =
  * expression when the exact node has no recorded span.
  */
 const spanForLocation = (
-  spans: ExpressionSpansByLocation | undefined,
+  spans: ExpressionSpans | undefined,
   location: KeyPath,
 ): Span | undefined =>
   spans === undefined ? undefined : (

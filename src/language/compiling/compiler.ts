@@ -1,7 +1,7 @@
 import either, { type Either } from '@matt.kantor/either'
 import type { Configuration } from '../configuration.js'
 import type { CompilationError } from '../errors.js'
-import type { ExpressionSpansByLocation, SyntaxTree } from '../parsing.js'
+import type { ExpressionSpans, SyntaxTree } from '../parsing.js'
 import {
   elaborateWithContext,
   makeInitialElaborationContext,
@@ -18,10 +18,7 @@ export type CompilationWithContext = {
 
 export const compileWithContext =
   (configuration: Configuration) =>
-  (
-    syntaxTree: SyntaxTree,
-    spans: ExpressionSpansByLocation,
-  ): CompilationWithContext => {
+  (syntaxTree: SyntaxTree, spans: ExpressionSpans): CompilationWithContext => {
     const context = makeInitialElaborationContext(
       configuration,
       syntaxTree,
@@ -41,6 +38,6 @@ export const compile =
   (configuration: Configuration) =>
   (
     syntaxTree: SyntaxTree,
-    spans: ExpressionSpansByLocation,
+    spans: ExpressionSpans,
   ): Either<CompilationError, Output> =>
     compileWithContext(configuration)(syntaxTree, spans).output

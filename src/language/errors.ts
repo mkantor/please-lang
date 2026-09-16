@@ -1,9 +1,18 @@
 import type { Span } from './source-location.js'
 
+/**
+ * A secondary region of source which helps explain an error.
+ */
+export type RelatedSpan = {
+  readonly message: string
+  readonly span: Span
+}
+
 export type BadSyntax = {
   readonly kind: 'badSyntax'
   readonly message: string
   readonly span: Span
+  readonly relatedSpans: readonly RelatedSpan[]
 }
 
 export type Bug = {

@@ -1,4 +1,5 @@
 import { map, oneOf, sequence, type Parser } from '@matt.kantor/parsing'
+import { notingUnclosedDelimiter } from './delimiters.js'
 import { closingParenthesis, openingParenthesis } from './literals.js'
 import { optionalTrivia } from './trivia.js'
 
@@ -24,14 +25,18 @@ export const optionallySurroundedByParentheses = <Output>(
 export const surroundedByParentheses = <Output>(
   theParser: Parser<Output>,
 ): Parser<Output> =>
-  map(
-    sequence([
-      openingParenthesis,
-      optionalTrivia,
-      theParser,
-      optionalTrivia,
-      closingParenthesis,
-    ]),
-    ([_openParenthesis, _trivia1, output, _trivia2, _closeParenthesis]) =>
-      output,
+  notingUnclosedParenthesis(
+    map(
+      sequence([
+        openingParenthesis,
+        optionalTrivia,
+        theParser,
+        optionalTrivia,
+        closingParenthesis,
+      ]),
+      ([_openParenthesis, _trivia1, output, _trivia2, _closeParenthesis]) =>
+        output,
+    ),
   )
+
+const notingUnclosedParenthesis = notingUnclosedDelimiter('(', ')')

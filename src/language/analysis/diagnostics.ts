@@ -1,5 +1,5 @@
 import { stripVTControlCharacters } from 'node:util'
-import type { CompilationError, ParseError } from '../errors.js'
+import type { CompilationError, ParseError, RelatedSpan } from '../errors.js'
 import type { Span } from '../source-location.js'
 
 export type DiagnosticSeverity = 'error' | 'warning' | 'information' | 'hint'
@@ -9,6 +9,7 @@ export type Diagnostic = {
   readonly code: (ParseError | CompilationError)['kind']
   readonly message: string
   readonly span: Span
+  readonly relatedSpans: readonly RelatedSpan[]
 }
 
 export const diagnosticFromError = (
@@ -19,4 +20,15 @@ export const diagnosticFromError = (
   // Messages may contain ANSI escape sequences.
   message: stripVTControlCharacters(error.message),
   span: error.span ?? [0, 0],
+  relatedSpans: relatedSpansOf(error),
 })
+
+const relatedSpansOf = (
+  error: ParseError | CompilationError,
+): readonly RelatedSpan[] =>
+  error.kind !== 'badSyntax' ?
+    []
+  : error.relatedSpans.map(related => ({
+      message: stripVTControlCharacters(related.message),
+      span: related.span,
+    }))
