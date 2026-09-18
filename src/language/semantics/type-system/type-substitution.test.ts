@@ -792,6 +792,26 @@ supplyTypeArgumentSuite(
   ],
 )
 
+const conditionStuckOnA = makeApplicationType(
+  makeFunctionType({ parameter: A, return: makeUnionType(['true']) }),
+  atom,
+  new Set([A.identity]),
+)
+const branchesByCondition = makeObjectType({ false: atom, true: integer })
+const stuckConditional = makeIndexedAccessType(
+  branchesByCondition,
+  conditionStuckOnA,
+)
+
+supplyTypeArgumentSuite('supplying type arguments within indexed accesses', [
+  // `stuckConditional` is stuck on `A`, not `B`, so this stays stuck.
+  [[stuckConditional, B, atom], stuckConditional],
+
+  [[stuckConditional, A, atom], integer],
+
+  [[makeIndexedAccessType(branchesByCondition, A), A, nothing], nothing],
+])
+
 const containedTypeParametersSuite = testCases(
   (type: Type) => [
     ...containedTypeParameters(type)

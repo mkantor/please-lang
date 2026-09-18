@@ -1498,6 +1498,41 @@ testCases(
 
   [
     `{
+      outer: (limit: :NaturalNumber) =>
+        (@if { 1 integer.equals :limit, then: hello, else: world }) ~ 42
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      outer: (limit: :NaturalNumber) =>
+        (@if { 1 integer.equals :limit, then: hello, else: world })
+          ~ (hello | world)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      outer: (limit: :NaturalNumber) =>
+        :integer.add(@if { 1 > :limit, then: hello, else: world })(1)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       lookup_within: (object: (?o: { a: :Something })) => :object.a
       :lookup_within(@runtime { _ => { a: true } }) ~ true
     }`,
