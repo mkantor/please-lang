@@ -582,6 +582,10 @@ export const effectiveExcessClauses = (
     [{ keys: atom, values: something }, ...excess]
   )
 
+export const typesAreEquivalent = (first: Type, second: Type): boolean =>
+  isAssignable({ source: first, target: second }) &&
+  isAssignable({ source: second, target: first })
+
 /**
  * Removes redundancies and otherwise attempts to reduce the number of members
  * in a union while preserving the semantics of the given `UnionType`.
@@ -603,10 +607,6 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
     typeof member !== 'string' && member.kind === 'object'
   const isMergeable = (member: ObjectType) =>
     Object.keys(member.children).length === 1
-
-  const typesAreEquivalent = (first: Type, second: Type): boolean =>
-    isAssignable({ source: first, target: second }) &&
-    isAssignable({ source: second, target: first })
 
   const excessBoundsAgree = (
     first: ObjectType['excess'],

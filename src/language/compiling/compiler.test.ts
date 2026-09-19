@@ -1498,6 +1498,94 @@ testCases(
 
   [
     `{
+      count_down: (n: :Integer) =>
+        @if { :n integer.equals 0, then: done, else: :count_down(:n - 1) }
+      :count_down ~ (:Integer ~> done)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      count_down: (n: :Integer) =>
+        @if { :n integer.equals 0, then: done, else: :count_down(:n - 1) }
+      :count_down ~ (:Integer ~> nope)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      even: (n: :Integer) =>
+        @if { :n integer.equals 0, then: yes, else: :odd(:n - 1) }
+      odd: (n: :Integer) =>
+        @if { :n integer.equals 0, then: no, else: :even(:n - 1) }
+      :even ~ (:Integer ~> yes | no)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (a: :Integer) => (callback: :Integer ~> :Integer) =>
+        @if { :a integer.equals 0, then: done, else: :f(:a - 1)(n => :callback(:n)) }
+      :f ~ (:Integer ~> (:Integer ~> :Integer) ~> done)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      accumulate: (state: {
+        count: :NaturalNumber
+        output: { [:Atom]: :Atom }
+      }) => @if {
+        :state.count > 2
+        then: :state.output
+        else: :accumulate({
+          count: :state.count + 1
+          output: :state.output object.overlay :object.from_property(:state.count)(x)
+        })
+      }
+      :accumulate ~ ({ count: :NaturalNumber, output: { [:Atom]: :Atom } } ~> { [:Atom]: :Atom })
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{ f: (g: :f) => :g }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      wrap: (n: :Integer) =>
+        @if { :n integer.equals 0, then: done, else: { wrapped: :wrap(:n - 1) } }
+      :wrap ~ (:Integer ~> done)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       outer: (limit: :NaturalNumber) =>
         (@if { 1 integer.equals :limit, then: hello, else: world }) ~ 42
     }`,

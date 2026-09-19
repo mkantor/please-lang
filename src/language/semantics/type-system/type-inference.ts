@@ -42,11 +42,21 @@ import {
   readExcessClauses,
   readObjectTypeExpression,
 } from '../expressions/object-type-expression.js'
-import { isObjectNode } from '../object-node.js'
+import { isObjectNode, type ObjectNode } from '../object-node.js'
 import { genericizeFunctionParameterAnnotation } from './genericize-function-parameter.js'
+import {
+  alsoAssuming,
+  flatMapInferred,
+  inferredValue,
+  mapInferred,
+  sequenceInferred,
+  usingNoAssumptions,
+  withoutAssumption,
+  type InferenceResult,
+} from './inference-result.js'
 import { typeFromSemanticGraph } from './literal-type.js'
 import * as types from './prelude-types.js'
-import { effectiveExcessClauses } from './subtyping.js'
+import { effectiveExcessClauses, typesAreEquivalent } from './subtyping.js'
 import { makeApplicationType } from './type-formats/application-type.js'
 import { makeFunctionType } from './type-formats/function-type.js'
 import { makeIndexedAccessType } from './type-formats/indexed-access-type.js'
@@ -57,10 +67,12 @@ import type { Type } from './type-formats/type.js'
 import { isBottomType, isCanonicalTopType } from './type-formats/type.js'
 import { makeUnionType, unionOfTypes } from './type-formats/union-type.js'
 import {
+  atomKeyPathComponentFromType,
   functionParameterKey,
   stringifyTypeKeyPathForEndUser,
   stringifyTypeKeyPathForInternalUse,
-  typeKeyPathFromObjectNode,
+  type TypeKeyPath,
+  type TypeKeyPathStringifiedForInternalUse as TypeKeyPathAsString,
 } from './type-key-path.js'
 import {
   containedTypeParameters,
@@ -82,18 +94,7 @@ import {
 export const resolveParameterTypes = (
   context: ExpressionContext,
 ): Either<ElaborationError, ReadonlyMap<Atom, Type>> =>
-  either.map(resolveEnclosingFunctionParameters(context), enclosingParameters =>
-    enclosingParameters.reduce(
-      (parameterTypes, { parameterName, parameterTypeInfo }) =>
-        parameterTypes.has(parameterName) ? parameterTypes : (
-          new Map([
-            ...parameterTypes,
-            [parameterName, parameterTypeInfo.parameterType],
-          ])
-        ),
-      new Map<Atom, Type>(),
-    ),
-  )
+  resolveParameterTypesAssuming(context, noTypeAssumptions)
 
 /**
  * The identities of all type parameters which are rigid at the given
@@ -104,7 +105,7 @@ export const rigidTypeParameterIdentities = (
   context: ExpressionContext,
 ): Either<ElaborationError, ReadonlySet<symbol>> =>
   either.map(
-    resolveEnclosingFunctionParameters(context),
+    resolveEnclosingFunctionParameters(context, noTypeAssumptions),
     enclosingParameters =>
       new Set(
         enclosingParameters.flatMap(({ parameterTypeInfo }) => [
@@ -117,9 +118,7 @@ export const inferType = (
   node: SemanticGraph,
   context: ExpressionContext,
 ): Either<ElaborationError, Type> =>
-  either.flatMap(resolveParameterTypes(context), parameterTypes =>
-    inferTypeImplementation(node, parameterTypes, new Set(), context),
-  )
+  inferTypeAssuming(node, context, noTypeAssumptions)
 
 /**
  * Like `inferType`, but for a `node` occurring in a type annotation (e.g. a
@@ -139,53 +138,230 @@ export const inferTypeOfTypeAnnotation = (
   node: SemanticGraph,
   context: ExpressionContext,
 ): Either<ElaborationError, Type> =>
-  either.flatMap(resolveParameterTypes(context), parameterTypes =>
-    inferTypeOfTypeAnnotationImplementation(
+  inferTypeOfTypeAnnotationAssuming(node, context, noTypeAssumptions)
+
+/**
+ * Turns an object like `{a,b,c}` into a `TypeKeyPath` like `['a','b','c']`.
+ */
+export const typeKeyPathFromObjectNode = (
+  node: ObjectNode,
+  context: ExpressionContext,
+): Either<ElaborationError, TypeKeyPath> =>
+  inferredValue(
+    typeKeyPathFromObjectNodeImplementation(
       node,
-      parameterTypes,
-      new Set(),
       context,
+      (component, componentContext) =>
+        either.map(inferType(component, componentContext), usingNoAssumptions),
     ),
   )
+
+const typeKeyPathFromObjectNodeImplementation = (
+  node: ObjectNode,
+  context: ExpressionContext,
+  inferComponentType: (
+    component: SemanticGraph,
+    contextOfComponent: ExpressionContext,
+  ) => InferenceResult<Type>,
+): InferenceResult<TypeKeyPath> =>
+  // Each sequentially-keyed property is either a literal atom or a dynamic key
+  // whose type must be an atom or union of atoms.
+  sequenceInferred(
+    Object.entries(node).map(
+      ([key, component]): InferenceResult<TypeKeyPath[number]> =>
+        typeof component === 'string' ?
+          either.makeRight(usingNoAssumptions(component))
+        : flatMapInferred(
+            inferComponentType(
+              component,
+              contextWithinExpression(context, [key]),
+            ),
+            componentType =>
+              either.map(
+                atomKeyPathComponentFromType(componentType),
+                usingNoAssumptions,
+              ),
+          ),
+    ),
+  )
+
+/**
+ * Temporarily-assumed inference results while types are being derived.
+ */
+type TypeAssumptions = ReadonlyMap<TypeKeyPathAsString, Type>
+
+const noTypeAssumptions: TypeAssumptions = new Map()
+
+const inferenceCacheKey = (context: ExpressionContext): TypeKeyPathAsString =>
+  stringifyTypeKeyPathForInternalUse(
+    context.cacheKeyPrefixOverride ?? context.location,
+  )
+
+const cacheIfAssumptionFree = (
+  result: InferenceResult<Type>,
+  cache: ExpressionContext['mutableInferenceCache'],
+  cacheKey: TypeKeyPathAsString,
+): InferenceResult<Type> =>
+  either.map(result, inferred => {
+    if (inferred.assumptionsUsed.size === 0) {
+      cache.set(cacheKey, inferred.value)
+    }
+    return inferred
+  })
+
+/**
+ * Build context for a node at `subPath` within the expression `context` is for.
+ *
+ * Warning: Call sites are coupled to specific expression structures and
+ * TypeScript won't warn you if things become mis-aligned. Pay special
+ * attention whenever an expression shape is revised.
+ */
+const contextWithinExpression = (
+  context: ExpressionContext,
+  subPath: KeyPath,
+): ExpressionContext => ({
+  ...context,
+  location: [...context.location, ...subPath],
+  cacheKeyPrefixOverride:
+    context.cacheKeyPrefixOverride === undefined ?
+      undefined
+    : [...context.cacheKeyPrefixOverride, ...subPath],
+})
+
+const resolveParameterTypesAssuming = (
+  context: ExpressionContext,
+  assumptions: TypeAssumptions,
+): Either<ElaborationError, ReadonlyMap<Atom, Type>> =>
+  either.map(
+    resolveEnclosingFunctionParameters(context, assumptions),
+    enclosingParameters =>
+      enclosingParameters.reduce(
+        (parameterTypes, { parameterName, parameterTypeInfo }) =>
+          parameterTypes.has(parameterName) ? parameterTypes : (
+            new Map([
+              ...parameterTypes,
+              [parameterName, parameterTypeInfo.parameterType],
+            ])
+          ),
+        new Map<Atom, Type>(),
+      ),
+  )
+
+const inferTypeAssuming = (
+  node: SemanticGraph,
+  context: ExpressionContext,
+  assumptions: TypeAssumptions,
+): Either<ElaborationError, Type> =>
+  either.flatMap(
+    resolveParameterTypesAssuming(context, assumptions),
+    parameterTypes =>
+      inferredValue(
+        inferTypeImplementation(node, parameterTypes, assumptions, context),
+      ),
+  )
+
+const inferTypeOfTypeAnnotationAssuming = (
+  node: SemanticGraph,
+  context: ExpressionContext,
+  assumptions: TypeAssumptions,
+): Either<ElaborationError, Type> =>
+  either.flatMap(
+    resolveParameterTypesAssuming(context, assumptions),
+    parameterTypes =>
+      inferredValue(
+        inferTypeOfTypeAnnotationImplementation(
+          node,
+          parameterTypes,
+          assumptions,
+          context,
+        ),
+      ),
+  )
+
+/**
+ * A recursive definition's type can't be naively inferred from its body because
+ * that'd never terminate. The type is therefore first derived assuming
+ * `pending` for itself, which reveals whether it's recursive. If so, it's
+ * re-derived assuming the bottom type, and again from whatever that produced,
+ * repeated until the answer stabilizes.
+ *
+ * Assumed types are monomorphic (type parameters could leave the body stuck).
+ */
+const inferTypeOfDefinition = (
+  definitionKeyPathAsString: TypeKeyPathAsString,
+  definition: SemanticGraph,
+  parameterTypes: ReadonlyMap<Atom, Type>,
+  assumptions: TypeAssumptions,
+  context: ExpressionContext,
+): InferenceResult<Type> => {
+  const inferAssuming = (assumption: Type): InferenceResult<Type> =>
+    inferTypeImplementation(
+      definition,
+      parameterTypes,
+      new Map([...assumptions, [definitionKeyPathAsString, assumption]]),
+      context,
+    )
+
+  const withoutIteration = inferAssuming(types.pending)
+
+  const iterate = (
+    assumption: Type,
+    round: number,
+    assumptionsUsedSoFar: ReadonlySet<TypeKeyPathAsString>,
+  ): InferenceResult<Type> => {
+    const result = alsoAssuming(inferAssuming(assumption), assumptionsUsedSoFar)
+    return either.match(result, {
+      // Fall back to whatever the definition inferred to without iterating.
+      left: _ => alsoAssuming(withoutIteration, new Set(assumptions.keys())),
+      right: ({ value: type, assumptionsUsed }) => {
+        const monomorphicType =
+          replaceAllTypeParametersWithTheirConstraints(type)
+        if (typesAreEquivalent(monomorphicType, assumption)) {
+          return result
+        } else if (round >= context.configuration.recursiveTypeIterationLimit) {
+          // The limit was exceeded without stabilizing. Fall back to whatever
+          // the definition inferred to without iterating.
+          return alsoAssuming(withoutIteration, assumptionsUsed)
+        } else {
+          return iterate(monomorphicType, round + 1, assumptionsUsed)
+        }
+      },
+    })
+  }
+
+  const derived = either.flatMap(withoutIteration, ({ assumptionsUsed }) =>
+    assumptionsUsed.has(definitionKeyPathAsString) ?
+      iterate(types.nothing, 1, assumptionsUsed)
+    : withoutIteration,
+  )
+
+  // Once settled, the type no longer uses the definition's assumption.
+  return cacheIfAssumptionFree(
+    withoutAssumption(derived, definitionKeyPathAsString),
+    context.mutableInferenceCache,
+    inferenceCacheKey(context),
+  )
+}
 
 const inferTypeImplementation = (
   node: SemanticGraph,
   parameterTypes: ReadonlyMap<Atom, Type>,
-  lookingUpKeys: ReadonlySet<Atom>,
+  assumptions: TypeAssumptions,
   context: ExpressionContext,
-): Either<ElaborationError, Type> => {
-  const cacheKey = stringifyTypeKeyPathForInternalUse(
-    context.cacheKeyPrefixOverride ?? context.location,
-  )
+): InferenceResult<Type> => {
+  const cacheKey = inferenceCacheKey(context)
   const cached = context.mutableInferenceCache.get(cacheKey)
   if (cached !== undefined) {
-    return either.makeRight(cached)
+    return either.makeRight(usingNoAssumptions(cached))
   }
 
   const cacheOnSuccess = (
-    result: Either<ElaborationError, Type>,
-  ): Either<ElaborationError, Type> =>
-    either.map(result, type => {
-      context.mutableInferenceCache.set(cacheKey, type)
-      return type
-    })
+    result: InferenceResult<Type>,
+  ): InferenceResult<Type> =>
+    cacheIfAssumptionFree(result, context.mutableInferenceCache, cacheKey)
 
-  /**
-   * Build context for a descendant node by appending `subPath` to
-   * `context.location`.
-   *
-   * Warning: Call sites are coupled to specific expression structures and
-   * TypeScript won't warn you if things become mis-aligned. Pay special
-   * attention whenever an expression shape is revised.
-   */
-  const descendantContext = (subPath: KeyPath): ExpressionContext => ({
-    ...context,
-    location: [...context.location, ...subPath],
-    cacheKeyPrefixOverride:
-      context.cacheKeyPrefixOverride === undefined ?
-        undefined
-      : [...context.cacheKeyPrefixOverride, ...subPath],
-  })
+  const descendantContext = (subPath: KeyPath): ExpressionContext =>
+    contextWithinExpression(context, subPath)
 
   if (
     typeof node === 'string' ||
@@ -193,7 +369,10 @@ const inferTypeImplementation = (
     typeof node === 'function'
   ) {
     return cacheOnSuccess(
-      typeFromSemanticGraph(node, { objectsAreExact: false }),
+      either.map(
+        typeFromSemanticGraph(node, { objectsAreExact: false }),
+        usingNoAssumptions,
+      ),
     )
   }
 
@@ -203,9 +382,13 @@ const inferTypeImplementation = (
   if (either.isRight(functionExpressionResult)) {
     return cacheOnSuccess(
       either.flatMap(
-        getFunctionParameterType(functionExpressionResult.value, context),
+        getFunctionParameterType(
+          functionExpressionResult.value,
+          context,
+          assumptions,
+        ),
         parameterTypeInfo =>
-          either.map(
+          mapInferred(
             inferTypeImplementation(
               functionExpressionResult.value[1].body,
               new Map([
@@ -215,7 +398,7 @@ const inferTypeImplementation = (
                   parameterTypeInfo.parameterType,
                 ],
               ]),
-              lookingUpKeys,
+              assumptions,
               descendantContext(['1', 'body']),
             ),
             returnType =>
@@ -235,60 +418,77 @@ const inferTypeImplementation = (
     const key = lookupExpressionResult.value[1].key
     const paramType = parameterTypes.get(key)
     if (paramType !== undefined) {
-      return cacheOnSuccess(either.makeRight(paramType))
-    } else if (!lookingUpKeys.has(key)) {
+      return cacheOnSuccess(either.makeRight(usingNoAssumptions(paramType)))
+    } else {
       const lookupResult = lookup({ key, context, inlineSelfReferences: true })
       if (either.isRight(lookupResult) && option.isSome(lookupResult.value)) {
         const { foundValue, foundLocation, foundHole, foundIsSelfReference } =
           lookupResult.value.value
-        const innerResult = option.match(foundHole, {
-          // The hole lives in an enclosing parameter annotation. Infer it here
-          // so its constraint is resolved in the current scope. The result is
-          // the hole's type, which is the same as this `@lookup`'s type, so
-          // caching both under this location is consistent.
-          some: holeExpression =>
-            inferTypeImplementation(
-              holeExpression,
-              parameterTypes,
-              new Set([...lookingUpKeys, key]),
-              context,
-            ),
-          none: _ =>
-            inferTypeImplementation(
-              foundValue,
-              parameterTypes,
-              new Set([...lookingUpKeys, key]),
-              foundLocation === 'prelude' ?
-                {
-                  ...context,
-                  // Prelude values exist outside the program, so use an
-                  // artificial key. `@` can't be a real key (it'd be escaped as
-                  // `@@`), so this can't collide with an actual location.
-                  cacheKeyPrefixOverride: ['@', key],
-                }
-              : {
-                  ...context,
-                  location: foundLocation,
-                  cacheKeyPrefixOverride: undefined,
-                },
-            ),
-        })
-        const resultWithMonomorphicSelfReference = either.map(
-          innerResult,
-          inferredType =>
-            foundIsSelfReference ?
-              replaceAllTypeParametersWithTheirConstraints(inferredType)
-            : inferredType,
-        )
-        return cacheOnSuccess(resultWithMonomorphicSelfReference)
+        // Prelude values exist outside the program, so use an artificial key.
+        // `@` can't be a real key (it'd be escaped as `@@`), so this can't
+        // collide with an actual location.
+        const definitionKeyPath =
+          foundLocation === 'prelude' ? ['@', key] : foundLocation
+        const definitionKeyPathAsString =
+          stringifyTypeKeyPathForInternalUse(definitionKeyPath)
+        const assumption = assumptions.get(definitionKeyPathAsString)
+        if (assumption !== undefined) {
+          // Inference has re-entered a definition it's already deriving, so
+          // its type is still an assumption.
+          return either.makeRight({
+            value: assumption,
+            assumptionsUsed: new Set([definitionKeyPathAsString]),
+          })
+        } else {
+          const innerResult = option.match(foundHole, {
+            some: holeExpression =>
+              // The hole lives in an enclosing parameter annotation. Infer it
+              // here so its constraint is resolved in the current scope. The
+              // result is the hole's type, which is the same as this
+              // `@lookup`'s type, so caching both under this location is
+              // consistent.
+              withoutAssumption(
+                inferTypeImplementation(
+                  holeExpression,
+                  parameterTypes,
+                  new Map([
+                    ...assumptions,
+                    [definitionKeyPathAsString, types.pending],
+                  ]),
+                  context,
+                ),
+                definitionKeyPathAsString,
+              ),
+            none: _ =>
+              // The looked-up value was not a hole. Infer its type, using
+              // `inferTypeOfDefinition` to handle recursive situations.
+              inferTypeOfDefinition(
+                definitionKeyPathAsString,
+                foundValue,
+                parameterTypes,
+                assumptions,
+                foundLocation === 'prelude' ?
+                  { ...context, cacheKeyPrefixOverride: definitionKeyPath }
+                : {
+                    ...context,
+                    location: definitionKeyPath,
+                    cacheKeyPrefixOverride: undefined,
+                  },
+              ),
+          })
+          const resultWithMonomorphicSelfReference = mapInferred(
+            innerResult,
+            inferredType =>
+              foundIsSelfReference ?
+                replaceAllTypeParametersWithTheirConstraints(inferredType)
+              : inferredType,
+          )
+          return cacheOnSuccess(resultWithMonomorphicSelfReference)
+        }
       } else {
         // Fall back to the top type.
-        return either.makeRight(types.something)
+        return either.makeRight(usingNoAssumptions(types.something))
       }
-    } else {
-      // Inference has re-entered a key it is already resolving, so this is a
-      // recursive definition whose type isn't known yet.
-      return either.makeRight(types.pending)
     }
   }
 
@@ -297,24 +497,24 @@ const inferTypeImplementation = (
   if (either.isRight(indexExpressionResult)) {
     const query = indexExpressionResult.value[1].query
     return cacheOnSuccess(
-      either.flatMap(
+      flatMapInferred(
         inferTypeImplementation(
           indexExpressionResult.value[1].object,
           parameterTypes,
-          lookingUpKeys,
+          assumptions,
           descendantContext(['1', 'object']),
         ),
         objectType =>
-          either.flatMap(
-            typeKeyPathFromObjectNode(
+          flatMapInferred(
+            typeKeyPathFromObjectNodeImplementation(
               query,
               descendantContext(['1', 'query']),
-              (node, context) =>
+              (component, contextOfComponent) =>
                 inferTypeImplementation(
-                  node,
+                  component,
                   parameterTypes,
-                  lookingUpKeys,
-                  context,
+                  assumptions,
+                  contextOfComponent,
                 ),
             ),
             keyPath =>
@@ -328,7 +528,8 @@ const inferTypeImplementation = (
                       objectType,
                     )}\``,
                   }),
-                some: either.makeRight,
+                some: indexedType =>
+                  either.makeRight(usingNoAssumptions(indexedType)),
               }),
           ),
       ),
@@ -354,7 +555,7 @@ const inferTypeImplementation = (
               types.runtimeContext,
             ],
           ]),
-          lookingUpKeys,
+          assumptions,
           descendantContext(['1', 'function', '1', 'body']),
         ),
       )
@@ -372,11 +573,14 @@ const inferTypeImplementation = (
     const inferredFunctionType = inferTypeImplementation(
       applyExpressionResult.value[1].function,
       parameterTypes,
-      lookingUpKeys,
+      assumptions,
       descendantContext(['1', 'function']),
     )
     if (either.isRight(inferredFunctionType)) {
-      const appliedFunctionType = inferredFunctionType.value
+      const {
+        value: appliedFunctionType,
+        assumptionsUsed: assumptionsUsedByFunction,
+      } = inferredFunctionType.value
 
       return option.match(applicableFunctionSignatures(appliedFunctionType), {
         some: signatures => {
@@ -398,15 +602,19 @@ const inferTypeImplementation = (
           const argumentTypeResult = inferTypeImplementation(
             applyExpressionResult.value[1].argument,
             parameterTypes,
-            lookingUpKeys,
+            assumptions,
             descendantContext(['1', 'argument']),
           )
           if (either.isRight(argumentTypeResult)) {
+            const {
+              value: argumentType,
+              assumptionsUsed: assumptionsUsedByArgument,
+            } = argumentTypeResult.value
             // Supply type arguments to the return type based on the inferred
             // argument type.
             const typeArguments = getTypesForTypeParameters({
               parameterType: combinedParameterType,
-              argumentType: argumentTypeResult.value,
+              argumentType,
             })
             const eagerReturnType = supplyTypeArguments(
               combinedReturnType,
@@ -458,21 +666,39 @@ const inferTypeImplementation = (
                     !boundTypeParameters.has(identity),
                 )
             return cacheOnSuccess(
-              either.makeRight(
-                applicationIsStuck ?
-                  makeApplicationType(
-                    appliedFunctionType,
-                    argumentTypeResult.value,
-                    parametersStuckOn,
-                  )
-                : eagerReturnType,
-              ),
+              either.makeRight({
+                value:
+                  applicationIsStuck ?
+                    makeApplicationType(
+                      appliedFunctionType,
+                      argumentType,
+                      parametersStuckOn,
+                    )
+                  : eagerReturnType,
+                assumptionsUsed: assumptionsUsedByFunction.union(
+                  assumptionsUsedByArgument,
+                ),
+              }),
             )
           } else {
-            return cacheOnSuccess(either.makeRight(combinedReturnType))
+            // Could not infer the argument type. We don't know why it failed,
+            // so pessimistically consider all assumptions used.
+            return cacheOnSuccess(
+              either.makeRight({
+                value: combinedReturnType,
+                assumptionsUsed: new Set(assumptions.keys()),
+              }),
+            )
           }
         },
-        none: _ => either.makeRight(types.something),
+        none: _ =>
+          either.makeRight({
+            value:
+              isBottomType(appliedFunctionType) ?
+                types.nothing
+              : types.something,
+            assumptionsUsed: assumptionsUsedByFunction,
+          }),
       })
     }
   }
@@ -487,23 +713,23 @@ const inferTypeImplementation = (
       inferTypeImplementation(
         then,
         parameterTypes,
-        lookingUpKeys,
+        assumptions,
         descendantContext(['1', 'then']),
       )
     const inferElse = () =>
       inferTypeImplementation(
         otherwise,
         parameterTypes,
-        lookingUpKeys,
+        assumptions,
         descendantContext(['1', 'else']),
       )
 
     return cacheOnSuccess(
-      either.flatMap(
+      flatMapInferred(
         inferTypeImplementation(
           condition,
           parameterTypes,
-          lookingUpKeys,
+          assumptions,
           descendantContext(['1', 'condition']),
         ),
         conditionType => {
@@ -522,8 +748,8 @@ const inferTypeImplementation = (
             // ```
             // { true: b, false: c }.:a
             // ```
-            return either.flatMap(inferThen(), thenType =>
-              either.map(inferElse(), elseType =>
+            return flatMapInferred(inferThen(), thenType =>
+              mapInferred(inferElse(), elseType =>
                 makeIndexedAccessType(
                   makeObjectType({ false: elseType, true: thenType }),
                   conditionType,
@@ -531,8 +757,8 @@ const inferTypeImplementation = (
               ),
             )
           } else {
-            return either.flatMap(inferThen(), thenType =>
-              either.map(inferElse(), elseType =>
+            return flatMapInferred(inferThen(), thenType =>
+              mapInferred(inferElse(), elseType =>
                 unionOfTypes([thenType, elseType]),
               ),
             )
@@ -549,7 +775,7 @@ const inferTypeImplementation = (
       inferTypeImplementation(
         checkExpressionResult.value[1].value,
         parameterTypes,
-        lookingUpKeys,
+        assumptions,
         descendantContext(['1', 'value']),
       ),
     )
@@ -560,7 +786,9 @@ const inferTypeImplementation = (
   if (either.isRight(todoExpressionResult)) {
     return cacheOnSuccess(
       either.makeRight(
-        makeObjectType({}, [{ keys: types.atom, values: types.nothing }]),
+        usingNoAssumptions(
+          makeObjectType({}, [{ keys: types.atom, values: types.nothing }]),
+        ),
       ),
     )
   }
@@ -568,20 +796,20 @@ const inferTypeImplementation = (
   // @panic: infer the bottom type.
   const panicExpressionResult = readPanicExpression(node)
   if (either.isRight(panicExpressionResult)) {
-    return cacheOnSuccess(either.makeRight(types.nothing))
+    return cacheOnSuccess(either.makeRight(usingNoAssumptions(types.nothing)))
   }
 
   // @union: infer each member as a type and combine them into a (flat) union.
   const unionExpressionResult = readUnionExpression(node)
   if (either.isRight(unionExpressionResult)) {
     return cacheOnSuccess(
-      either.map(
-        either.sequence(
+      mapInferred(
+        sequenceInferred(
           Object.entries(unionExpressionResult.value[1]).map(([key, member]) =>
             inferTypeImplementation(
               member,
               parameterTypes,
-              lookingUpKeys,
+              assumptions,
               descendantContext(['1', key]),
             ),
           ),
@@ -597,14 +825,14 @@ const inferTypeImplementation = (
     const objectTypeExpression = objectTypeExpressionResult.value
     const { properties } = objectTypeExpression[1]
     const inferExcessClauseKeys = (keys: SemanticGraph, index: number) =>
-      either.flatMap(
+      flatMapInferred(
         inferTypeOfTypeAnnotationImplementation(
           keys,
           parameterTypes,
-          lookingUpKeys,
+          assumptions,
           descendantContext(['1', 'excess', String(index), '0']),
         ),
-        (keysType): Either<ElaborationError, Type> =>
+        (keysType): InferenceResult<Type> =>
           // Keys must be concrete atom subtypes.
           containedTypeParameters(keysType).size > 0 ?
             either.makeLeft({
@@ -621,18 +849,18 @@ const inferTypeImplementation = (
                 types.atom,
               )}\``,
             })
-          : either.makeRight(keysType),
+          : either.makeRight(usingNoAssumptions(keysType)),
       )
     return cacheOnSuccess(
       either.flatMap(readExcessClauses(objectTypeExpression), clauses =>
-        either.flatMap(
-          either.sequence(
+        flatMapInferred(
+          sequenceInferred(
             Object.entries(properties).map(([key, propertyValue]) =>
-              either.map(
+              mapInferred(
                 inferTypeOfTypeAnnotationImplementation(
                   propertyValue,
                   parameterTypes,
-                  lookingUpKeys,
+                  assumptions,
                   descendantContext(['1', 'properties', key]),
                 ),
                 propertyType => [key, propertyType],
@@ -640,20 +868,26 @@ const inferTypeImplementation = (
             ),
           ),
           children =>
-            either.map(
-              either.sequence(
+            mapInferred(
+              sequenceInferred(
                 clauses.map((clause, index) =>
-                  either.map(
-                    either.sequence([
-                      inferExcessClauseKeys(clause[0], index),
-                      inferTypeOfTypeAnnotationImplementation(
-                        clause[1],
-                        parameterTypes,
-                        lookingUpKeys,
-                        descendantContext(['1', 'excess', String(index), '1']),
+                  flatMapInferred(
+                    inferExcessClauseKeys(clause[0], index),
+                    keys =>
+                      mapInferred(
+                        inferTypeOfTypeAnnotationImplementation(
+                          clause[1],
+                          parameterTypes,
+                          assumptions,
+                          descendantContext([
+                            '1',
+                            'excess',
+                            String(index),
+                            '1',
+                          ]),
+                        ),
+                        values => ({ keys, values }),
                       ),
-                    ]),
-                    ([keys, values]) => ({ keys, values }),
                   ),
                 ),
               ),
@@ -675,12 +909,12 @@ const inferTypeImplementation = (
     switch (getHoleConstraintSource(holeExpression)) {
       case 'expression':
         return cacheOnSuccess(
-          either.map(
+          mapInferred(
             // Constraints are type annotations (upper bounds).
             inferTypeOfTypeAnnotationImplementation(
               holeExpression[1].constraint.assignableTo,
               parameterTypes,
-              lookingUpKeys,
+              assumptions,
               descendantContext(['1', 'constraint', 'assignableTo']),
             ),
             resolvedConstraint => ({
@@ -691,21 +925,21 @@ const inferTypeImplementation = (
         )
       case 'typeParameter':
         // The stashed parameter's constraint was already resolved, so trust it.
-        return cacheOnSuccess(either.makeRight(parameter))
+        return cacheOnSuccess(either.makeRight(usingNoAssumptions(parameter)))
     }
   }
 
   // Non-specific default case for object nodes: recurse into properties and
   // infer their types, then create an `ObjectType`.
   return cacheOnSuccess(
-    either.map(
-      either.sequence(
+    mapInferred(
+      sequenceInferred(
         Object.entries(node).map(([key, value]) =>
-          either.map(
+          mapInferred(
             inferTypeImplementation(
               value,
               parameterTypes,
-              lookingUpKeys,
+              assumptions,
               descendantContext([key]),
             ),
             childType => [key, childType],
@@ -729,32 +963,26 @@ const inferTypeImplementation = (
 const inferTypeOfTypeAnnotationImplementation = (
   node: SemanticGraph,
   parameterTypes: ReadonlyMap<Atom, Type>,
-  lookingUpKeys: ReadonlySet<Atom>,
+  assumptions: TypeAssumptions,
   context: ExpressionContext,
-): Either<ElaborationError, Type> => {
+): InferenceResult<Type> => {
   const isPlainObjectLiteral = isObjectNode(node) && !isExpression(node)
-  const descendantContext = (subPath: KeyPath): ExpressionContext => ({
-    ...context,
-    location: [...context.location, ...subPath],
-    cacheKeyPrefixOverride:
-      context.cacheKeyPrefixOverride === undefined ?
-        undefined
-      : [...context.cacheKeyPrefixOverride, ...subPath],
-  })
+  const descendantContext = (subPath: KeyPath): ExpressionContext =>
+    contextWithinExpression(context, subPath)
   const unionExpressionResult = readUnionExpression(node)
   if (either.isRight(readObjectTypeExpression(node))) {
     // `@object` operands are type positions; `inferTypeImplementation`
     // interprets the whole subtree as written.
-    return inferTypeImplementation(node, parameterTypes, lookingUpKeys, context)
+    return inferTypeImplementation(node, parameterTypes, assumptions, context)
   } else if (either.isRight(unionExpressionResult)) {
     // Distribute over union members.
-    return either.map(
-      either.sequence(
+    return mapInferred(
+      sequenceInferred(
         Object.entries(unionExpressionResult.value[1]).map(([key, member]) =>
           inferTypeOfTypeAnnotationImplementation(
             member,
             parameterTypes,
-            lookingUpKeys,
+            assumptions,
             descendantContext(['1', key]),
           ),
         ),
@@ -762,14 +990,14 @@ const inferTypeOfTypeAnnotationImplementation = (
       unionOfTypes,
     )
   } else if (isPlainObjectLiteral) {
-    return either.map(
-      either.sequence(
+    return mapInferred(
+      sequenceInferred(
         Object.entries(node).map(([key, propertyValue]) =>
-          either.map(
+          mapInferred(
             inferTypeOfTypeAnnotationImplementation(
               propertyValue,
               parameterTypes,
-              lookingUpKeys,
+              assumptions,
               descendantContext([key]),
             ),
             propertyType => [key, propertyType],
@@ -779,8 +1007,8 @@ const inferTypeOfTypeAnnotationImplementation = (
       entries => makeObjectType(Object.fromEntries(entries)),
     )
   } else {
-    return either.map(
-      inferTypeImplementation(node, parameterTypes, lookingUpKeys, context),
+    return mapInferred(
+      inferTypeImplementation(node, parameterTypes, assumptions, context),
       recursivelyOpenObjectTypes,
     )
   }
@@ -800,6 +1028,7 @@ const inferTypeOfTypeAnnotationImplementation = (
 const getFunctionParameterType = (
   expression: FunctionExpression,
   contextOfFunction: ExpressionContext,
+  assumptions: TypeAssumptions,
 ): Either<ElaborationError, FunctionParameterTypeInfo> => {
   // `genericizeFunctionParameterAnnotation` mints fresh type parameters, but
   // type parameters are identified by an internal `symbol`. To keep identities
@@ -823,16 +1052,20 @@ const getFunctionParameterType = (
             // than their own location (a property within the `@function`), so
             // `location` stays anchored at the function while cache keys are
             // rooted at the annotation's true position.
-            inferTypeOfTypeAnnotation(annotation, {
-              ...contextOfFunction,
-              cacheKeyPrefixOverride: [
-                ...(contextOfFunction.cacheKeyPrefixOverride ??
-                  contextOfFunction.location),
-                '1',
-                'parameter',
-                getParameterName(expression),
-              ],
-            }),
+            inferTypeOfTypeAnnotationAssuming(
+              annotation,
+              {
+                ...contextOfFunction,
+                cacheKeyPrefixOverride: [
+                  ...(contextOfFunction.cacheKeyPrefixOverride ??
+                    contextOfFunction.location),
+                  '1',
+                  'parameter',
+                  getParameterName(expression),
+                ],
+              },
+              assumptions,
+            ),
             annotationType => {
               const parameterName = getParameterName(expression)
               // `_` (`ignoredKey`) is the name for an ignored parameter (and is
@@ -902,7 +1135,7 @@ const getFunctionParameterType = (
                   isExternalToProgram: contextOfFunction.isExternalToProgram,
                   applicationChain: contextOfFunction.applicationChain,
                 }
-                const contextuallyAppliedFunctionType = inferType(
+                const contextuallyAppliedFunctionType = inferTypeAssuming(
                   applyExpressionResult.value[1].function,
                   {
                     ...contextOfEnclosingExpression,
@@ -923,6 +1156,7 @@ const getFunctionParameterType = (
                           'function',
                         ],
                   },
+                  assumptions,
                 )
 
                 // If the applied function's signature is `(a ~> b) ~> c`, the
@@ -1012,6 +1246,7 @@ type EnclosingFunctionParameter = {
  */
 const resolveEnclosingFunctionParameters = (
   context: ExpressionContext,
+  assumptions: TypeAssumptions,
 ): Either<ElaborationError, readonly EnclosingFunctionParameter[]> => {
   const collectFromLocation = (
     currentLocation: KeyPath,
@@ -1050,16 +1285,20 @@ const resolveEnclosingFunctionParameters = (
               either.makeRight([])
             : either.map(
                 either.mapLeft(
-                  getFunctionParameterType(functionExpression, {
-                    configuration: context.configuration,
-                    keywordHandlers: context.keywordHandlers,
-                    program: context.program,
-                    location: enclosingFunctionLocation,
-                    mutableInferenceCache: context.mutableInferenceCache,
-                    mutableFunctionParameterCache:
-                      context.mutableFunctionParameterCache,
-                    applicationChain: context.applicationChain,
-                  }),
+                  getFunctionParameterType(
+                    functionExpression,
+                    {
+                      configuration: context.configuration,
+                      keywordHandlers: context.keywordHandlers,
+                      program: context.program,
+                      location: enclosingFunctionLocation,
+                      mutableInferenceCache: context.mutableInferenceCache,
+                      mutableFunctionParameterCache:
+                        context.mutableFunctionParameterCache,
+                      applicationChain: context.applicationChain,
+                    },
+                    assumptions,
+                  ),
                   // The annotation is at fault, not whatever is being inferred
                   // at `context.location`.
                   attachSpanIfAbsent({

@@ -2,16 +2,11 @@ import either, { type Either } from '@matt.kantor/either'
 import option from '@matt.kantor/option'
 import { styleText } from 'node:util'
 import { withPhantomData, type WithPhantomData } from '../../../phantom-data.js'
-import type { ElaborationError, TypeMismatchError } from '../../errors.js'
+import type { TypeMismatchError } from '../../errors.js'
 import type { Atom } from '../../parsing.js'
 import { quoteAtomIfNecessary } from '../../unparsing/plz-utilities.js'
 import { keyColor, punctuation } from '../../unparsing/unparsing-utilities.js'
-import type { ExpressionContext } from '../expression-elaboration.js'
-import type { ObjectNode } from '../object-node.js'
-import {
-  stringifyTypeForEndUser,
-  type SemanticGraph,
-} from '../semantic-graph.js'
+import { stringifyTypeForEndUser } from '../semantic-graph.js'
 import { asUnionWithLiteralAtomMembers } from './subtyping.js'
 import { makeFunctionType } from './type-formats/function-type.js'
 import {
@@ -55,30 +50,6 @@ export type TypeKeyPathStringifiedForInternalUse = WithPhantomData<
   string,
   IsKeyPathStringifiedForInternalUse
 >
-
-export const typeKeyPathFromObjectNode = (
-  node: ObjectNode,
-  context: ExpressionContext,
-  inferType: (
-    specificKey: SemanticGraph,
-    contextForSpecificKey: ExpressionContext,
-  ) => Either<ElaborationError, Type>,
-): Either<ElaborationError, TypeKeyPath> =>
-  // Each sequentially-keyed property is either a literal atom or a dynamic key
-  // whose type must be an atom or union of atoms.
-  either.sequence(
-    Object.entries(node).map(([key, component]) =>
-      typeof component === 'string' ?
-        either.makeRight(component)
-      : either.flatMap(
-          inferType(component, {
-            ...context,
-            location: [...context.location, key],
-          }),
-          atomKeyPathComponentFromType,
-        ),
-    ),
-  )
 
 /**
  * If the given `KeyPath` is not valid for the given `Type`, the given `Type` is
