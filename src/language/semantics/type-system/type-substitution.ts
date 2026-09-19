@@ -734,6 +734,31 @@ const reduceIntrinsicApplication = (
 }
 
 /**
+ * Attempt to reduce a (possibly stuck) indexed access.
+ */
+const reduceIndexedAccess = (object: Type, key: Type): Type => {
+  // A stuck intrinsic application used as a key is reduced to its upper bound
+  // so indexing can proceed (e.g. `{ false: …, true: … }[boolean]`).
+  const keyForIndexing =
+    key.kind === 'intrinsicApplication' ?
+      replaceAllTypeParametersWithTheirConstraints(key)
+    : key
+  return either.match(atomKeyPathComponentFromType(keyForIndexing), {
+    left: _ =>
+      // Keep it stuck, unless the key is the bottom type in which case we know
+      // the access can never happen.
+      isBottomType(keyForIndexing) ? nothing : (
+        makeIndexedAccessType(object, key)
+      ),
+    right: keyPathComponent =>
+      option.match(applyKeyPathToType(object, [keyPathComponent]), {
+        none: _ => nothing,
+        some: typeAtKeyPath => typeAtKeyPath,
+      }),
+  })
+}
+
+/**
  * Substitute the given `typeParameter` with the given `typeArgument` within
  * `type`, recursively visiting object properties, union members, etc.
  *
@@ -798,37 +823,11 @@ export const supplyTypeArgument = (
           type.reduce,
           type.computeUpperBound,
         ),
-      indexedAccess: type => {
-        const substitutedKey = supplyTypeArgument(
-          type.key,
-          typeParameter,
-          typeArgument,
-        )
-        // A stuck intrinsic application used as a key (e.g. an `atom.equals`
-        // application) is reduced to its upper bound so indexing can proceed
-        // (e.g. `{ false: …, true: … }[boolean]`).
-        const keyForIndexing =
-          substitutedKey.kind === 'intrinsicApplication' ?
-            replaceAllTypeParametersWithTheirConstraints(substitutedKey)
-          : substitutedKey
-        return either.match(atomKeyPathComponentFromType(keyForIndexing), {
-          left: _ =>
-            // TODO: Should this trigger an error?
-            nothing,
-          right: key =>
-            option.match(
-              applyKeyPathToType(
-                supplyTypeArgument(type.object, typeParameter, typeArgument),
-                [key],
-              ),
-              {
-                // TODO: Should this trigger an error?
-                none: _ => nothing,
-                some: typeAtKeyPath => typeAtKeyPath,
-              },
-            ),
-        })
-      },
+      indexedAccess: type =>
+        reduceIndexedAccess(
+          supplyTypeArgument(type.object, typeParameter, typeArgument),
+          supplyTypeArgument(type.key, typeParameter, typeArgument),
+        ),
       opaque: type => type,
       parameter: type =>
         type.identity === typeParameter.identity ?
