@@ -14,5 +14,7 @@ export const todoKeywordHandler = (
 ): Either<ElaborationError, SemanticGraph> =>
   // Operands are elaborated only so that errors within them surface.
   either.map(elaborateOperands(expression, context), _ =>
+    // TODO: Consider producing the unit value instead. Make sure to update
+    // `inferType` as well.
     objectNodeFromOrderedEntries([]),
   )

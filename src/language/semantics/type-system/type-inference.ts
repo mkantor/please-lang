@@ -12,12 +12,14 @@ import {
   isFunctionNode,
   lookup,
   readApplyExpression,
+  readCheckExpression,
   readFunctionExpression,
   readIfExpression,
   readIndexExpression,
   readLookupExpression,
   readPanicExpression,
   readRuntimeExpression,
+  readTodoExpression,
   readUnionExpression,
   stringifyResolvedTypeForEndUser,
   type ExpressionContext,
@@ -536,6 +538,29 @@ const inferTypeImplementation = (
             )
           }
         },
+      ),
+    )
+  }
+
+  // @check: elaborates to its `value` (or a type error).
+  const checkExpressionResult = readCheckExpression(node)
+  if (either.isRight(checkExpressionResult)) {
+    return cacheOnSuccess(
+      inferTypeImplementation(
+        checkExpressionResult.value[1].value,
+        parameterTypes,
+        lookingUpKeys,
+        descendantContext(['1', 'value']),
+      ),
+    )
+  }
+
+  // @todo: elaborates to an empty object.
+  const todoExpressionResult = readTodoExpression(node)
+  if (either.isRight(todoExpressionResult)) {
+    return cacheOnSuccess(
+      either.makeRight(
+        makeObjectType({}, [{ keys: types.atom, values: types.nothing }]),
       ),
     )
   }

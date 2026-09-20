@@ -72,7 +72,10 @@ export {
   readRuntimeExpression,
   type RuntimeExpression,
 } from './semantics/expressions/runtime-expression.js'
-export { type TodoExpression } from './semantics/expressions/todo-expression.js'
+export {
+  readTodoExpression,
+  type TodoExpression,
+} from './semantics/expressions/todo-expression.js'
 export {
   makeUnionExpression,
   readUnionExpression,
