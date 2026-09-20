@@ -89,6 +89,7 @@ export {
 export { isSemanticGraph } from './semantics/is-semantic-graph.js'
 export {
   arrayToMolecule,
+  keyPathFromInternalUse,
   keyPathFromObjectNode,
   stringifyKeyPathForEndUser,
   stringifyKeyPathForInternalUse,
@@ -120,6 +121,7 @@ export {
   updateValueAtKeyPathInSemanticGraph,
   type Output,
   type SemanticGraph,
+  type TypeRenderingOptions,
 } from './semantics/semantic-graph.js'
 export {
   applicableFunctionSignatures,
@@ -127,10 +129,12 @@ export {
   containedTypeParameters,
   getTypesForTypeParameters,
   inferType,
+  inferTypeOfTypeAnnotation,
   isAssignable,
   replaceAllTypeParametersWithTheirConstraints,
   resolveParameterTypes,
   rigidTypeParameterIdentities,
+  simplifyType,
   supplyTypeArgument,
   supplyTypeArguments,
   typeFromSemanticGraph,

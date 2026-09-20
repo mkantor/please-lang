@@ -1362,6 +1362,7 @@ const recursivelyOpenObjectTypes = (type: Type): Type =>
           type.reduce,
           parameterTypes =>
             recursivelyOpenObjectTypes(type.computeUpperBound(parameterTypes)),
+          type.functionKeyPath,
         ),
       object: type =>
         makeObjectType(

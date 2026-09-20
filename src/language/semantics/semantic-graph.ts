@@ -8,13 +8,18 @@ import type {
 import type { Atom, Molecule, SyntaxTree } from '../parsing.js'
 import {
   ignoredKey,
+  keyPathToLookupExpression,
   makeApplyExpression,
+  makeCheckExpression,
   makeFunctionExpression,
+  makeIfExpression,
   makeIndexExpression,
   makeLookupExpression,
   makeUnionExpression,
   readFunctionExpression,
+  readUnionExpression,
   type Type,
+  type TypeParameter,
 } from '../semantics.js'
 import { inlinePlz, unparse, type Notation } from '../unparsing.js'
 import { isExpression } from './expression.js'
@@ -28,6 +33,7 @@ import {
   makeObjectNode,
   objectNodeFromMolecule,
   objectNodeFromOrderedEntries,
+  orderedEntriesOfObjectNode,
   serializeObjectNode,
   withProperty,
   type ObjectNode,
@@ -40,8 +46,10 @@ import {
   matchTypeFormat,
   simplifyType,
   typeParameterAssignableToConstraintKey,
+  typeParameterIdentitiesWithinFunctionParameters,
   types,
   withStuckApplicationsResolved,
+  type IndexedAccessType,
   type TypeKeyPath,
 } from './type-system.js'
 import {
@@ -319,11 +327,123 @@ export const stringifySemanticGraphForEndUser = (
 
 export const typeToSemanticGraph = (
   unsimplifiedType: Type,
-  alreadyIntroducedTypeParameterIdentities: Set<symbol>,
+  options: TypeRenderingOptions = {},
 ): SemanticGraph => {
   const type = simplifyType(unsimplifiedType)
+  const introducibleTypeParameterIdentities =
+    options.typeParametersInScope === undefined ?
+      option.none
+    : option.makeSome(
+        typeParameterIdentitiesWithinFunctionParameters(type).difference(
+          options.typeParametersInScope,
+        ),
+      )
+  return typeToSemanticGraphImplementation(type, {
+    alreadyIntroducedTypeParameterIdentities: new Set(),
+    introducibleTypeParameterIdentities,
+    typeParameterIdentitiesReferredTo:
+      options.unreferencedTypeParametersAsConstraints === true ?
+        option.makeSome(
+          typeParameterIdentitiesReferredToWhenRendering(
+            type,
+            introducibleTypeParameterIdentities,
+          ),
+        )
+      : option.none,
+    rememberReferenceToTypeParameter: _ => undefined,
+  })
+}
+
+/**
+ * Type parameters in `type` which are referred to after their introduction,
+ * e.g. the `:b` in `(a: ?b) => :b`.
+ */
+const typeParameterIdentitiesReferredToWhenRendering = (
+  type: Type,
+  introducibleTypeParameterIdentities: Option<ReadonlySet<symbol>>,
+): ReadonlySet<symbol> => {
+  const referredTo = new Set<symbol>()
+  typeToSemanticGraphImplementation(type, {
+    alreadyIntroducedTypeParameterIdentities: new Set(),
+    introducibleTypeParameterIdentities,
+    typeParameterIdentitiesReferredTo: option.none,
+    rememberReferenceToTypeParameter: identity => referredTo.add(identity),
+  })
+  return referredTo
+}
+
+type TypeParameterRenderingState = {
+  /**
+   * Type parameters introduced so far. Mutable because it has to be visible to
+   * occurrences elsewhere in the type.
+   */
+  readonly alreadyIntroducedTypeParameterIdentities: Set<symbol>
+  /**
+   * When present, only these type parameters are "introduced" in the rendered
+   * type (displayed with their constraint); others are rendered as references.
+   * When `none`, all parameters are introduced at their first occurrence.
+   */
+  readonly introducibleTypeParameterIdentities: Option<ReadonlySet<symbol>>
+  /**
+   * When present, all type parameters except these are written as concrete
+   * types (their constraints).
+   */
+  readonly typeParameterIdentitiesReferredTo: Option<ReadonlySet<symbol>>
+  /**
+   * Called with a type parameter's identity for each occurrence that's a bare
+   * reference (like the `:a` in `(?a: :Integer) ~> :a`).
+   */
+  readonly rememberReferenceToTypeParameter: (identity: symbol) => void
+}
+
+const typeToSemanticGraphImplementation = (
+  unsimplifiedType: Type,
+  state: TypeParameterRenderingState,
+): SemanticGraph => {
+  const type = simplifyType(unsimplifiedType)
+  const {
+    alreadyIntroducedTypeParameterIdentities,
+    introducibleTypeParameterIdentities,
+    typeParameterIdentitiesReferredTo,
+    rememberReferenceToTypeParameter,
+  } = state
+
   const recurseWithSameTypeParameters = (type: Type) =>
-    typeToSemanticGraph(type, alreadyIntroducedTypeParameterIdentities)
+    typeToSemanticGraphImplementation(type, state)
+
+  const isIntroducible = (typeParameter: TypeParameter): boolean =>
+    option.match(introducibleTypeParameterIdentities, {
+      none: _ => true,
+      some: identities => identities.has(typeParameter.identity),
+    })
+
+  const isReferredTo = (typeParameter: TypeParameter): boolean =>
+    option.match(typeParameterIdentitiesReferredTo, {
+      none: _ => true,
+      some: identities => identities.has(typeParameter.identity),
+    })
+
+  /**
+   * A stuck application is typically shown as its upper bound. `@if` conditions
+   * are an exception because reducing them (usually to `false | true`) obscures
+   * what the conditional depends on.
+   */
+  const conditionAsWritten = (condition: Type): SemanticGraph =>
+    condition.kind === 'intrinsicApplication' ?
+      option.match(condition.functionKeyPath, {
+        none: _ => recurseWithSameTypeParameters(condition),
+        some: functionKeyPath =>
+          condition.parameterTypes.reduce<SemanticGraph>(
+            (partiallyApplied, parameterType) =>
+              makeApplyExpression({
+                function: partiallyApplied,
+                argument: recurseWithSameTypeParameters(parameterType),
+              }),
+            keyPathToLookupExpression(functionKeyPath),
+          ),
+      })
+    : recurseWithSameTypeParameters(condition)
+
   return matchTypeFormat(type, {
     application: type =>
       makeApplyExpression({
@@ -338,11 +458,21 @@ export const typeToSemanticGraph = (
         recurseWithSameTypeParameters(type.signature.return),
       ),
     indexedAccess: type =>
-      makeIndexExpression({
-        object: recurseWithSameTypeParameters(type.object),
-        query: objectNodeFromOrderedEntries([
-          ['0', recurseWithSameTypeParameters(type.key)],
-        ]),
+      option.match(conditionalBranches(type), {
+        // Convert conditional indexed access types to `@if` expressions.
+        some: branches =>
+          makeIfExpression({
+            condition: conditionAsWritten(type.key),
+            then: recurseWithSameTypeParameters(branches.then),
+            else: recurseWithSameTypeParameters(branches.else),
+          }),
+        none: _ =>
+          makeIndexExpression({
+            object: recurseWithSameTypeParameters(type.object),
+            query: objectNodeFromOrderedEntries([
+              ['0', recurseWithSameTypeParameters(type.key)],
+            ]),
+          }),
       }),
     object: type => {
       const properties = objectNodeFromOrderedEntries(
@@ -351,8 +481,8 @@ export const typeToSemanticGraph = (
           recurseWithSameTypeParameters(value),
         ]),
       )
-      // An open object becomes a plain literal; any other excess bounds are
-      // spelled out with the explicit `@object` form.
+      // Open objects become plain literals; excess bounds are written as
+      // `@object` expressions.
       const [firstClause, ...remainingClauses] = type.excess
       const isOpen =
         firstClause === undefined ||
@@ -383,20 +513,33 @@ export const typeToSemanticGraph = (
     opaque: type => typeSymbolToSemanticGraph(type.symbol),
     parameter: type => {
       if (alreadyIntroducedTypeParameterIdentities.has(type.identity)) {
-        return makeLookupExpression(type.name)
+        rememberReferenceToTypeParameter(type.identity)
+        return isIntroducible(type) ?
+            makeLookupExpression(type.name)
+          : referenceToTypeParameterBoundOutsideType(type)
+      } else if (isIntroducible(type) && !isReferredTo(type)) {
+        // Type parameters occurring only once are shown as their constraints.
+        return recurseWithSameTypeParameters(type.constraint.assignableTo)
       } else {
         // Side effect: remember the type parameter. This is a direct mutation
         // because it needs to be visible to usages not in this call stack.
         alreadyIntroducedTypeParameterIdentities.add(type.identity)
-        return makeHoleExpressionWithExtantTypeParameter(
-          type.name,
-          makeObjectNode({
-            assignableTo: recurseWithSameTypeParameters(
-              type.constraint.assignableTo,
-            ),
-          }),
-          type,
-        )
+        if (!isIntroducible(type)) {
+          return makeCheckExpression({
+            value: referenceToTypeParameterBoundOutsideType(type),
+            type: recurseWithSameTypeParameters(type.constraint.assignableTo),
+          })
+        } else {
+          return makeHoleExpressionWithExtantTypeParameter(
+            type.name,
+            makeObjectNode({
+              assignableTo: recurseWithSameTypeParameters(
+                type.constraint.assignableTo,
+              ),
+            }),
+            type,
+          )
+        }
       }
     },
     union: type => {
@@ -412,12 +555,18 @@ export const typeToSemanticGraph = (
         } else {
           return makeUnionExpression(
             objectNodeFromOrderedEntries(
-              [...type.members].map((member, index) => [
-                String(index),
-                typeof member === 'string' ? member : (
-                  recurseWithSameTypeParameters(member)
-                ),
-              ]),
+              [...type.members]
+                .flatMap(member =>
+                  membersOfRenderedType(
+                    typeof member === 'string' ? member : (
+                      recurseWithSameTypeParameters(member)
+                    ),
+                  ),
+                )
+                .map((renderedMember, index) => [
+                  String(index),
+                  renderedMember,
+                ]),
             ),
           )
         }
@@ -426,15 +575,57 @@ export const typeToSemanticGraph = (
   })
 }
 
-export const stringifyTypeForEndUser = (type: Type): string =>
-  stringifySemanticGraphForEndUser(typeToSemanticGraph(type, new Set()))
+// These options primarily exist to tune how types are rendered in tooltips vs
+// error messages.
+export type TypeRenderingOptions = {
+  /**
+   * The type parameters in scope where the type is shown. When present, a type
+   * parameter is introduced (`(?a: constraint)`) only if it isn't in scope;
+   * others are written as references (`:a`). When absent, all type parameters
+   * are introduced at first occurrence.
+   */
+  readonly typeParametersInScope?: ReadonlySet<symbol>
+  /**
+   * Write type parameters occurring exactly once as their constraints, e.g.
+   * `(?a: :Integer) ~> :Integer` is `:Integer ~> :Integer`.
+   */
+  readonly unreferencedTypeParametersAsConstraints?: boolean
+}
+
+const membersOfRenderedType = (
+  renderedType: SemanticGraph,
+): readonly SemanticGraph[] => {
+  const nestedMembers = either.match(readUnionExpression(renderedType), {
+    left: _ => [],
+    right: unionExpression =>
+      orderedEntriesOfObjectNode(unionExpression[1]).map(
+        ([_key, member]) => member,
+      ),
+  })
+  return nestedMembers.length === 0 ? [renderedType] : nestedMembers
+}
+
+export const stringifyTypeForEndUser = (
+  type: Type,
+  notation: Notation = inlinePlz,
+  options: TypeRenderingOptions = {},
+): string =>
+  stringifySemanticGraphForEndUser(typeToSemanticGraph(type, options), notation)
 
 /**
  * Like `stringifyTypeForEndUser`, but stuck applications are first replaced with
  * what they are known to produce.
  */
-export const stringifyResolvedTypeForEndUser = (type: Type): string =>
-  stringifyTypeForEndUser(withStuckApplicationsResolved(type))
+export const stringifyResolvedTypeForEndUser = (
+  type: Type,
+  notation: Notation = inlinePlz,
+  options: TypeRenderingOptions = {},
+): string =>
+  stringifyTypeForEndUser(
+    withStuckApplicationsResolved(type),
+    notation,
+    options,
+  )
 
 export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
   makeLookupExpression(
@@ -457,6 +648,38 @@ export const typeSymbolToSemanticGraph = (typeSymbol: TypeSymbol): ObjectNode =>
       }
     })(),
   )
+
+const referenceToTypeParameterBoundOutsideType = (
+  typeParameter: TypeParameter,
+): SemanticGraph =>
+  // Type parameters that are reachable via a key path (e.g. `:x.a` in the body
+  // of `(x: { a: :Atom, b: :Atom }) => …` are printed as index expressions.
+  option.match(typeParameter.valueKeyPath, {
+    none: _ => makeLookupExpression(typeParameter.name),
+    some: keyPathToLookupExpression,
+  })
+
+/**
+ * Returns a `some` of the conditional branches when the type is `@if`-like
+ * (it's an indexed access type with `true` and `false` properties).
+ */
+const conditionalBranches = (
+  type: IndexedAccessType,
+): Option<{ readonly then: Type; readonly else: Type }> => {
+  if (type.object.kind !== 'object') {
+    return option.none
+  } else {
+    const thenBranch = type.object.children['true']
+    const elseBranch = type.object.children['false']
+    return (
+        thenBranch === undefined ||
+          elseBranch === undefined ||
+          Object.keys(type.object.children).length !== 2
+      ) ?
+        option.none
+      : option.makeSome({ then: thenBranch, else: elseBranch })
+  }
+}
 
 const syntaxTreeToSemanticGraph = (
   syntaxTree: Atom | Molecule,

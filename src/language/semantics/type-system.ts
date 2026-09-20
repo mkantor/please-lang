@@ -29,6 +29,7 @@ export {
 } from './type-system/type-key-path.js'
 export {
   containedTypeParameters,
+  typeParameterIdentitiesWithinFunctionParameters,
   typeParameterIdentitiesWithinType,
 } from './type-system/type-parameter-analysis.js'
 export { simplifyType } from './type-system/type-simplification.js'

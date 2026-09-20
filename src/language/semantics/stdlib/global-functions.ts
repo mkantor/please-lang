@@ -110,6 +110,7 @@ const matcheeParameter: Parameter<TaggedNode> = {
           casesType === undefined ? anyTaggedValue : (
             matcheeTypeForCases(casesType)
           ),
+        option.none,
       )
     ),
 }

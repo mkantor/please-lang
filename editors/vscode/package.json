@@ -59,6 +59,8 @@
     "build": "tsc --build"
   },
   "dependencies": {
+    "@matt.kantor/either": "^1.4.0",
+    "@matt.kantor/option": "^1.2.0",
     "@matt.kantor/please": "file:../..",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",

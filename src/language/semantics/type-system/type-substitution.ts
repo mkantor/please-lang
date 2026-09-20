@@ -2,6 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { Writable } from '../../../utility-types.js'
 import type { FunctionNodeCallError } from '../function-node.js'
+import type { NonEmptyKeyPath } from '../key-path.js'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
 import type { SemanticGraph } from '../semantic-graph.js'
 import { nothing } from './prelude-types.js'
@@ -176,7 +177,12 @@ export const applyKeyPathToType = (
                   type.constraint.assignableTo,
                   remainingKeyPath,
                 ),
-                assignableTo => makeTypeParameter(type.name, { assignableTo }),
+                assignableTo =>
+                  makeTypeParameter(
+                    type.name,
+                    { assignableTo },
+                    type.valueKeyPath,
+                  ),
               )
             case functionParameterKey:
             case functionReturnKey:
@@ -581,6 +587,7 @@ export const withStuckApplicationsResolved = (type: Type): Type =>
             withStuckApplicationsResolved(
               type.computeUpperBound(parameterTypes),
             ),
+          type.functionKeyPath,
         ),
       object: type =>
         makeObjectType(
@@ -713,12 +720,14 @@ const reduceIntrinsicApplication = (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
   computeUpperBound: (parameterTypes: readonly Type[]) => Type,
+  functionKeyPath: Option<NonEmptyKeyPath>,
 ): Type => {
   const argumentPossibilities = parameterTypes.map(enumerateInhabitants)
   const stuck = makeIntrinsicApplicationType(
     parameterTypes,
     reduce,
     computeUpperBound,
+    functionKeyPath,
   )
   return option.match(option.sequence(argumentPossibilities), {
     none: _ => stuck,
@@ -822,6 +831,7 @@ export const supplyTypeArgument = (
           ),
           type.reduce,
           type.computeUpperBound,
+          type.functionKeyPath,
         ),
       indexedAccess: type =>
         reduceIndexedAccess(

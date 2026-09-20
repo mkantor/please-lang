@@ -1,4 +1,5 @@
 import either, { type Either } from '@matt.kantor/either'
+import option, { type Option } from '@matt.kantor/option'
 import * as orderedRecord from '../../ordered-record.js'
 import { withPhantomData, type WithPhantomData } from '../../phantom-data.js'
 import type { InvalidExpressionError } from '../errors.js'
@@ -30,6 +31,14 @@ export const stringifyKeyPathForInternalUse = (
 ): KeyPathStringifiedForInternalUse =>
   withPhantomData<IsKeyPathStringifiedForInternalUse>()(JSON.stringify(keyPath))
 
+/** The inverse of `stringifyKeyPathForInternalUse`. */
+export const keyPathFromInternalUse = (
+  stringifiedKeyPath: KeyPathStringifiedForInternalUse,
+): Option<KeyPath> => {
+  const parsed: unknown = JSON.parse(stringifiedKeyPath)
+  return isKeyPath(parsed) ? option.makeSome(parsed) : option.none
+}
+
 export const arrayToMolecule = (
   keyPath: readonly (Molecule | Atom)[],
 ): Molecule =>
@@ -57,3 +66,6 @@ export const keyPathFromObjectNode = (
   }
   return either.makeRight(relativePath)
 }
+
+const isKeyPath = (value: unknown): value is KeyPath =>
+  Array.isArray(value) && value.every(key => typeof key === 'string')

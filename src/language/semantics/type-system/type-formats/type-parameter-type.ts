@@ -1,3 +1,5 @@
+import option, { type Option } from '@matt.kantor/option'
+import type { NonEmptyKeyPath } from '../../key-path.js'
 import type { Type } from './type.js'
 
 export type TypeParameter = {
@@ -8,16 +10,23 @@ export type TypeParameter = {
     readonly assignableTo: Type
     // readonly assignableFrom: Type // TODO: Implement lower bound constraints.
   }
+  /**
+   * A key path where this type parameter can be reached (e.g. `:x.a` in the
+   * body of `(x: { a: :Atom, b: :Atom }) => …`.
+   */
+  readonly valueKeyPath: Option<NonEmptyKeyPath>
 }
 
 export const makeTypeParameter = (
   name: string,
   constraint: TypeParameter['constraint'],
+  valueKeyPath: Option<NonEmptyKeyPath> = option.none,
 ): TypeParameter => ({
   name,
   kind: 'parameter',
   identity: Symbol(name),
   constraint,
+  valueKeyPath,
 })
 
 /**
@@ -37,9 +46,9 @@ export const typeParameterWithConstraint = (
     }
 
 export const isTypeParameter = (value: unknown): value is TypeParameter => {
-  // This doesn't exhaustively validate (it doesn't look inside `constraint`),
-  // but something very weird would have to be going on for this to have a false
-  // positive.
+  // This doesn't exhaustively validate (it doesn't look inside `constraint` or
+  // at `valueKeyPath`), but something very weird would have to be going on for
+  // this to have a false positive.
   if (
     typeof value === 'object' &&
     value !== null &&
@@ -58,8 +67,8 @@ export const isTypeParameter = (value: unknown): value is TypeParameter => {
       kind: value.kind,
       constraint: value.constraint,
       identity: value.identity,
-    }) satisfies Omit<TypeParameter, 'constraint'> & {
-      constraint: Omit<TypeParameter['constraint'], 'assignableTo'>
+    }) satisfies Omit<TypeParameter, 'constraint' | 'valueKeyPath'> & {
+      constraint: {}
     }
     return true
   } else {

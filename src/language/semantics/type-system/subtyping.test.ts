@@ -1,4 +1,5 @@
 import either from '@matt.kantor/either'
+import option from '@matt.kantor/option'
 import { testCases } from '../../../test-utilities.test.js'
 import { stringifyTypeForEndUser } from '../semantic-graph.js'
 import {
@@ -114,6 +115,7 @@ const parameterFreeStuckIntrinsicApplication = makeIntrinsicApplicationType(
       makeObjectType({ value: integer }),
       makeObjectType({ value: exactEmptyObject }),
     ]),
+  option.none,
 )
 const parameterFreeStuckIndexedAccess = makeIndexedAccessType(
   parameterFreeStuckIntrinsicApplication,
@@ -124,6 +126,7 @@ const integerBoundStuckIndexedAccess = makeIndexedAccessType(
     [makeUnionType(['0']), object],
     _argumentValues => either.makeRight(something),
     _parameterTypes => makeObjectType({ value: integer }),
+    option.none,
   ),
   makeUnionType(['value']),
 )
@@ -1829,6 +1832,7 @@ const stuckIntrinsicApplicationSpanningTopTypeMembers =
     [object],
     _argumentValues => either.makeRight(something),
     _parameterTypes => makeUnionType(['an atom', makeObjectType({})]),
+    option.none,
   )
 
 typeAssignabilitySuite('union member standing for an unresolved type', [

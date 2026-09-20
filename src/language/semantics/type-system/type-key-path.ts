@@ -137,13 +137,17 @@ export const updateTypeAtKeyPathIfValid = (
       parameter: type => {
         switch (firstKey) {
           case typeParameterAssignableToConstraintKey:
-            return makeTypeParameter(type.name, {
-              assignableTo: updateTypeAtKeyPathIfValid(
-                type.constraint.assignableTo,
-                remainingKeyPath,
-                operation,
-              ),
-            })
+            return makeTypeParameter(
+              type.name,
+              {
+                assignableTo: updateTypeAtKeyPathIfValid(
+                  type.constraint.assignableTo,
+                  remainingKeyPath,
+                  operation,
+                ),
+              },
+              type.valueKeyPath,
+            )
           default:
             return type
         }

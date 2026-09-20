@@ -106,6 +106,21 @@ const containedTypeParametersImplementation = (
   }
 }
 
+/**
+ * Identities of all type parameters within function parameters in `type`.
+ */
+export const typeParameterIdentitiesWithinFunctionParameters = (
+  type: Type,
+): ReadonlySet<symbol> =>
+  new Set(
+    containedTypeParameters(type)
+      .values()
+      .filter(({ keyPath }) => keyPath.includes(functionParameterKey))
+      .flatMap(({ typeParameters }) =>
+        typeParameters.members.values().map(({ identity }) => identity),
+      ),
+  )
+
 export const findKeyPathsToTypeParameter = (
   type: Type,
   typeParameterToFind: TypeParameter,

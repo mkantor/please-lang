@@ -1,5 +1,7 @@
 import type { Either } from '@matt.kantor/either'
+import type { Option } from '@matt.kantor/option'
 import type { FunctionNodeCallError } from '../../function-node.js'
+import type { NonEmptyKeyPath } from '../../key-path.js'
 import type { SemanticGraph } from '../../semantic-graph.js'
 import type { Type } from './type.js'
 
@@ -28,6 +30,10 @@ export type IntrinsicApplicationType = {
    * become known.
    */
   readonly computeUpperBound: (parameterTypes: readonly Type[]) => Type
+  /**
+   * Where the applied function is located, when it's addressable.
+   */
+  readonly functionKeyPath: Option<NonEmptyKeyPath>
 }
 
 export const makeIntrinsicApplicationType = (
@@ -36,9 +42,11 @@ export const makeIntrinsicApplicationType = (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
   computeUpperBound: (parameterTypes: readonly Type[]) => Type,
+  functionKeyPath: Option<NonEmptyKeyPath>,
 ): IntrinsicApplicationType => ({
   kind: 'intrinsicApplication',
   parameterTypes,
   reduce,
   computeUpperBound,
+  functionKeyPath,
 })

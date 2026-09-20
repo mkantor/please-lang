@@ -382,16 +382,13 @@ const unparseSugaredApply =
   }
 
 // `type ~> body` is sugar for `(_: type) => body`, so it applies when the
-// parameter is the ignored name `_` and it has an explicit type annotation
-// which isn't the top type (in which case `_ => body` is preferred).
+// parameter is the ignored name `_` and it has an explicit type annotation.
 const signatureSugarTypeAnnotation = (
   expression: FunctionExpression,
 ): Option<SemanticGraph> =>
   getParameterName(expression) !== ignoredKey ?
     option.none
-  : option.flatMap(getParameterTypeAnnotation(expression), typeAnnotation =>
-      isTopType(typeAnnotation) ? option.none : option.makeSome(typeAnnotation),
-    )
+  : getParameterTypeAnnotation(expression)
 
 const unparseSugaredFunction =
   (context: Context) =>
