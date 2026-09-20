@@ -1,7 +1,11 @@
 import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
-import { compileWithoutSpans } from '../../test-utilities.test.js'
+import { stripVTControlCharacters } from 'node:util'
+import {
+  compileWithoutSpans,
+  withEnvironmentVariables,
+} from '../../test-utilities.test.js'
 import { parse } from '../parsing/parser.js'
 
 const compileErrorMessage = (source: string): string => {
@@ -19,7 +23,7 @@ const compileErrorMessage = (source: string): string => {
 }
 
 const assertMessageContains = (source: string, expected: string): void => {
-  const message = compileErrorMessage(source)
+  const message = stripVTControlCharacters(compileErrorMessage(source))
   assert(
     message.includes(expected),
     `expected the error for \`${source}\` to mention \`${expected}\`, but it was:\n${message}`,
@@ -91,5 +95,15 @@ suite('type parameters survive in error messages', () => {
 
   test('an unannotated parameter is not reported as the top type', () => {
     assertMessageContains('a => :a ~ :Integer', 'have type `?a`')
+  })
+
+  test('a synthesized name is not quoted when output is colorized', () => {
+    withEnvironmentVariables({ FORCE_COLOR: '3', NO_COLOR: undefined }, () => {
+      assertMessageContains('a => :a ~ :Integer', 'have type `?a`')
+      assertMessageContains(
+        '(f: :Atom ~> :Atom) => :f ~ :Integer',
+        'have type `(?"f.#parameter": :Atom) ~> (?"f.#return": :Atom)`',
+      )
+    })
   })
 })

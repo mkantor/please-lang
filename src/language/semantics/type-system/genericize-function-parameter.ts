@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from 'node:util'
 import type { Atom } from '../../parsing.js'
 import { makeFunctionType } from './type-formats/function-type.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
@@ -142,4 +143,11 @@ const doNotGenericizeLeaf = (
 const synthesizeTypeParameterName = (
   parameterName: Atom,
   keyPath: TypeKeyPath,
-): string => parameterName.concat(stringifyTypeKeyPathForEndUser(keyPath))
+): string =>
+  parameterName.concat(
+    // `stripVTControlCharacters` is more important than you might think here:
+    // synthesized type parameter names can eventually end up going through
+    // `quoteKeyPathComponentIfNecessary`, which would add quotes if there are
+    // escape sequences (even if they end up getting stripped later).
+    stripVTControlCharacters(stringifyTypeKeyPathForEndUser(keyPath)),
+  )
