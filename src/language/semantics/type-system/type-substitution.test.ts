@@ -1,7 +1,11 @@
 import either, { type Either } from '@matt.kantor/either'
 import optionAdt from '@matt.kantor/option'
 import assert from 'node:assert'
-import { testCases } from '../../../test-utilities.test.js'
+import test from 'node:test'
+import {
+  testCases,
+  withEnvironmentVariables,
+} from '../../../test-utilities.test.js'
 import type { FunctionNodeCallError } from '../function-node.js'
 import { stringifyKeyPathForEndUser, type KeyPath } from '../key-path.js'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
@@ -832,3 +836,16 @@ containedTypeParametersSuite('containedTypeParameters over excess bounds', [
   [object, []],
   [something, []],
 ])
+
+test('synthesized names do not change if colors are enabled', () => {
+  withEnvironmentVariables({ FORCE_COLOR: '3', NO_COLOR: undefined }, () => {
+    const { type } = genericizeFunctionParameterAnnotation(
+      's',
+      makeObjectType({ a: integer }),
+    )
+    assert(type.kind === 'object')
+    const parameter = type.children['a']
+    assert(parameter?.kind === 'parameter')
+    assert.equal(parameter.name, 's.a')
+  })
+})
