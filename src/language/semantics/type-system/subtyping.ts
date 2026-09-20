@@ -1,7 +1,7 @@
 import type { Option } from '@matt.kantor/option'
 import option from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
-import { atom, something } from './prelude-types.js'
+import { atom, pendingTypeSymbol, something } from './prelude-types.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
 import {
   makeObjectType,
@@ -693,6 +693,11 @@ export const simplifyUnionType = (typeToSimplify: UnionType): UnionType => {
   )
 }
 
+const isPendingType = (member: Atom | Exclude<Type, UnionType>): boolean =>
+  typeof member !== 'string' &&
+  member.kind === 'opaque' &&
+  member.symbol === pendingTypeSymbol
+
 const excludeRedundantUnionTypeMembers = (type: UnionType) => {
   const membersAsArray = [...type.members]
   return makeUnionType(
@@ -703,6 +708,9 @@ const excludeRedundantUnionTypeMembers = (type: UnionType) => {
         !membersAsArray.some(
           (otherMember, otherIndex) =>
             index !== otherIndex &&
+            // Don't allow `pending` to eat other members.
+            !isPendingType(possiblyRedundantMember) &&
+            !isPendingType(otherMember) &&
             isAssignable({
               source: possiblyRedundantMember,
               target: otherMember,
