@@ -1432,6 +1432,40 @@ testCases(
 
   [
     `{
+      f: (first: a) => (second: b) =>
+        (value: { a: { b: yes } }.:first.:second) => :value
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (first: a) => (second: b) =>
+        (value: { a: { a: yes, b: no } }.:first.:second) => :value
+      :f(@runtime { _ => a })(@runtime { _ => b })(no) ~ no
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (first: a) => (second: b) =>
+        (value: { a: { a: yes, b: no } }.:first.:second) => :value
+      :f(@runtime { _ => a })(@runtime { _ => b })(yes)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert('kind' in result.value)
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       choose: (c: :Boolean) => (@if { :c, { x: yes }, { x: no } }).x
       :choose(@runtime { _ => true }) ~ yes
     }`,

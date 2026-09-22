@@ -16,13 +16,15 @@
     "roundtripper",
     "roundtripping",
     "scrutinee",
+    "subtype",
     "subtyping",
-    "unparse",
-    "unparser",
-    "unparsing",
+    "tooltip",
     "unelaborated",
     "uninstantiated",
     "unioned",
+    "unparse",
+    "unparser",
+    "unparsing",
     "whitespaced"
   ]
 }
