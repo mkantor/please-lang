@@ -23,9 +23,17 @@ export type Configuration = {
    * allow raising it.
    */
   readonly demandedApplicationDepthLimit: number
+  /**
+   * Limits the number of times a recursive definition's type is re-derived.
+   *
+   * Each round unfolds recursion once. Typical recursive functions need two
+   * (one to determine a type and another to confirm it stops changing).
+   */
+  readonly recursiveTypeIterationLimit: number
 }
 
 export const defaultConfiguration: Configuration = {
   speculativeApplicationDepthLimit: 8,
   demandedApplicationDepthLimit: 256,
+  recursiveTypeIterationLimit: 4,
 }

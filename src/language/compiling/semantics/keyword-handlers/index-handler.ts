@@ -71,11 +71,10 @@ export const indexKeywordHandler = (
           1: { object, query },
         } = indexExpression
         return either.flatMap(
-          typeKeyPathFromObjectNode(
-            query,
-            { ...context, location: [...context.location, '1', 'query'] },
-            inferType,
-          ),
+          typeKeyPathFromObjectNode(query, {
+            ...context,
+            location: [...context.location, '1', 'query'],
+          }),
           typeKeyPath => {
             return either.flatMap(
               checkKeyPathExistsInType(object, typeKeyPath, context),

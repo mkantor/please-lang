@@ -16,13 +16,13 @@ export {
   inferTypeOfTypeAnnotation,
   resolveParameterTypes,
   rigidTypeParameterIdentities,
+  typeKeyPathFromObjectNode,
 } from './type-system/type-inference.js'
 export {
   functionParameterKey,
   functionReturnKey,
   stringifyTypeKeyPathForEndUser,
   stringifyTypeKeyPathForInternalUse,
-  typeKeyPathFromObjectNode,
   typeParameterAssignableToConstraintKey,
   type TypeKeyPath,
   type TypeKeyPathStringifiedForInternalUse,
