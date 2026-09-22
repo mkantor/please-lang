@@ -341,13 +341,6 @@ denoted by a key in square brackets:
 The type `{ [:NaturalNumber]: :Boolean }` says "keys which are natural numbers
 may exist, but only if their values are booleans".
 
-Excess clauses may be used with `{| … |}`, where they open the object for a
-specific key type (other excess properties are still forbidden):
-
-```plz
-{ a: 1, 42: true } ~ {| a: :Integer, [:NaturalNumber]: :Boolean |}
-```
-
 #### Generic Programming
 
 Please functions are generic, even when the parameter type is annotated. For
