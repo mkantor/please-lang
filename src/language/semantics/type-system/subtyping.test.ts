@@ -21,6 +21,7 @@ import {
   naturalNumber,
   nothing,
   object,
+  pending,
   something,
 } from './prelude-types.js'
 import { isAssignable, simplifyUnionType } from './subtyping.js'
@@ -168,6 +169,13 @@ testCases(
     ]),
     '{| a: a | b |} | { a: c }',
   ],
+  [
+    // `pending` doesn't eat other union members even though everything is
+    // assignable to it.
+    makeUnionType([pending, 'true']),
+    ':Unresolved | true',
+  ],
+  [makeUnionType(['true', pending]), 'true | :Unresolved'],
 ])
 typeAssignabilitySuite('prelude types (assignable)', [
   [

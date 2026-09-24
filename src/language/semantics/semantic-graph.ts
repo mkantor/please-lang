@@ -38,6 +38,7 @@ import {
   functionReturnKey,
   isCanonicalTopType,
   matchTypeFormat,
+  simplifyType,
   typeParameterAssignableToConstraintKey,
   types,
   withStuckApplicationsResolved,
@@ -317,9 +318,10 @@ export const stringifySemanticGraphForEndUser = (
   )
 
 export const typeToSemanticGraph = (
-  type: Type,
+  unsimplifiedType: Type,
   alreadyIntroducedTypeParameterIdentities: Set<symbol>,
 ): SemanticGraph => {
+  const type = simplifyType(unsimplifiedType)
   const recurseWithSameTypeParameters = (type: Type) =>
     typeToSemanticGraph(type, alreadyIntroducedTypeParameterIdentities)
   return matchTypeFormat(type, {
