@@ -11,6 +11,7 @@ import {
   isBottomType,
   makeObjectType,
   makeUnionType,
+  simplifyType,
   types,
   unionOfTypes,
   type ObjectType,
@@ -21,7 +22,6 @@ import {
   asUnionWithLiteralAtomMembers,
   effectiveExcessClauses,
   excessBoundForKey,
-  simplifyUnionType,
 } from '../type-system/subtyping.js'
 import { concreteUpperBound } from '../type-system/type-substitution.js'
 import { anyValue, atomParameter, objectParameter } from './parameters.js'
@@ -292,7 +292,7 @@ const computeLookupReturnType = (parameterTypes: readonly Type[]): Type => {
             // can only ever return `option(1)`, after all.
             types.option(types.something),
           some: members =>
-            simplifyIfUnion(
+            simplifyType(
               unionOfTypes(
                 members.map(member =>
                   lookupReturnTypeForObjectType(keyType, member),
@@ -377,6 +377,3 @@ export const object = {
     computeOverlayReturnType,
   ),
 } as const
-
-const simplifyIfUnion = (type: Type): Type =>
-  type.kind === 'union' ? simplifyUnionType(type) : type
