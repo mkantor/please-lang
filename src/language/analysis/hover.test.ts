@@ -227,6 +227,30 @@ hoverCases('type parameters which share a name', [
   ],
 ])
 
+hoverCases('a type parameter bound by more than one function', [
+  [
+    ['{ f: { i: :identity, j: :identity } }', 'f:'],
+    'f :: {| i: ?a ~> :a, j: ?a ~> :a |}',
+  ],
+  [
+    ['{ f: :option.map }', 'option.map'],
+    [
+      'option :: {|',
+      '  type: ?a ~> :Option(:a)',
+      '  none: {|',
+      '    tag: none',
+      '  |}',
+      '  make_some: ?a ~> :Option(:a)',
+      '  map: (?a ~> ?b) ~> :Option(:a) ~> :Option(:b)',
+      '  flat_map: (?a ~> :Option(?b)) ~> :Option(:a) ~> :Option(:b)',
+      '  get_or_else: ?b ~> :Option(?a) ~> :a | :b',
+      '  is_some: :Option(:Something) ~> :Boolean',
+      '  is_none: :Option(:Something) ~> :Boolean',
+      '|}',
+    ].join('\n'),
+  ],
+])
+
 hoversIn(`{
   f: (x: :Atom) => {
     callback: (k: :x ~> :Integer) => 1

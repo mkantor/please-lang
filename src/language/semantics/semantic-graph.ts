@@ -49,8 +49,10 @@ import {
   simplifyType,
   typeParameterAssignableToConstraintKey,
   typeParameterIdentitiesWithinFunctionParameters,
+  typeParameterIdentitiesWithinType,
   types,
   withStuckApplicationsResolved,
+  type FunctionType,
   type IndexedAccessType,
   type TypeKeyPath,
 } from './type-system.js'
@@ -368,6 +370,7 @@ export const typeToSemanticGraph = (
     typeParameterIdentitiesReferredTo,
     rememberReferenceToTypeParameter: _ => undefined,
     withinConditional: false,
+    typeParameterIdentitiesBoundByEnclosingFunctionTypes: new Set(),
   })
 }
 
@@ -388,6 +391,7 @@ const typeParameterIdentitiesReferredToWhenRendering = (
     typeParameterIdentitiesReferredTo: option.none,
     rememberReferenceToTypeParameter: identity => referredTo.add(identity),
     withinConditional: false,
+    typeParameterIdentitiesBoundByEnclosingFunctionTypes: new Set(),
   })
   return referredTo
 }
@@ -476,6 +480,11 @@ type TypeParameterRenderingState = {
    * Whether the type is in an `@if`.
    */
   readonly withinConditional: boolean
+  /**
+   * Type parameters that enclosing function types bind. Nested function types
+   * don't bind these again, because calling the enclosing function fixes them.
+   */
+  readonly typeParameterIdentitiesBoundByEnclosingFunctionTypes: ReadonlySet<symbol>
 }
 
 const typeToSemanticGraphImplementation = (
@@ -491,10 +500,68 @@ const typeToSemanticGraphImplementation = (
     typeParameterIdentitiesReferredTo,
     rememberReferenceToTypeParameter,
     withinConditional,
+    typeParameterIdentitiesBoundByEnclosingFunctionTypes,
   } = state
 
   const recurseWithSameTypeParameters = (type: Type) =>
     typeToSemanticGraphImplementation(type, state)
+
+  /**
+   * A function type binds the type parameters its parameter mentions (unless an
+   * enclosing function type already does). For example, when two functions
+   * share a type parameter (as standard library functions can), each introduces
+   * its own `?a` rather than the second referring to the first's.
+   */
+  const functionTypeWithItsOwnIntroductions = (
+    type: FunctionType,
+  ): SemanticGraph => {
+    const mentionedByParameter = typeParameterIdentitiesWithinType(
+      type.signature.parameter,
+    )
+    const boundHere = option
+      .match(introducibleTypeParameterIdentities, {
+        none: _ => mentionedByParameter,
+        some: introducibleIdentities =>
+          mentionedByParameter.intersection(introducibleIdentities),
+      })
+      .difference(typeParameterIdentitiesBoundByEnclosingFunctionTypes)
+    const introducedOutside = boundHere.intersection(
+      alreadyIntroducedTypeParameterIdentities,
+    )
+    const stateWithinFunctionType = {
+      ...state,
+      typeParameterIdentitiesBoundByEnclosingFunctionTypes:
+        typeParameterIdentitiesBoundByEnclosingFunctionTypes.union(boundHere),
+    }
+    // Side effect: scope introductions to this function type. Ones made outside
+    // it are set aside while it's rendered and restored afterwards, and ones
+    // made within it are forgotten.
+    boundHere.forEach(identity =>
+      alreadyIntroducedTypeParameterIdentities.delete(identity),
+    )
+    const rendered = makeFunctionExpression(
+      objectNodeFromOrderedEntries([
+        [
+          ignoredKey,
+          typeToSemanticGraphImplementation(
+            type.signature.parameter,
+            stateWithinFunctionType,
+          ),
+        ],
+      ]),
+      typeToSemanticGraphImplementation(
+        type.signature.return,
+        stateWithinFunctionType,
+      ),
+    )
+    boundHere.forEach(identity =>
+      alreadyIntroducedTypeParameterIdentities.delete(identity),
+    )
+    introducedOutside.forEach(identity =>
+      alreadyIntroducedTypeParameterIdentities.add(identity),
+    )
+    return rendered
+  }
 
   const recurseWithinConditional = (type: Type) =>
     typeToSemanticGraphImplementation(type, {
@@ -565,16 +632,7 @@ const typeToSemanticGraphImplementation = (
             function: recurseWithSameTypeParameters(type.function),
             argument: recurseWithSameTypeParameters(type.argument),
           }),
-        function: type =>
-          makeFunctionExpression(
-            objectNodeFromOrderedEntries([
-              [
-                ignoredKey,
-                recurseWithSameTypeParameters(type.signature.parameter),
-              ],
-            ]),
-            recurseWithSameTypeParameters(type.signature.return),
-          ),
+        function: functionTypeWithItsOwnIntroductions,
         indexedAccess: type =>
           option.match(conditionalBranches(type), {
             // Convert conditional indexed access types to `@if` expressions.
