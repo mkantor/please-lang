@@ -853,11 +853,16 @@ const reduceIntrinsicApplication = (
  * Attempt to reduce a (possibly stuck) indexed access.
  */
 const reduceIndexedAccess = (object: Type, key: Type): Type => {
-  // A stuck intrinsic application used as a key is reduced to its upper bound
-  // so indexing can proceed (e.g. `{ false: …, true: … }[boolean]`).
+  // A stuck intrinsic application key is reduced to its upper bound so indexing
+  // can proceed (e.g. `{ false: …, true: … }[boolean]`), but not while it
+  // mentions type parameters (since instantiating them later could produce
+  // something more specific).
   const keyForIndexing =
-    key.kind === 'intrinsicApplication' ?
-      replaceAllTypeParametersWithTheirConstraints(key)
+    (
+      key.kind === 'intrinsicApplication' &&
+      containedTypeParameters(key).size === 0
+    ) ?
+      key.computeUpperBound(key.parameterTypes)
     : key
   return either.match(atomKeyPathComponentFromType(keyForIndexing), {
     left: _ =>

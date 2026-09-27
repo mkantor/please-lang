@@ -105,11 +105,9 @@ export const isAssignable = ({
             // target's parameter type. For example, when checking whether
             // `?a ~> :Option(:a)` is assignable to `1 ~> :Option(1)`, `a` is
             // instantiated as `1`.
-            // TODO: Substituting into the return type collapses stuck `@if`s
-            // into unions of branch types, even when the supplied type
-            // argument doesn't concretize the condition. The result is that
-            // functions returning stuck `@if`s aren't assignable to their own
-            // types.
+            // TODO: A function whose result mentions two of its type
+            // parameters (e.g. `(n: :Integer) => (m: :Integer) => :n + :m`)
+            // isn't assignable to its own type.
             option.match(
               typeArgumentsForSourceFunction(
                 source.signature.parameter,

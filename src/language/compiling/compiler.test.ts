@@ -2775,6 +2775,36 @@ testCases(
 
   [
     `{
+      f: (n: :Integer) => @if { :n > 0, then: :n, else: 0 }
+      check: :f ~ ((?n: :Integer) ~> @if { :n > 0, then: :n, else: 0 })
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => @if { :n > 0, then: :n, else: 0 }
+      g: (x: :Integer) => :f(:x) ~ @if { :x > 0, then: :x, else: 0 }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => @if { :n > 0, then: :n, else: 0 }
+      g: (x: :Integer) => :f(:x) ~ (:x | 0)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
       k: (a: :Integer) => (b: :Boolean) =>
         @if { :b, then: :a, else: :a } ~ :a
       r: :k(2)(true)
