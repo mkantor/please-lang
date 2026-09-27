@@ -66,6 +66,13 @@ type TargetRole =
       readonly componentIndex: number
     }
   /**
+   * An unannotated function parameter's name (`a` in `a => …`).
+   */
+  | {
+      readonly kind: 'parameterName'
+      readonly functionExpression: KeyPath
+    }
+  /**
    * Anything else.
    */
   | { readonly kind: 'other' }
@@ -164,6 +171,19 @@ const typeOfTarget = (
       return inferredTypeAt(program, role.expression)
     case 'queryComponent':
       return typeOfPartialIndex(program, role.expression, role.componentIndex)
+    case 'parameterName':
+      // Describe the parameter type of the function, which can come from its
+      // context (e.g. `@runtime`).
+      return option.flatMap(
+        inferredTypeAt(program, role.functionExpression),
+        functionType =>
+          functionType.kind !== 'function' ? option.none
+          : functionType.signature.parameter.kind === 'parameter' ?
+            option.makeSome(
+              functionType.signature.parameter.constraint.assignableTo,
+            )
+          : option.makeSome(functionType.signature.parameter),
+      )
     case 'other':
       return inferredTypeAt(program, keyPath)
   }
@@ -171,7 +191,11 @@ const typeOfTarget = (
 
 const roleAt = (program: ParsedProgram, keyPath: KeyPath): TargetRole =>
   option.match(roleOfAtomAt(program, keyPath), {
-    none: _ => ({ kind: 'other' }),
+    none: _ =>
+      option.match(unannotatedParameterNameAt(program, keyPath), {
+        none: _ => ({ kind: 'other' }),
+        some: role => role,
+      }),
     some: role => role,
   })
 
@@ -206,6 +230,28 @@ const roleOfAtomAt = (
   } else {
     return option.none
   }
+}
+
+/**
+ * `a` in `a => …`.
+ */
+const unannotatedParameterNameAt = (
+  program: ParsedProgram,
+  keyPath: KeyPath,
+): Option<TargetRole> => {
+  const functionExpression = keyPath.slice(0, -2)
+  const [operandsKey, operandKey] = keyPath.slice(-2)
+  return (
+      operandsKey === '1' &&
+        operandKey === 'parameter' &&
+        isExpressionAt(program, functionExpression, readFunctionExpression)
+    ) ?
+      option.flatMap(nodeAt(program, keyPath), node =>
+        typeof node === 'string' ?
+          option.makeSome({ kind: 'parameterName', functionExpression })
+        : option.none,
+      )
+    : option.none
 }
 
 const isExpressionAt = (

@@ -251,6 +251,20 @@ hoverCases('a type parameter bound by more than one function', [
   ],
 ])
 
+hoverCases('the name of a parameter', [
+  [['(a: :Integer) => :a', 'a:'], 'a :: :Integer'],
+  [['a => :a', 'a =>'], 'a :: :Something'],
+  [['_ => 1', '_ =>'], '_ :: :Something'],
+  [['{ f: (g: :Atom ~> :Atom) => :g, h: :f(x => :x) }', 'x =>'], 'x :: :Atom'],
+  [
+    ['@runtime { context => :context.program.start_time }', 'context =>'],
+    hover => {
+      assert.ok(hover !== undefined)
+      assert.match(hover, /^context :: \{\|\n {2}arguments: /)
+    },
+  ],
+])
+
 hoversIn(`{
   f: (x: :Atom) => {
     callback: (k: :x ~> :Integer) => 1
