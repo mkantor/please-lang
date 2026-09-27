@@ -265,12 +265,16 @@ export const concreteUpperBound = (type: Type): Type =>
 
 /**
  * The most specific resolvable upper bound of a stuck type, or `none` when
- * nothing further can be resolved.
+ * nothing further can be resolved. It can still contain type parameters (e.g.
+ * in an `@if`'s branches).
  */
 export const upperBoundOfStuckType = (
   stuckType: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
 ): Option<Type> => {
-  const substituted = replaceAllTypeParametersWithTheirConstraints(stuckType)
+  const substituted =
+    stuckType.kind === 'indexedAccess' ?
+      replaceTypeParametersWithTheirConstraintsKeyFirst(stuckType)
+    : replaceAllTypeParametersWithTheirConstraints(stuckType)
   if (substituted !== stuckType) {
     return option.makeSome(substituted)
   } else {
@@ -298,6 +302,23 @@ export const upperBoundOfStuckType = (
         return option.none
     }
   }
+}
+
+/**
+ * Replaces the type parameters in an indexed access's key with their
+ * constraints, keeping others. If it's still an indexed access after that,
+ * they're all replaced.
+ */
+const replaceTypeParametersWithTheirConstraintsKeyFirst = (
+  indexedAccess: IndexedAccessType,
+): Type => {
+  const reduced = reduceIndexedAccess(
+    indexedAccess.object,
+    replaceAllTypeParametersWithTheirConstraints(indexedAccess.key),
+  )
+  return reduced.kind === 'indexedAccess' ?
+      replaceAllTypeParametersWithTheirConstraints(indexedAccess)
+    : reduced
 }
 
 const upperBoundOfResolvableStuckType = (

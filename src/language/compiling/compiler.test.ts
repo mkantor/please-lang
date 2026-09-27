@@ -2774,6 +2774,46 @@ testCases(
   ],
 
   [
+    `{
+      k: (a: :Integer) => (b: :Boolean) =>
+        @if { :b, then: :a, else: :a } ~ :a
+      r: :k(2)(true)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      k: (a: :Integer) => (b: :Boolean) => {
+        f: (y: :a) => :y
+        r: :f(@if { :b, then: :a, else: :a })
+      }.r
+      s: :k(2)(false)
+    }.s`,
+    success('2'),
+  ],
+
+  [
+    `(a: :Integer) => (b: :Boolean) => {
+      f: (y: :a) => :y
+      r: :f(@if { :b, then: :a, else: 1 })
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(k: b | c) => (cond: :Boolean) =>
+      :object.lookup(@if { :cond, then: a, else: :k })({ a: 1, b: 2, c: 3 })
+        ~ { tag: some, value: 1 | 2 | 3 }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `(k: b | c) => (x: a | :k) =>
       :object.lookup(:x)({ a: 1, b: 2, c: 3 })
         ~ ({ tag: some, value: 1 } | { tag: none })`,
