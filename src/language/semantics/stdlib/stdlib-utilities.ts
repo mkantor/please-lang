@@ -433,6 +433,7 @@ const genericizeIntrinsicSignature = (
           [firstParameterType, ...restParameterTypes],
           reduce,
           computeRefinedReturnType ?? (() => returnType),
+          option.none,
           option.makeSome(keyPath),
         ),
       ),

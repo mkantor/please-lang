@@ -652,6 +652,11 @@ export const withStuckApplicationsResolved = (type: Type): Type =>
             withStuckApplicationsResolved(
               type.computeUpperBound(parameterTypes),
             ),
+          option.map(
+            type.computeLowerBound,
+            computeLowerBound => parameterTypes =>
+              withStuckApplicationsResolved(computeLowerBound(parameterTypes)),
+          ),
           type.functionKeyPath,
         ),
       object: type =>
@@ -785,6 +790,7 @@ const reduceIntrinsicApplication = (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
   computeUpperBound: (parameterTypes: readonly Type[]) => Type,
+  computeLowerBound: Option<(parameterTypes: readonly Type[]) => Type>,
   functionKeyPath: Option<NonEmptyKeyPath>,
 ): Type => {
   const argumentPossibilities = parameterTypes.map(enumerateInhabitants)
@@ -792,6 +798,7 @@ const reduceIntrinsicApplication = (
     parameterTypes,
     reduce,
     computeUpperBound,
+    computeLowerBound,
     functionKeyPath,
   )
   return option.match(option.sequence(argumentPossibilities), {
@@ -896,6 +903,7 @@ export const supplyTypeArgument = (
           ),
           type.reduce,
           type.computeUpperBound,
+          type.computeLowerBound,
           type.functionKeyPath,
         ),
       indexedAccess: type =>

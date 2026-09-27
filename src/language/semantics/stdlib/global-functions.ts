@@ -103,6 +103,20 @@ const computeMatchReturnType = (parameterTypes: readonly Type[]): Type => {
 
 const anyTaggedValue = typeOfParameter(taggedParameter, [])
 
+// TODO: As an upper bound this is too lenient where a function is checked
+// against `match`'s type: with `B` as `{ [:Atom]: :Nothing ~> :Something }`,
+// `(cases: B) => (x: :Nothing) => :x` passes as `match`. To fix this, argument
+// checks would have to read the lower bound instead.
+const computeMatcheeUpperBound = ([casesType]: readonly Type[]): Type =>
+  casesType === undefined ? anyTaggedValue : (
+    matcheeTypeForCases(concreteUpperBound(casesType), 'handleAnything')
+  )
+
+const computeMatcheeLowerBound = ([casesType]: readonly Type[]): Type =>
+  casesType === undefined ?
+    types.nothing
+  : matcheeTypeForCases(concreteUpperBound(casesType), 'handleNothing')
+
 const matcheeParameter: Parameter<TaggedNode> = {
   ...taggedParameter,
   // The `matchee`'s type is constrained by the cases object supplied to `match`
@@ -120,12 +134,10 @@ const matcheeParameter: Parameter<TaggedNode> = {
             })
           : either.map(
               typeFromSemanticGraph(cases, { objectsAreExact: true }),
-              matcheeTypeForCases,
+              casesType => matcheeTypeForCases(casesType, 'handleAnything'),
             ),
-        ([casesType]) =>
-          casesType === undefined ? anyTaggedValue : (
-            matcheeTypeForCases(concreteUpperBound(casesType))
-          ),
+        computeMatcheeUpperBound,
+        option.makeSome(computeMatcheeLowerBound),
         option.none,
       )
     ),
@@ -269,23 +281,28 @@ export const globalFunctions = {
 const unitValue: Atom = '_'
 
 /**
- * The widest matchee type the given cases can handle.
+ * The matchees which every cases object of the given type handles.
  */
-const matcheeTypeForCases = (casesType: Type): Type =>
+const matcheeTypeForCases = (
+  casesType: Type,
+  unknownCases: 'handleAnything' | 'handleNothing',
+): Type =>
   casesType.kind !== 'object' ?
     // TODO: Cases of a union type should only accept matchees which every
     // member handles.
-    anyTaggedValue
+    unknownCases === 'handleAnything' ?
+      anyTaggedValue
+    : types.nothing
   : unionOfTypes(
       Object.entries(casesType.children).map(([tag, caseType]) => {
         const acceptedPayloadType = option.match(
           payloadTypeAcceptedByCase(caseType),
           {
-            // A case whose type isn't a single function type (see
-            // `payloadTypeAcceptedByCase`) doesn't constrain its payload.
-            // `match` validates payloads against the applied case, so a bad
-            // payload type is still rejected, just later.
-            none: _ => types.something,
+            none: _ =>
+              unknownCases === 'handleAnything' ?
+                // `match` still validates the payload when applying the case.
+                types.something
+              : types.nothing,
             some: payloadType => payloadType,
           },
         )

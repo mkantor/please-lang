@@ -2852,6 +2852,86 @@ testCases(
   ],
 
   [
+    `(n: :Integer) => true ~ (:n > 0)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(n: :Integer) => (:n < 0) ~ (:n > 0)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(n: :Integer) => {
+      a: (:n > 0) ~ (:n > 0)
+      b: (:n > 0) ~ :Boolean
+      c: (:n > 0) ~ ((:n > 0) | 5)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:integer.subtract ~ :integer.add`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:integer.add ~ :+`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => {
+        x: @if { :n < 0, then: :n, else: 0 }
+        y: :x ~ @if { :n > 0, then: :n, else: 0 }
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (x: :Integer) => { a: :x } object.overlay { b: 1 }
+      check: :f ~ ((?x: :Integer) ~> ({ a: :x } object.overlay { b: 1 }))
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:match ~ ({| a: :Integer ~> :Integer |} ~> {| tag: a, value: :Integer |} ~> :Integer)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:match ~ (({| a: :Integer ~> :Integer |} | {| b: :Atom ~> :Atom |}) ~> {| tag: c |} ~> :Something)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `:option.make_some ~ (1 ~> :Option(1))`,
     result => {
       assert(either.isRight(result))

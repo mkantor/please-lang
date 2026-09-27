@@ -84,7 +84,7 @@ testCases(
           some: (v: :Atom) => :a
         }
     }`,
-    'f :: :NaturalNumber ~> :NaturalNumber',
+    'f :: (?a: :NaturalNumber) ~> :a | :NaturalNumber',
   ],
   [
     `{
