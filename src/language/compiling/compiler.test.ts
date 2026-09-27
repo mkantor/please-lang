@@ -2686,6 +2686,29 @@ testCases(
   ],
 
   [
+    `:object.from_property ~ (:Atom ~> ?b ~> { [:Atom]: :b })`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:object.from_property ~ (:Atom ~> ?b ~> { [:Atom]: :Integer })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:object.from_property ~ (:Atom ~> ?b ~> ?c ~> { [:Atom]: :c })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `{
       f: (count: :Integer) => {
         g: (value: :Integer) => { x: :value, n: :count }

@@ -14,11 +14,7 @@ import {
   unionOfTypes,
   type UnionType,
 } from './type-formats/union-type.js'
-import { updateTypeAtKeyPathIfValid } from './type-key-path.js'
-import {
-  containedTypeParameters,
-  findKeyPathsToTypeParameter,
-} from './type-parameter-analysis.js'
+import { containedTypeParameters } from './type-parameter-analysis.js'
 import {
   reduceStuckApplication,
   replaceAllTypeParametersWithTheirConstraints,
@@ -160,30 +156,15 @@ export const isAssignable = ({
                       targetParameterTypeParameters.get(stringifiedKeyPath)
 
                     if (correspondingTargetTypeParameter !== undefined) {
-                      const locationsOfSourceTypeParameterInSourceReturn =
-                        findKeyPathsToTypeParameter(
-                          source.signature.return,
+                      sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
+                        supplyTypeArgument(
+                          sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
                           sourceTypeParameter,
+                          unionOfTypes([
+                            ...correspondingTargetTypeParameter.typeParameters
+                              .members,
+                          ]),
                         )
-
-                      for (const locationOfSourceTypeParameterInSourceReturn of locationsOfSourceTypeParameterInSourceReturn) {
-                        sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
-                          updateTypeAtKeyPathIfValid(
-                            sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
-                            locationOfSourceTypeParameterInSourceReturn,
-                            typeAtKeyPath => {
-                              if (
-                                typeAtKeyPath.kind === 'parameter' &&
-                                typeAtKeyPath.identity ===
-                                  sourceTypeParameter.identity
-                              ) {
-                                return correspondingTargetTypeParameter.typeParameters
-                              } else {
-                                return typeAtKeyPath
-                              }
-                            },
-                          )
-                      }
                     }
                   }
                 }
@@ -223,6 +204,10 @@ export const isAssignable = ({
             some: upperBound => isAssignable({ source: upperBound, target }),
           }),
         intrinsicApplication: source =>
+          isAssignable({
+            source: source.computeUpperBound(source.parameterTypes),
+            target,
+          }) ||
           option.match(upperBoundOfStuckType(source), {
             none: _ => false,
             some: upperBound => isAssignable({ source: upperBound, target }),
