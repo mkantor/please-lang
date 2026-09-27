@@ -2774,6 +2774,16 @@ testCases(
   ],
 
   [
+    `(k: b | c) => (x: a | :k) =>
+      :object.lookup(:x)({ a: 1, b: 2, c: 3 })
+        ~ ({ tag: some, value: 1 } | { tag: none })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `{
       f: (x: {| de: :Atom |}) => :x
       check: :f ~ ({| de: :Atom |} ~> {| de: :Atom |})

@@ -246,7 +246,21 @@ export const concreteUpperBound = (type: Type): Type =>
     object: _ => type,
     opaque: _ => type,
     parameter: type => concreteUpperBound(type.constraint.assignableTo),
-    union: _ => type,
+    union: type => {
+      const members = [...type.members]
+      const boundedMembers = members.map(member =>
+        typeof member === 'string' ? member : concreteUpperBound(member),
+      )
+      return (
+          boundedMembers.every((member, index) => member === members[index])
+        ) ?
+          type
+        : unionOfTypes(
+            boundedMembers.map(member =>
+              typeof member === 'string' ? makeUnionType([member]) : member,
+            ),
+          )
+    },
   })
 
 /**
