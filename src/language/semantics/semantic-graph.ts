@@ -490,6 +490,7 @@ type TypeParameterRenderingState = {
 const typeToSemanticGraphImplementation = (
   unsimplifiedType: Type,
   state: TypeParameterRenderingState,
+  isFunctionParameter = false,
 ): SemanticGraph => {
   const type = simplifyType(unsimplifiedType)
   const {
@@ -546,6 +547,7 @@ const typeToSemanticGraphImplementation = (
           typeToSemanticGraphImplementation(
             type.signature.parameter,
             stateWithinFunctionType,
+            true,
           ),
         ],
       ]),
@@ -706,11 +708,14 @@ const typeToSemanticGraphImplementation = (
             return isBoundOutsideType(type) ?
                 referenceToTypeParameterBoundOutsideType(type)
               : makeLookupExpression(nameOfIntroducedTypeParameter(type))
-          } else if (!isReferredTo(type)) {
-            // Type parameters occurring only once are shown as their constraints.
+          } else if (
+            !isReferredTo(type) &&
+            !(type.isTypeOfStandardLibraryParameter && isFunctionParameter)
+          ) {
+            // Type parameters occurring once are shown as their constraints.
             return recurseWithSameTypeParameters(type.constraint.assignableTo)
           } else {
-            // Side effect: remember the type parameter. This is a direct mutation
+            // Side effect: remember the type parameter. It's a direct mutation
             // because it needs to be visible to usages not in this call stack.
             alreadyIntroducedTypeParameterIdentities.add(type.identity)
             if (isBoundOutsideType(type)) {
@@ -789,7 +794,9 @@ export type TypeRenderingOptions = {
   readonly typeParametersInScope?: ReadonlySet<symbol>
   /**
    * Write type parameters occurring exactly once as their constraints, e.g.
-   * `(?a: :Integer) ~> :Integer` is `:Integer ~> :Integer`.
+   * `(?a: :Integer) ~> :Integer` is `:Integer ~> :Integer`. Standard library
+   * functions' parameters are the exception: they stay named holes, e.g.
+   * `(?top: {}) ~> (?base: {}) ~> {}`.
    */
   readonly unreferencedTypeParametersAsConstraints?: boolean
 }

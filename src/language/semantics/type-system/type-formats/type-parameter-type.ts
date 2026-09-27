@@ -15,6 +15,7 @@ export type TypeParameter = {
    * body of `(x: { a: :Atom, b: :Atom }) => …`.
    */
   readonly valueKeyPath: Option<NonEmptyKeyPath>
+  readonly isTypeOfStandardLibraryParameter: boolean
 }
 
 export const makeTypeParameter = (
@@ -27,6 +28,7 @@ export const makeTypeParameter = (
   identity: Symbol(name),
   constraint,
   valueKeyPath,
+  isTypeOfStandardLibraryParameter: false,
 })
 
 /**
@@ -60,13 +62,16 @@ export const isTypeParameter = (value: unknown): value is TypeParameter => {
     typeof value.constraint === 'object' &&
     value.constraint !== null &&
     'identity' in value &&
-    typeof value.identity === 'symbol'
+    typeof value.identity === 'symbol' &&
+    'isTypeOfStandardLibraryParameter' in value &&
+    typeof value.isTypeOfStandardLibraryParameter === 'boolean'
   ) {
     ;({
       name: value.name,
       kind: value.kind,
       constraint: value.constraint,
       identity: value.identity,
+      isTypeOfStandardLibraryParameter: value.isTypeOfStandardLibraryParameter,
     }) satisfies Omit<TypeParameter, 'constraint' | 'valueKeyPath'> & {
       constraint: {}
     }
