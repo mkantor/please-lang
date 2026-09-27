@@ -24,6 +24,7 @@ import {
   stringifyResolvedTypeForEndUser,
   type ExpressionContext,
   type FunctionParameterTypeInfo,
+  type IfExpression,
   type KeyPath,
   type SemanticGraph,
 } from '../../semantics.js'
@@ -122,17 +123,9 @@ export const inferType = (
 
 /**
  * Like `inferType`, but for a `node` occurring in a type annotation (e.g. a
- * function parameter type or `@check` type). The denoted type is interpreted as
- * an open upper bound:
- * - An explicit `@object` expression is interpreted exactly as written.
- * - Each `@union` member is interpreted as if it were written bare in the
- *   same position (`inferTypeOfTypeAnnotation` distributes over union members).
- * - A plain object literal is open (allowing arbitrary excess properties), in
- *   contrast to value positions where inference gives closed object types.
- * - Anything indirect (lookups, indexed accesses, applications, …) is
- *   interpreted as its inferred type with every closed object widened to an
- *   open one; in particular an alias to an explicitly-closed `@object` is
- *   interpreted as open.
+ * function parameter type or `@check` type), where plain object literals
+ * denote open object types. When `node` is stuck, even explicitly-closed
+ * `@object`s are opened.
  */
 export const inferTypeOfTypeAnnotation = (
   node: SemanticGraph,
@@ -381,32 +374,12 @@ const inferTypeImplementation = (
   const functionExpressionResult = readFunctionExpression(node)
   if (either.isRight(functionExpressionResult)) {
     return cacheOnSuccess(
-      either.flatMap(
-        getFunctionParameterType(
-          functionExpressionResult.value,
-          context,
-          assumptions,
-        ),
-        parameterTypeInfo =>
-          mapInferred(
-            inferTypeImplementation(
-              functionExpressionResult.value[1].body,
-              new Map([
-                ...parameterTypes,
-                [
-                  getParameterName(functionExpressionResult.value),
-                  parameterTypeInfo.parameterType,
-                ],
-              ]),
-              assumptions,
-              descendantContext(['1', 'body']),
-            ),
-            returnType =>
-              makeFunctionType({
-                parameter: parameterTypeInfo.parameterType,
-                return: returnType,
-              }),
-          ),
+      inferTypeOfFunctionExpression(
+        functionExpressionResult.value,
+        inferTypeImplementation,
+        parameterTypes,
+        assumptions,
+        context,
       ),
     )
   }
@@ -703,67 +676,16 @@ const inferTypeImplementation = (
     }
   }
 
-  // @if: narrow to the chosen branch when the condition is statically known
-  // to be `true` or `false`; otherwise return a union of the branch types.
+  // @if: narrow to the chosen branch when the condition is statically known.
   const ifExpressionResult = readIfExpression(node)
   if (either.isRight(ifExpressionResult)) {
-    const { condition, then, else: otherwise } = ifExpressionResult.value[1]
-
-    const inferThen = () =>
-      inferTypeImplementation(
-        then,
-        parameterTypes,
-        assumptions,
-        descendantContext(['1', 'then']),
-      )
-    const inferElse = () =>
-      inferTypeImplementation(
-        otherwise,
-        parameterTypes,
-        assumptions,
-        descendantContext(['1', 'else']),
-      )
-
     return cacheOnSuccess(
-      flatMapInferred(
-        inferTypeImplementation(
-          condition,
-          parameterTypes,
-          assumptions,
-          descendantContext(['1', 'condition']),
-        ),
-        conditionType => {
-          if (isAssignable({ source: conditionType, target: 'true' })) {
-            return inferThen()
-          } else if (isAssignable({ source: conditionType, target: 'false' })) {
-            return inferElse()
-          } else if (containedTypeParameters(conditionType).size > 0) {
-            // The condition depends on a type parameter, so keep the choice
-            // unresolved as an indexed access into a boolean-keyed object.
-            // This expression:
-            // ```
-            // @if { :a, b, c }
-            // ```
-            // Is equivalent type-wise to this expression:
-            // ```
-            // { true: b, false: c }.:a
-            // ```
-            return flatMapInferred(inferThen(), thenType =>
-              mapInferred(inferElse(), elseType =>
-                makeIndexedAccessType(
-                  makeObjectType({ false: elseType, true: thenType }),
-                  conditionType,
-                ),
-              ),
-            )
-          } else {
-            return flatMapInferred(inferThen(), thenType =>
-              mapInferred(inferElse(), elseType =>
-                unionOfTypes([thenType, elseType]),
-              ),
-            )
-          }
-        },
+      inferTypeOfIfExpression(
+        ifExpressionResult.value,
+        inferTypeImplementation,
+        parameterTypes,
+        assumptions,
+        context,
       ),
     )
   }
@@ -970,7 +892,32 @@ const inferTypeOfTypeAnnotationImplementation = (
   const descendantContext = (subPath: KeyPath): ExpressionContext =>
     contextWithinExpression(context, subPath)
   const unionExpressionResult = readUnionExpression(node)
-  if (either.isRight(readObjectTypeExpression(node))) {
+  const ifExpressionResult = readIfExpression(node)
+  const functionExpressionResult = readFunctionExpression(node)
+  // A function type (e.g. `A ~> B`) usually arrives as an elaborated function,
+  // whose body's lookups resolve where it was defined.
+  if (isFunctionNode(node) && option.isSome(node.definition)) {
+    const { expression, context: definitionContext } = node.definition.value
+    return either.flatMap(
+      resolveParameterTypesAssuming(definitionContext, assumptions),
+      parameterTypesAtDefinition =>
+        inferTypeOfFunctionExpression(
+          expression,
+          inferTypeOfTypeAnnotationImplementation,
+          parameterTypesAtDefinition,
+          assumptions,
+          definitionContext,
+        ),
+    )
+  } else if (either.isRight(functionExpressionResult)) {
+    return inferTypeOfFunctionExpression(
+      functionExpressionResult.value,
+      inferTypeOfTypeAnnotationImplementation,
+      parameterTypes,
+      assumptions,
+      context,
+    )
+  } else if (either.isRight(readObjectTypeExpression(node))) {
     // `@object` operands are type positions; `inferTypeImplementation`
     // interprets the whole subtree as written.
     return inferTypeImplementation(node, parameterTypes, assumptions, context)
@@ -988,6 +935,15 @@ const inferTypeOfTypeAnnotationImplementation = (
         ),
       ),
       unionOfTypes,
+    )
+  } else if (either.isRight(ifExpressionResult)) {
+    // Distribute over branches.
+    return inferTypeOfIfExpression(
+      ifExpressionResult.value,
+      inferTypeOfTypeAnnotationImplementation,
+      parameterTypes,
+      assumptions,
+      context,
     )
   } else if (isPlainObjectLiteral) {
     return mapInferred(
@@ -1012,6 +968,105 @@ const inferTypeOfTypeAnnotationImplementation = (
       recursivelyOpenObjectTypes,
     )
   }
+}
+
+const inferTypeOfFunctionExpression = (
+  expression: FunctionExpression,
+  inferTypeOfBody: TypeInferrer,
+  parameterTypes: ReadonlyMap<Atom, Type>,
+  assumptions: TypeAssumptions,
+  context: ExpressionContext,
+): InferenceResult<Type> =>
+  either.flatMap(
+    getFunctionParameterType(expression, context, assumptions),
+    parameterTypeInfo =>
+      mapInferred(
+        inferTypeOfBody(
+          expression[1].body,
+          new Map([
+            ...parameterTypes,
+            [getParameterName(expression), parameterTypeInfo.parameterType],
+          ]),
+          assumptions,
+          contextWithinExpression(context, ['1', 'body']),
+        ),
+        returnType =>
+          makeFunctionType({
+            parameter: parameterTypeInfo.parameterType,
+            return: returnType,
+          }),
+      ),
+  )
+
+/**
+ * Narrows to the chosen branch when the condition is statically known to be
+ * `true` or `false`, otherwise unions the branches' types.
+ */
+const inferTypeOfIfExpression = (
+  expression: IfExpression,
+  inferTypeOfBranch: TypeInferrer,
+  parameterTypes: ReadonlyMap<Atom, Type>,
+  assumptions: TypeAssumptions,
+  context: ExpressionContext,
+): InferenceResult<Type> => {
+  const { condition, then, else: otherwise } = expression[1]
+
+  const inferThen = () =>
+    inferTypeOfBranch(
+      then,
+      parameterTypes,
+      assumptions,
+      contextWithinExpression(context, ['1', 'then']),
+    )
+  const inferElse = () =>
+    inferTypeOfBranch(
+      otherwise,
+      parameterTypes,
+      assumptions,
+      contextWithinExpression(context, ['1', 'else']),
+    )
+
+  return flatMapInferred(
+    inferTypeImplementation(
+      condition,
+      parameterTypes,
+      assumptions,
+      contextWithinExpression(context, ['1', 'condition']),
+    ),
+    conditionType => {
+      if (isAssignable({ source: conditionType, target: 'true' })) {
+        return inferThen()
+      } else if (isAssignable({ source: conditionType, target: 'false' })) {
+        return inferElse()
+      } else if (containedTypeParameters(conditionType).size > 0) {
+        // The condition depends on a type parameter, so keep the choice
+        // unresolved as an indexed access into a boolean-keyed object.
+        //
+        // This expression:
+        // ```
+        // @if { :a, b, c }
+        // ```
+        // Is equivalent type-wise to this expression:
+        // ```
+        // { true: b, false: c }.:a
+        // ```
+        return flatMapInferred(inferThen(), thenType =>
+          mapInferred(inferElse(), elseType =>
+            makeIndexedAccessType(
+              makeObjectType({ false: elseType, true: thenType }),
+              conditionType,
+            ),
+          ),
+        )
+      } else {
+        return flatMapInferred(inferThen(), thenType =>
+          mapInferred(inferElse(), elseType =>
+            unionOfTypes([thenType, elseType]),
+          ),
+        )
+      }
+    },
+  )
 }
 
 /**
@@ -1397,3 +1452,10 @@ const recursivelyOpenObjectTypes = (type: Type): Type =>
         ),
     })
   )
+
+type TypeInferrer = (
+  node: SemanticGraph,
+  parameterTypes: ReadonlyMap<Atom, Type>,
+  assumptions: TypeAssumptions,
+  context: ExpressionContext,
+) => InferenceResult<Type>

@@ -1,5 +1,4 @@
 import either from '@matt.kantor/either'
-import option from '@matt.kantor/option'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
 import {
@@ -9,7 +8,7 @@ import {
 import {
   isFunctionNode,
   makeFunctionExpression,
-  makeFunctionNode,
+  makeNativeFunctionNode,
   objectNodeFromOrderedEntries,
   stringifyKeyPathForInternalUse,
   types,
@@ -57,11 +56,10 @@ const contextSeenByAppliedFunction = (
   secondArgument: SemanticGraph,
 ): ExpressionContext | undefined => {
   let contextSeenByRecordingFunction: ExpressionContext | undefined = undefined
-  const recordingFunction = makeFunctionNode({
+  const recordingFunction = makeNativeFunctionNode({
     signature: { parameter: types.something, return: types.something },
     serialize: () =>
       either.makeRight(makeFunctionExpression('parameter', 'body')),
-    parameterName: option.none,
     call: (recordedArgument, contextOfRecordedApplication) => {
       contextSeenByRecordingFunction = contextOfRecordedApplication
       return either.makeRight(recordedArgument)

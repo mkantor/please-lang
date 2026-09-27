@@ -83,7 +83,8 @@ export {
 } from './semantics/expressions/union-expression.js'
 export {
   isFunctionNode,
-  makeFunctionNode,
+  makeFunctionNodeFromDefinition,
+  makeNativeFunctionNode,
   type FunctionNode,
 } from './semantics/function-node.js'
 export { isSemanticGraph } from './semantics/is-semantic-graph.js'

@@ -11,7 +11,7 @@ import {
   type ExpressionContext,
 } from '../../semantics.js'
 import {
-  makeFunctionNode,
+  makeNativeFunctionNode,
   type FunctionNode,
   type FunctionNodeCallError,
   type FunctionNodeCallSignature,
@@ -175,10 +175,9 @@ export const preludeFunction = <const Parameters extends NonEmptyParameters>(
       ),
     computeRefinedReturnType,
   )
-  return makeFunctionNode({
+  return makeNativeFunctionNode({
     signature: liftedSignature,
     serialize: () => either.makeRight(keyPathToLookupExpression(keyPath)),
-    parameterName: option.none,
     call: handleUnavailableDependencies(
       acceptArgument(definition)({
         remainingParameters: parameters,
@@ -341,13 +340,12 @@ const acceptArgument =
                         argument,
                       ),
                       refinedReturn =>
-                        makeFunctionNode({
+                        makeNativeFunctionNode({
                           signature: refinedReturn.signature,
                           serialize: serializeAppliedFunction(
                             definition.keyPath,
                             argumentsSoFar,
                           ),
-                          parameterName: option.none,
                           call: handleUnavailableDependencies(
                             acceptArgument(definition)({
                               remainingParameters: restParameters,

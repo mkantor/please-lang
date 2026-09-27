@@ -2761,6 +2761,89 @@ testCases(
   ],
 
   [
+    `{
+      f: (n: :Integer) => {
+        x: @if { :n > 0, then: { b: 1, c: 1 }, else: { b: 2 } }
+        y: :x ~ @if { :n > 0, then: {| b: 1 |}, else: {| b: 2 |} }
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (x: {| de: :Atom |}) => :x
+      check: :f ~ ({| de: :Atom |} ~> {| de: :Atom |})
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (x: :Atom) => { de: :x, en: :x }
+      check: :f ~ (:Atom ~> {| de: :Atom |})
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (x: {| de: :Atom, en: :Atom |}) => :x.de
+      check: :f ~ ({ de: :Atom } ~> :Atom)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:object.lookup ~ (:Atom ~> {| de: :Atom |} ~> {| tag: some, value: :Atom |} | {| tag: none |})`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (g: {| de: :Atom |} ~> :Atom) => :g({ de: a })
+      result: :f((x: {| de: :Atom |}) => :x.de)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      T: ?a ~> :a
+      check: ((x: :Something) => 1) ~ :T
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+  [
+    `{
+      a: 1
+      T: ?a ~> :a
+      check: ((x: :Something) => :x) ~ :T
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
     `:option.make_some ~ (1 ~> :Option(1))`,
     result => {
       assert(either.isRight(result))

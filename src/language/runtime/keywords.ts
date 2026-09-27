@@ -8,7 +8,7 @@ import {
   elaborateOperands,
   isFunctionNode,
   keyPathToLookupExpression,
-  makeFunctionNode,
+  makeNativeFunctionNode,
   makeObjectNode,
   readRuntimeExpression,
   serialize,
@@ -53,13 +53,12 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
   )
   return makeObjectNode({
     arguments: makeObjectNode({
-      lookup: makeFunctionNode({
+      lookup: makeNativeFunctionNode({
         signature: {
           parameter: types.atom,
           return: types.option(types.atom),
         },
         serialize: serializeRuntimeContextFunction(['arguments', 'lookup']),
-        parameterName: option.none,
         call: key => {
           if (typeof key !== 'string') {
             return either.makeLeft({
@@ -94,13 +93,12 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
       }),
     }),
     environment: makeObjectNode({
-      lookup: makeFunctionNode({
+      lookup: makeNativeFunctionNode({
         signature: {
           parameter: types.atom,
           return: types.option(types.atom),
         },
         serialize: serializeRuntimeContextFunction(['environment', 'lookup']),
-        parameterName: option.none,
         call: key => {
           if (typeof key !== 'string') {
             return either.makeLeft({
@@ -127,13 +125,12 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
         },
       }),
     }),
-    log: makeFunctionNode({
+    log: makeNativeFunctionNode({
       signature: {
         parameter: logValue,
         return: logValue,
       },
       serialize: serializeRuntimeContextFunction(['log']),
-      parameterName: option.none,
       call: output => {
         const serializationResult = serialize(output)
         if (either.isLeft(serializationResult)) {
