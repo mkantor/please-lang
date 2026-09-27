@@ -45,7 +45,7 @@ const serializeFunction =
     return () => serialize
   }
 
-const A = makeTypeParameter('a', { assignableTo: types.something })
+const logValue = makeTypeParameter('value', { assignableTo: types.something })
 
 const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
   const serializeRuntimeContextFunction = serializeFunction(
@@ -129,8 +129,8 @@ const runtimeContext = (runtimeFunctionParameterName: Option<string>) => {
     }),
     log: makeFunctionNode({
       signature: {
-        parameter: A,
-        return: A,
+        parameter: logValue,
+        return: logValue,
       },
       serialize: serializeRuntimeContextFunction(['log']),
       parameterName: option.none,

@@ -7,6 +7,7 @@ import { makeObjectType, types } from '../type-system.js'
 import {
   anyValue,
   atomParameter,
+  named,
   objectOfAtomsParameter,
 } from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
@@ -17,7 +18,7 @@ export const atom = {
 
   append: preludeFunction(
     ['atom', 'append'],
-    [atomParameter, atomParameter],
+    [named('suffix', atomParameter), named('subject', atomParameter)],
     types.atom,
     atomToAppend =>
       either.makeRight(atomToAppendTo =>
@@ -31,7 +32,7 @@ export const atom = {
   // types of values.
   equals: preludeFunction(
     ['atom', 'equals'],
-    [atomParameter, atomParameter],
+    [named('other', atomParameter), named('subject', atomParameter)],
     types.boolean,
     atom2 =>
       either.makeRight(atom1 => either.makeRight(String(atom1 === atom2))),
@@ -39,7 +40,7 @@ export const atom = {
 
   from: preludeFunction(
     ['atom', 'from'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.option(types.atom),
     argument =>
       either.makeRight(
@@ -55,7 +56,7 @@ export const atom = {
 
   prepend: preludeFunction(
     ['atom', 'prepend'],
-    [atomParameter, atomParameter],
+    [named('prefix', atomParameter), named('subject', atomParameter)],
     types.atom,
     atomToPrepend =>
       either.makeRight(atomToPrependTo =>
@@ -65,7 +66,7 @@ export const atom = {
 
   length: preludeFunction(
     ['atom', 'length'],
-    [atomParameter],
+    [named('subject', atomParameter)],
     types.naturalNumber,
     // Count codepoints rather than JavaScript's internal UTF-16 units.
     subject => either.makeRight(String(Array.from(subject).length)),
@@ -73,7 +74,7 @@ export const atom = {
 
   contains: preludeFunction(
     ['atom', 'contains'],
-    [atomParameter, atomParameter],
+    [named('needle', atomParameter), named('haystack', atomParameter)],
     types.boolean,
     needle =>
       either.makeRight(haystack =>
@@ -83,7 +84,7 @@ export const atom = {
 
   starts_with: preludeFunction(
     ['atom', 'starts_with'],
-    [atomParameter, atomParameter],
+    [named('prefix', atomParameter), named('subject', atomParameter)],
     types.boolean,
     prefix =>
       either.makeRight(subject =>
@@ -93,7 +94,7 @@ export const atom = {
 
   ends_with: preludeFunction(
     ['atom', 'ends_with'],
-    [atomParameter, atomParameter],
+    [named('suffix', atomParameter), named('subject', atomParameter)],
     types.boolean,
     suffix =>
       either.makeRight(subject =>
@@ -103,7 +104,7 @@ export const atom = {
 
   join: preludeFunction(
     ['atom', 'join'],
-    [atomParameter, objectOfAtomsParameter],
+    [named('separator', atomParameter), named('atoms', objectOfAtomsParameter)],
     types.atom,
     separator =>
       either.makeRight(list =>
@@ -125,7 +126,7 @@ export const atom = {
 
   split: preludeFunction(
     ['atom', 'split'],
-    [atomParameter, atomParameter],
+    [named('separator', atomParameter), named('subject', atomParameter)],
     makeObjectType({}, [{ keys: types.atom, values: types.atom }]),
     separator =>
       either.makeRight(subject =>

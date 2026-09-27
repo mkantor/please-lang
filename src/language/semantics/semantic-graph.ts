@@ -450,9 +450,9 @@ type TypeParameterRenderingState = {
    */
   readonly alreadyIntroducedTypeParameterIdentities: Set<symbol>
   /**
-   * Names for type parameters that are unique within the rendered type even
-   * when the type parameters' own names aren't. Mutable for the same reason as
-   * `alreadyIntroducedTypeParameterIdentities`.
+   * Names for type parameters that differ from those of the other type
+   * parameters in scope even when the type parameters' own names don't. Mutable
+   * for the same reason as `alreadyIntroducedTypeParameterIdentities`.
    */
   readonly typeParameterNames: Map<symbol, Atom>
   /**
@@ -592,9 +592,19 @@ const typeToSemanticGraphImplementation = (
     if (existingName !== undefined) {
       return existingName
     } else {
+      // Only type parameters introduced so far and still in scope (e.g. not
+      // those of a sibling function type) could be confused with this one.
       const name = firstUnusedName(
         typeParameter.name,
-        new Set([...reservedNames, ...typeParameterNames.values()]),
+        new Set([
+          ...reservedNames,
+          ...alreadyIntroducedTypeParameterIdentities
+            .values()
+            .flatMap(identity => {
+              const nameInScope = typeParameterNames.get(identity)
+              return nameInScope === undefined ? [] : [nameInScope]
+            }),
+        ]),
       )
       // Side effect: remember the name, so occurrences of the same type
       // parameter use it.

@@ -142,7 +142,7 @@ hoversIn(`{
   ['n: :Integer', 'n :: :Integer'],
   [':Integer', ':Integer :: :Integer'],
   ['Integer)', 'Integer :: :Integer'],
-  ['|>', '|> :: ?a ~> :a'],
+  ['|>', '|> :: ?value ~> :value'],
   ['add(:n)', 'add :: :Integer ~> :Integer ~> :Integer'],
 ])
 
@@ -212,38 +212,46 @@ hoverCases('type parameters in `@if`s', [
 ])
 
 hoverCases('type parameters which share a name', [
-  // `option.get_or_else`'s type parameter is also named `a`.
+  // `option.get_or_else`'s type parameter is also named `value`.
   [
-    ['{ f: (a: :Integer) => :option.get_or_else(:a) }', 'f:'],
-    'f :: (?a: :Integer) ~> :Option(?a2) ~> :a2 | :a',
+    ['{ f: (value: :Integer) => :option.get_or_else(:value) }', 'f:'],
+    'f :: (?value: :Integer) ~> :Option(?value2) ~> :value2 | :value',
   ],
   [
-    ['(a: :Integer) => { x: :a, y: :a, h: :option.get_or_else(:a) }', '{ x'],
-    '{ x: :a, y: :a, h: :option.get_or_else(:a) } :: {| x: :a ~ :Integer, y: :a, h: :Option(?a2) ~> :a2 | :a |}',
+    [
+      '(value: :Integer) => { x: :value, y: :value, h: :option.get_or_else(:value) }',
+      '{ x',
+    ],
+    '{ x: :value, y: :value, h: :option.get_or_else(:value) } :: {| x: :value ~ :Integer, y: :value, h: :Option(?value2) ~> :value2 | :value |}',
   ],
   [
-    ['(a: :Integer) => { x: :a, h: :option.get_or_else }', '{ x'],
-    '{ x: :a, h: :option.get_or_else } :: {| x: :Integer, h: ?b ~> :Option(?a) ~> :a | :b |}',
+    ['(value: :Integer) => { x: :value, h: :option.get_or_else }', '{ x'],
+    '{ x: :value, h: :option.get_or_else } :: {| x: :Integer, h: ?fallback ~> :Option(?value) ~> :value | :fallback |}',
+  ],
+  // Type parameters in separate scopes can share a name.
+  [
+    ['{ f: { i: :identity, j: :option.make_some } }', 'f:'],
+    'f :: {| i: ?value ~> :value, j: ?value ~> :Option(:value) |}',
   ],
 ])
 
 hoverCases('a type parameter bound by more than one function', [
   [
     ['{ f: { i: :identity, j: :identity } }', 'f:'],
-    'f :: {| i: ?a ~> :a, j: ?a ~> :a |}',
+    'f :: {| i: ?value ~> :value, j: ?value ~> :value |}',
   ],
   [
     ['{ f: :option.map }', 'option.map'],
     [
       'option :: {|',
-      '  type: ?a ~> :Option(:a)',
+      '  type: ?value ~> :Option(:value)',
       '  none: {|',
       '    tag: none',
       '  |}',
-      '  make_some: ?a ~> :Option(:a)',
-      '  map: (?a ~> ?b) ~> :Option(:a) ~> :Option(:b)',
-      '  flat_map: (?a ~> :Option(?b)) ~> :Option(:a) ~> :Option(:b)',
-      '  get_or_else: ?b ~> :Option(?a) ~> :a | :b',
+      '  make_some: ?value ~> :Option(:value)',
+      '  map: (?value ~> ?result) ~> :Option(:value) ~> :Option(:result)',
+      '  flat_map: (?value ~> :Option(?result)) ~> :Option(:value) ~> :Option(:result)',
+      '  get_or_else: ?fallback ~> :Option(?value) ~> :value | :fallback',
       '  is_some: :Option(:Something) ~> :Boolean',
       '  is_none: :Option(:Something) ~> :Boolean',
       '|}',

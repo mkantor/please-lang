@@ -21,7 +21,7 @@ import {
 import { makeTypeParameter } from '../type-system.js'
 import { globalFunctions } from './global-functions.js'
 import { option as optionModule } from './option.js'
-import { anyValue } from './parameters.js'
+import { anyValue, named } from './parameters.js'
 import {
   emptyContextForStdlibApplications,
   preludeFunction,
@@ -115,11 +115,11 @@ test('a computed parameter bound forces lifting', _ => {
   const { signature } = preludeFunction(
     ['test_function'],
     [
-      anyValue(first),
-      {
+      named('first', anyValue(first)),
+      named('second', {
         ...anyValue(types.something),
         type: ([preceding]) => preceding ?? types.something,
-      },
+      }),
     ],
     first,
     _firstArgument =>
