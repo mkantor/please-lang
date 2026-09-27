@@ -156,6 +156,11 @@ export const isAssignable = ({
                       targetParameterTypeParameters.get(stringifiedKeyPath)
 
                     if (correspondingTargetTypeParameter !== undefined) {
+                      // TODO: Substituting into the return type collapses stuck
+                      // `@if`s into unions of branch types, even when the
+                      // supplied type argument doesn't concretize the
+                      // condition. The result is that functions returning stuck
+                      // `@if`s aren't assignable to their own types.
                       sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
                         supplyTypeArgument(
                           sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
@@ -199,6 +204,10 @@ export const isAssignable = ({
             union: target => isNonUnionAssignableToUnion({ source, target }),
           }),
         indexedAccess: source =>
+          (target.kind === 'indexedAccess' &&
+            isAssignable({ source: source.object, target: target.object }) &&
+            isAssignable({ source: source.key, target: target.key }) &&
+            isAssignable({ source: target.key, target: source.key })) ||
           option.match(upperBoundOfStuckType(source), {
             none: _ => false,
             some: upperBound => isAssignable({ source: upperBound, target }),

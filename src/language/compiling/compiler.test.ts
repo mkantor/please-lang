@@ -2737,6 +2737,31 @@ testCases(
 
   [
     `{
+      f: (n: :Integer) => {
+        x: @if { :n > 0, then: :n, else: 0 }
+        y: :x ~ @if { :n > 0, then: :n, else: 0 }
+      }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => {
+        x: @if { :n > 0, then: :n, else: 0 }
+        y: :x ~ @if { :n > 0, then: :n, else: 1 }
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       f: (key: @union { a, c }) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
           { tag: some, value: :Integer },
