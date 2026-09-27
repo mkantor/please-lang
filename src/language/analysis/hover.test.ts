@@ -272,6 +272,14 @@ hoverCases('standard library parameters', [
     ['{ f: :option.map(:boolean.is) }', 'f:'],
     'f :: :Option(:Something) ~> :Option(:Boolean)',
   ],
+  [
+    ['{ f: :match }', 'f:'],
+    [
+      'f :: (?cases: {',
+      '  [:Atom]: :Nothing ~> :Something',
+      '}) ~> (?matchee: :Nothing) ~> :Nothing',
+    ].join('\n'),
+  ],
   [['{ f: :object.overlay({ b: 1 }) }', 'f:'], 'f :: (?base: {}) ~> { b: 1 }'],
 ])
 

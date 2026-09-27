@@ -2844,6 +2844,14 @@ testCases(
   ],
 
   [
+    `(cases: { [:Atom]: :Nothing ~> :Something }) => :match(:cases)({ tag: a })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `:option.make_some ~ (1 ~> :Option(1))`,
     result => {
       assert(either.isRight(result))

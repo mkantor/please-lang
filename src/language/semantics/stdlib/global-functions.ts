@@ -34,8 +34,8 @@ import {
   anyValue,
   functionParameter,
   named,
-  parameterTypeParameter,
   objectOfFunctionsParameter,
+  parameterTypeParameter,
   taggedParameter,
   typeOfParameter,
   type Parameter,
@@ -124,7 +124,7 @@ const matcheeParameter: Parameter<TaggedNode> = {
             ),
         ([casesType]) =>
           casesType === undefined ? anyTaggedValue : (
-            matcheeTypeForCases(casesType)
+            matcheeTypeForCases(concreteUpperBound(casesType))
           ),
         option.none,
       )
@@ -273,6 +273,8 @@ const unitValue: Atom = '_'
  */
 const matcheeTypeForCases = (casesType: Type): Type =>
   casesType.kind !== 'object' ?
+    // TODO: Cases of a union type should only accept matchees which every
+    // member handles.
     anyTaggedValue
   : unionOfTypes(
       Object.entries(casesType.children).map(([tag, caseType]) => {
