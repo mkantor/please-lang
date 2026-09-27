@@ -654,7 +654,7 @@ export const stringifyTypeForEndUser = (
 
 /**
  * Like `stringifyTypeForEndUser`, but stuck applications are first replaced with
- * what they are known to produce.
+ * what they would produce if they were reduced now.
  */
 export const stringifyResolvedTypeForEndUser = (
   type: Type,

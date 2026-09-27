@@ -2638,6 +2638,82 @@ testCases(
 
   [
     `{
+      defaults: { a: 1 }
+      f: (options: {}) => {
+        x: :defaults object.overlay :options
+        y: :x ~ (:defaults object.overlay :options)
+      }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      defaults: { a: 1 }
+      f: (options: {}) => {
+        x: :defaults object.overlay :options
+        y: :x ~ ({ b: 1 } object.overlay :options)
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      defaults: { a: 1 }
+      f: (options: {}) => :defaults object.overlay :options
+      check: :f ~ ((?options: {}) ~> :defaults object.overlay :options)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      defaults: { a: 1 }
+      f: (options: {}) => :defaults object.overlay :options
+      check: :f ~ ({} ~> { a: :Something })
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (count: :Integer) => {
+        g: (value: :Integer) => { x: :value, n: :count }
+        y: { x: 0, n: :count } ~ :g(:count + 1)
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (count: :Integer) => {
+        g: (value: :Integer) => { x: :value, n: :count }
+        h: (p: :g(:count + 1)) => :p
+        r: :h({ x: 0, n: :count })
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       f: (key: @union { a, c }) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
           { tag: some, value: :Integer },
