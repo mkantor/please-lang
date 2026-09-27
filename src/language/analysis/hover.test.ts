@@ -211,6 +211,22 @@ hoverCases('type parameters in `@if`s', [
   ],
 ])
 
+hoverCases('type parameters which share a name', [
+  // `option.get_or_else`'s type parameter is also named `a`.
+  [
+    ['{ f: (a: :Integer) => :option.get_or_else(:a) }', 'f:'],
+    'f :: (?a: :Integer) ~> :Option(?a2) ~> :a2 | :a',
+  ],
+  [
+    ['(a: :Integer) => { x: :a, y: :a, h: :option.get_or_else(:a) }', '{ x'],
+    '{ x: :a, y: :a, h: :option.get_or_else(:a) } :: {| x: :a ~ :Integer, y: :a, h: :Option(?a2) ~> :a2 | :a |}',
+  ],
+  [
+    ['(a: :Integer) => { x: :a, h: :option.get_or_else }', '{ x'],
+    '{ x: :a, h: :option.get_or_else } :: {| x: :Integer, h: ?b ~> :Option(?a) ~> :a | :b |}',
+  ],
+])
+
 hoversIn(`{
   f: (x: :Atom) => {
     callback: (k: :x ~> :Integer) => 1
