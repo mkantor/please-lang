@@ -323,10 +323,7 @@ export const isAssignable = ({
 }
 
 /**
- * Type arguments for the type parameters in `sourceFunctionParameterType`. Each
- * is inferred as if `targetFunctionParameterType` were an argument's type, or
- * else is its type parameter's constraint. `none` if an inferred type argument
- * doesn't satisfy its constraint with these type arguments supplied.
+ * Type arguments for the type parameters in `sourceFunctionParameterType`.
  */
 const typeArgumentsForSourceFunction = (
   sourceFunctionParameterType: Type,

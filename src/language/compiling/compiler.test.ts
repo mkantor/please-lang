@@ -2829,6 +2829,43 @@ testCases(
 
   [
     `{
+      f: (o: :Option(:Integer)) => :option.get_or_else(0)(:o)
+      g: (o: :Option(:Integer)) => :o option.map :integer.add(1)
+      h: (o: :Option(:Integer)) => :option.map(:identity)(:o)
+      i: (o: :Option(:Integer)) => :option.flat_map(:option.make_some)(:o)
+      check_f: :f ~ (:Option(:Integer) ~> :Integer)
+      check_g: :g ~ (:Option(:Integer) ~> :Option(:Integer))
+      check_h: :h ~ (:Option(:Integer) ~> :Option(:Integer))
+      check_i: :i ~ (:Option(:Integer) ~> :Option(:Integer))
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (o: :Option(:Atom)) => :option.map(:integer.add(1))(:o)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (o: :Option(:Integer)) => :option.get_or_else(0)(:o)
+      check: :f ~ (:Option(:Integer) ~> :Boolean)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       f: (key: @union { a, c }) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {
           { tag: some, value: :Integer },
