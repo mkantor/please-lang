@@ -1235,6 +1235,7 @@ const getFunctionParameterType = (
                     contextOfFunction.mutableInferenceCache,
                   mutableFunctionParameterCache:
                     contextOfFunction.mutableFunctionParameterCache,
+                  mutableBindingValues: contextOfFunction.mutableBindingValues,
                   isExternalToProgram: contextOfFunction.isExternalToProgram,
                   applicationChain: contextOfFunction.applicationChain,
                 }
@@ -1398,6 +1399,7 @@ const resolveEnclosingFunctionParameters = (
                       mutableInferenceCache: context.mutableInferenceCache,
                       mutableFunctionParameterCache:
                         context.mutableFunctionParameterCache,
+                      mutableBindingValues: context.mutableBindingValues,
                       applicationChain: context.applicationChain,
                     },
                     assumptions,

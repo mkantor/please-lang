@@ -1,6 +1,7 @@
 import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import {
+  compileToInlinePlz,
   compileWithoutSpans,
   parseAndCompileAndRun,
   testCases,
@@ -152,6 +153,37 @@ compileSuite('self-referential lookups', [
   ],
 ])
 
+compileToInlinePlz('calls of functions referring to enclosing bindings', [
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+    }`),
+  ],
+  [
+    `{
+      f: (a: :Integer) => {
+        g: (b: :Integer) => :f
+        r: :g(1)
+      }
+    }`,
+    either.makeRight(`{
+      f: (a: :Integer) => {
+        g: (b: :Integer) => :f
+        r: :f
+      }
+    }`),
+  ],
+])
+
 const compileAndRun = testCases(
   parseAndCompileAndRun,
   input => `running \`${input}\``,
@@ -167,6 +199,54 @@ compileAndRun('types of self-referential lookups', [
       assert(either.isRight(output))
       assert.deepEqual(output.value, toSyntaxTree('3'))
     },
+  ],
+])
+
+compileAndRun('self-references to bindings enclosing a function', [
+  [
+    `{
+      f: { value: (n: :Integer) => @if { :n > 0, then: :f(:n - 1), else: done } }.value
+      main: :f(3)
+    }.main`,
+    either.makeRight('done'),
+  ],
+  [
+    `{
+      f: :identity((n: :Integer) => @if { :n > 0, then: :f(:n - 1), else: done })
+      main: :f(3)
+    }.main`,
+    either.makeRight('done'),
+  ],
+  [
+    `{
+      f: { value: (n: :Integer) => { number: :n, next: :f } }.value
+      main: :f(1).next(2).number
+    }.main`,
+    either.makeRight('2'),
+  ],
+  [
+    `{
+      m: { f: (n: :Integer) => :m, g: 42 }
+      main: :m.f(1).f(2).g
+    }.main`,
+    either.makeRight('42'),
+  ],
+  [
+    `{
+      a: {
+        b: { f: (n: :Integer) => { x: :a, y: :b } }
+        w: 2
+      }
+      main: :a.b.f(1).y.f(2).x.w
+    }.main`,
+    either.makeRight('2'),
+  ],
+  [
+    `{
+      return: { value: (n: :Integer) => @if { :n > 0, then: :return(:n - 1), else: done } }.value
+      main: :return(3)
+    }.main`,
+    either.makeRight('done'),
   ],
 ])
 
