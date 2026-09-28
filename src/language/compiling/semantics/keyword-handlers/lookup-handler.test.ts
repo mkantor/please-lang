@@ -1,9 +1,9 @@
 import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import {
+  compileAndRun,
   compileToInlinePlz,
   compileWithoutSpans,
-  parseAndCompileAndRun,
   testCases,
   toSyntaxTree,
   valueAtKeyPath,
@@ -279,11 +279,6 @@ compileToInlinePlz('calls of functions referring to enclosing bindings', [
     }`),
   ],
 ])
-
-const compileAndRun = testCases(
-  parseAndCompileAndRun,
-  input => `running \`${input}\``,
-)
 
 compileAndRun('types of self-referential lookups', [
   [

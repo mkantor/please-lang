@@ -136,6 +136,11 @@ export const parseAndCompileAndRun = (input: string): ProgramResult => {
   return runtimeOutput
 }
 
+export const compileAndRun = testCases(
+  parseAndCompileAndRun,
+  input => `running \`${input}\``,
+)
+
 const compileToInlinePlzExactly = testCases(
   (input: string) =>
     either.flatMap(either.flatMap(parse(input), compileWithoutSpans), output =>
