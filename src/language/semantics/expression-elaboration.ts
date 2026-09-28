@@ -25,6 +25,7 @@ import {
   type ObjectNode,
 } from './object-node.js'
 import {
+  applyKeyPathToSemanticGraph,
   containsAnyUnelaboratedNodes,
   extractStringValueIfPossible,
   serialize,
@@ -71,7 +72,8 @@ export type ExpressionContext = {
   /**
    * The latest elaborated value of each binding (a plain object's property,
    * which `@lookup`s can find). Properties which didn't need elaborating aren't
-   * recorded.
+   * recorded. While an object's properties are being elaborated, its own entry
+   * holds its partial value.
    */
   readonly mutableBindingValues: Map<
     KeyPathStringifiedForInternalUse,
@@ -376,6 +378,7 @@ const elaborateWithinMolecule = (
               stringifyKeyPathForInternalUse(location),
               reelaborationResult.value,
             )
+            recordPartialValue(context, updatedProgram)
             keysNeedingReelaboration.delete(key)
             madeProgress = true
           }
@@ -471,6 +474,17 @@ const elaborateProperties = (
 
   let updatedProgram = context.program
   const keysNeedingReelaboration = new Set<Atom>()
+  // When a function's body is re-elaborated, the program holds this object
+  // serialized, so the entry keeps the previous value (whose functions are
+  // elaborated).
+  if (
+    options.arePlainObjectProperties &&
+    !context.mutableBindingValues.has(
+      stringifyKeyPathForInternalUse(context.location),
+    )
+  ) {
+    recordPartialValue(context, updatedProgram)
+  }
 
   for (const [key, value] of propertiesToElaborate) {
     const keyUpdateResult = handleAtomWhichMayNotBeAKeyword(key)
@@ -511,6 +525,7 @@ const elaborateProperties = (
               stringifyKeyPathForInternalUse(location),
               elaborationResult.value,
             )
+            recordPartialValue(context, updatedProgram)
           }
           if (!(updatedKey in properties)) {
             orderedKeysAccumulator.push(updatedKey)
@@ -599,6 +614,24 @@ export const programWithValueAtKeyPath = (
     updateValueAtKeyPathInSemanticGraph(program, keyPath, _ => value),
     _ => program,
   )
+
+/**
+ * Record a partial value of the object being elaborated at `context.location`,
+ * so calls made meanwhile can use its finished parts.
+ */
+const recordPartialValue = (
+  context: ExpressionContext,
+  program: SemanticGraph,
+): void =>
+  option.match(applyKeyPathToSemanticGraph(program, context.location), {
+    none: _ => undefined,
+    some: partialValue => {
+      context.mutableBindingValues.set(
+        stringifyKeyPathForInternalUse(context.location),
+        partialValue,
+      )
+    },
+  })
 
 const unescapeIfAtom = (
   value: SemanticGraph,

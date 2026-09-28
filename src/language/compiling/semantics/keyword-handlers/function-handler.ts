@@ -371,7 +371,31 @@ const apply = (
                       }),
                   )
 
-                  return either.mapLeft(result, asPanic)
+                  // A result referring to an unfinished enclosing binding may
+                  // contain calls back into this function, so the call waits
+                  // for the binding.
+                  return either.flatMap(
+                    either.mapLeft(result, asPanic),
+                    resultValue =>
+                      either.flatMap(
+                        enclosingBindingsReferredToWithin(resultValue, {
+                          ownKey,
+                          functionDefinitionContext,
+                        }),
+                        bindingsReferredToByResult => {
+                          const unfinishedBindingReferredTo =
+                            bindingsReferredToByResult.find(([_key, value]) =>
+                              containsAnyUnelaboratedNodes(value),
+                            )
+                          return unfinishedBindingReferredTo === undefined ?
+                              either.makeRight(resultValue)
+                            : either.makeLeft({
+                                kind: 'dependencyUnavailable',
+                                message: `application of \`${ownKey}\` was deferred because its result refers to \`${unfinishedBindingReferredTo[0]}\`, which encloses it and is not fully elaborated`,
+                              })
+                        },
+                      ),
+                  )
                 },
               ),
           )
@@ -441,7 +465,7 @@ const applicationLimitError = ({
 }
 
 /**
- * The bindings enclosing a function's definition which `body` refers to. For
+ * The bindings enclosing a function's definition which `node` refers to. For
  * example:
  * ```plz
  * { a: { f: (n: :Integer) => :a }
@@ -450,7 +474,7 @@ const applicationLimitError = ({
  * For `f`'s body, that's `a`.
  */
 const enclosingBindingsReferredToWithin = (
-  body: SemanticGraph,
+  node: SemanticGraph,
   {
     ownKey,
     functionDefinitionContext,
@@ -471,12 +495,12 @@ const enclosingBindingsReferredToWithin = (
 
   const bodyLocation = [...definitionLocation, '1', 'body']
 
-  // Nested functions are `FunctionNode`s in the program, but lookups find
-  // parameters through `@function` expressions.
-  const programWithSerializedBody = programWithValueAtKeyPath(
+  // Nested functions in the body are `FunctionNode`s in the program, but
+  // lookups find parameters through `@function` expressions.
+  const programWithNode = programWithValueAtKeyPath(
     functionDefinitionContext.program,
     bodyLocation,
-    body,
+    node,
   )
 
   const isFunctionExpressionAt = (location: KeyPath) =>
@@ -484,7 +508,8 @@ const enclosingBindingsReferredToWithin = (
       applyKeyPathToSemanticGraph(functionDefinitionContext.program, location),
       {
         none: _ => false,
-        some: node => either.isRight(readFunctionExpression(node)),
+        some: valueAtLocation =>
+          either.isRight(readFunctionExpression(valueAtLocation)),
       },
     )
 
@@ -492,9 +517,9 @@ const enclosingBindingsReferredToWithin = (
     ancestors
       .filter(
         ({ location }, index) =>
-          refersToBindingAt(location, body, bodyLocation, {
+          refersToBindingAt(location, node, bodyLocation, {
             ...functionDefinitionContext,
-            program: programWithSerializedBody,
+            program: programWithNode,
           }) &&
           !ancestors
             .slice(index)
@@ -504,12 +529,10 @@ const enclosingBindingsReferredToWithin = (
         const value = functionDefinitionContext.mutableBindingValues.get(
           stringifyKeyPathForInternalUse(location),
         )
-        // An unfinished value may contain calls back into this function, which
-        // would be repeated wherever the body copies it.
-        return value === undefined || containsAnyUnelaboratedNodes(value) ?
+        return value === undefined ?
             either.makeLeft({
               kind: 'dependencyUnavailable',
-              message: `application of \`${ownKey}\` was deferred because \`${key}\`, which encloses it, isn't fully elaborated`,
+              message: `application of \`${ownKey}\` was deferred because \`${key}\`, which encloses it, has no value yet`,
             })
           : either.makeRight([key, value] as const)
       }),

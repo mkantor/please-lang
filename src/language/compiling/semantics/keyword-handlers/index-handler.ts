@@ -9,6 +9,7 @@ import {
   inferType,
   isExpression,
   isObjectNode,
+  lookup,
   makeIndexExpression,
   readIndexExpression,
   readLookupExpression,
@@ -73,8 +74,12 @@ export const indexKeywordHandler = (
     ({ expression, context }) =>
       either.flatMap(readIndexExpression(expression), indexExpression => {
         const {
-          1: { object, query },
+          1: { object: objectOperand, query },
         } = indexExpression
+        const object = dereferenced(objectOperand, {
+          ...context,
+          location: [...context.location, '1', 'object'],
+        })
         return either.flatMap(
           typeKeyPathFromObjectNode(query, {
             ...context,
@@ -82,7 +87,7 @@ export const indexKeywordHandler = (
           }),
           typeKeyPath => {
             return either.flatMap(
-              checkKeyPathExistsInType(object, typeKeyPath, context),
+              checkKeyPathExistsInType(objectOperand, typeKeyPath, context),
               _ =>
                 (
                   !isReadableAlong(
@@ -123,6 +128,27 @@ export const indexKeywordHandler = (
         )
       }),
   )
+
+/**
+ * The value `object` refers to, if it's a `@lookup` which stayed a reference
+ * (see `lookupKeywordHandler`).
+ */
+const dereferenced = (
+  object: SemanticGraph,
+  context: ExpressionContext,
+): SemanticGraph =>
+  either.match(readLookupExpression(object), {
+    left: _ => object,
+    right: ({ 1: { key } }) =>
+      either.match(lookup({ key, context }), {
+        left: _ => object,
+        right: foundBinding =>
+          option.match(foundBinding, {
+            none: _ => object,
+            some: ({ foundValue }) => foundValue,
+          }),
+      }),
+  })
 
 const isElaboratedAlong = (
   object: SemanticGraph,
