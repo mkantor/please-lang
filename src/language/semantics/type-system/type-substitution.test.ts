@@ -498,6 +498,7 @@ const intrinsicReductionSuite = testCases(
         ],
         describeReducedArguments,
         computeUpperBound,
+        optionAdt.none,
       ),
       A,
       typeArgument,
@@ -540,6 +541,7 @@ intrinsicReductionSuite('intrinsic application reduction over object types', [
       ],
       describeReducedArguments,
       computeUpperBound,
+      optionAdt.none,
     ),
   ],
 ])
@@ -679,6 +681,7 @@ applicableFunctionSignaturesSuite('applicableFunctionSignatures', [
       [atom],
       _ => either.makeLeft({ kind: 'panic', message: 'unexpected error' }),
       _ => atomToAtom,
+      optionAdt.none,
     ),
     optionAdt.makeSome([atomToAtom.signature]),
   ],

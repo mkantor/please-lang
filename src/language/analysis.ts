@@ -8,3 +8,4 @@ export {
   type Diagnostic,
   type DiagnosticSeverity,
 } from './analysis/diagnostics.js'
+export { hoverAt, type Hover } from './analysis/hover.js'

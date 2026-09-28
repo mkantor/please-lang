@@ -1,3 +1,4 @@
+import option from '@matt.kantor/option'
 import { stripVTControlCharacters } from 'node:util'
 import type { Atom } from '../../parsing.js'
 import { makeFunctionType } from './type-formats/function-type.js'
@@ -124,6 +125,9 @@ const genericizeLeaf =
     const typeParameter = makeTypeParameter(
       synthesizeTypeParameterName(parameterName, keyPath),
       { assignableTo: leafType },
+      keyPath.every(component => typeof component === 'string') ?
+        option.makeSome([parameterName, ...keyPath])
+      : option.none,
     )
     return {
       type: typeParameter,

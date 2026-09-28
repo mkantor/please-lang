@@ -166,6 +166,7 @@ export const preludeFunction = <const Parameters extends NonEmptyParameters>(
     body,
   }
   const liftedSignature = genericizeIntrinsicSignature(
+    keyPath,
     parameters,
     returnType,
     argumentValues =>
@@ -411,6 +412,7 @@ const synthesizedTypeParameters = (
  * `reduce` (which should apply the function itself).
  */
 const genericizeIntrinsicSignature = (
+  keyPath: NonEmptyKeyPath,
   parameters: NonEmptyParameters,
   returnType: Type,
   reduce: (
@@ -441,6 +443,7 @@ const genericizeIntrinsicSignature = (
           [firstParameterType, ...restParameterTypes],
           reduce,
           computeRefinedReturnType ?? (() => returnType),
+          option.makeSome(keyPath),
         ),
       ),
     }

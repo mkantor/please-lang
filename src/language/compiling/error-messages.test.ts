@@ -34,7 +34,7 @@ suite('stuck applications are resolved in error messages', () => {
   test('a partially applied prelude function reports what it produces', () => {
     assertMessageContains(
       '(x: { a: :Integer }) => :object.overlay(:x)({ b: true }) ~ { b: true }',
-      '`{ b: :Something, a: (?"x.a": :Integer) }`',
+      'inferred to have type `{ b: :Something, a: (?"x.a": :Integer) }`',
     )
   })
 
@@ -45,17 +45,59 @@ suite('stuck applications are resolved in error messages', () => {
     )
   })
 
-  test('applications within a stuck projection are resolved', () => {
+  test('applications within an unresolved conditional are resolved', () => {
     assertMessageContains(
       '(f: :Atom ~> :Integer) => (b: :Boolean) => (x: :Atom) => @if { :b, then: :f(:x), else: true } ~ :Nothing',
-      '`{ false: true, true: (?"f.#return": :Integer) }.((?b: false | true))`',
+      'then: (?"f.#return": :Integer)',
     )
   })
 
   test('applications within a stdlib return type are resolved', () => {
     assertMessageContains(
       '(f: :Atom ~> :Integer) => (x: :Atom) => :object.overlay({ a: :f(:x) })({ b: true }) ~ :Nothing',
-      '`{| b: true, a: (?"f.#return": :Integer) |}`',
+      'inferred to have type `{| b: true, a: (?"f.#return": :Integer) |}`',
+    )
+  })
+})
+
+suite('unresolved conditionals are reported as `@if`s', () => {
+  test('`@if`-shaped types are reported with `@if` syntax', () => {
+    assertMessageContains(
+      '(b: :Boolean) => @if { :b, then: yes, else: no } ~ :Nothing',
+      'inferred to have type `@if { condition: (?b: false | true), then: yes, else: no }`',
+    )
+  })
+
+  test('conditional indexed access is equivalent to `@if`', () => {
+    // TODO: Is this confusing? I can imagine machinery that decides how to
+    // display types based on the original syntax tree (rather than just the
+    // type itself), but is it worth the effort/complexity?
+    assertMessageContains(
+      '(b: :Boolean) => { true: yes, false: no }.:b ~ :Nothing',
+      'inferred to have type `@if { condition: (?b: false | true), then: yes, else: no }`',
+    )
+  })
+
+  test('an indexed access with more than two branches does not become an `@if`', () => {
+    assertMessageContains(
+      '(k: false | true | maybe) => { true: 1, false: 2, maybe: 3 }.:k ~ :Nothing',
+      'inferred to have type `{| true: 1, false: 2, maybe: 3 |}.((?k: false | true | maybe))`',
+    )
+  })
+
+  test('a computed condition does not reduce to its type', () => {
+    // Displaying `condition: false | true` would make it look like the whole
+    // type should just reduce to `yes | no`, but that'd erase useful detail.
+    assertMessageContains(
+      '(b: :NaturalNumber) => @if { :b integer.equals 0, then: yes, else: no } ~ :Nothing',
+      'inferred to have type `@if { condition: (?b: :NaturalNumber) integer.equals 0, then: yes, else: no }`',
+    )
+  })
+
+  test('a stuck application in a branch reduces', () => {
+    assertMessageContains(
+      '(b: :NaturalNumber) => @if { :b integer.equals 0, then: :b integer.add 1, else: 0 } ~ :Nothing',
+      'inferred to have type `@if { condition: (?b: :NaturalNumber) integer.equals 0, then: :NaturalNumber, else: 0 }`',
     )
   })
 })
@@ -102,7 +144,7 @@ suite('type parameters survive in error messages', () => {
       assertMessageContains('a => :a ~ :Integer', 'have type `?a`')
       assertMessageContains(
         '(f: :Atom ~> :Atom) => :f ~ :Integer',
-        'have type `(?"f.#parameter": :Atom) ~> (?"f.#return": :Atom)`',
+        'inferred to have type `(?"f.#parameter": :Atom) ~> (?"f.#return": :Atom)`',
       )
     })
   })

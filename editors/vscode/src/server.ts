@@ -1,7 +1,12 @@
+import either, { type Either } from '@matt.kantor/either'
+import option from '@matt.kantor/option'
 import {
+  analyze,
   defaultConfiguration,
-  diagnose,
+  hoverAt,
   lineAndColumnAtOffset,
+  offsetAtLineAndColumn,
+  type Analysis,
   type Diagnostic,
   type DiagnosticSeverity,
   type Span,
@@ -10,11 +15,13 @@ import { TextDocument } from 'vscode-languageserver-textdocument'
 import {
   createConnection,
   DiagnosticSeverity as LspDiagnosticSeverity,
+  MarkupKind,
   TextDocuments,
   TextDocumentSyncKind,
+  type DiagnosticRelatedInformation,
   type InitializeResult,
   type Diagnostic as LspDiagnostic,
-  type DiagnosticRelatedInformation,
+  type Hover as LspHover,
   type Position,
   type Range,
 } from 'vscode-languageserver/node'
@@ -26,13 +33,27 @@ const analysisDebounceMilliseconds = 300
 
 const connection = createConnection()
 const documents = new TextDocuments(TextDocument)
-const diagnoseSource = diagnose(defaultConfiguration)
+const analyzeSource = analyze(defaultConfiguration)
+
+type DocumentURI = string
 
 /**
- * Pending re-analysis timers, keyed by document URI. Mutable because it tracks
- * work in flight.
+ * Pending re-analysis timers. Mutable so it can track work in flight.
  */
-const scheduledAnalyses = new Map<string, NodeJS.Timeout>()
+const scheduledAnalyses = new Map<DocumentURI, NodeJS.Timeout>()
+
+/**
+ * The most recent analysis of each open document. Mutable because entries are
+ * replaced as documents change. This is an optimization: re-analyzing on every
+ * request would work, but be slow.
+ */
+const analyses = new Map<
+  DocumentURI,
+  {
+    readonly version: number
+    readonly analysis: Either<Error, Analysis>
+  }
+>()
 
 const positionAtOffset = (source: string, offset: number): Position => {
   const { line, column } = lineAndColumnAtOffset(source, offset)
@@ -64,7 +85,7 @@ const lspSeverities: Readonly<
 }
 
 const toLspDiagnostic =
-  (uri: string, source: string) =>
+  (uri: DocumentURI, source: string) =>
   (diagnostic: Diagnostic): LspDiagnostic => ({
     severity: lspSeverities[diagnostic.severity],
     range: rangeOfSpan(source, diagnostic.span),
@@ -79,31 +100,43 @@ const toLspDiagnostic =
     ),
   })
 
-const diagnosticsForDocument = (
-  document: TextDocument,
-): readonly LspDiagnostic[] => {
-  const source = document.getText()
-  // A program which crashes the compiler degrades to "no diagnostics" rather
-  // than taking down the process.
-  try {
-    return diagnoseSource(source).map(toLspDiagnostic(document.uri, source))
-  } catch (error) {
-    connection.console.error(
-      `analysis of ${document.uri} failed: ${String(error)}`,
-    )
-    return []
+const analyzeDocument = (document: TextDocument): Either<Error, Analysis> => {
+  const cached = analyses.get(document.uri)
+  if (cached?.version === document.version) {
+    return cached.analysis
+  } else {
+    const analysis = ((): Either<Error, Analysis> => {
+      // A program which crashes the compiler degrades to no diagnostics/hovers
+      // rather than taking down the language server.
+      try {
+        return either.makeRight(analyzeSource(document.getText()))
+      } catch (cause) {
+        const message = `Analysis of ${document.uri} failed. This is a bug!`
+        connection.console.error(`${message}\nCaused by: ${String(cause)}`)
+        return either.makeLeft(new Error(message, { cause }))
+      }
+    })()
+    // Failures are cached so a document which crashes the compiler does so once
+    // per edit rather than once per request.
+    analyses.set(document.uri, { version: document.version, analysis })
+    return analysis
   }
 }
 
 const publishDiagnostics = (document: TextDocument): undefined => {
+  const source = document.getText()
   void connection.sendDiagnostics({
     uri: document.uri,
     version: document.version,
-    diagnostics: [...diagnosticsForDocument(document)],
+    diagnostics: either.match(analyzeDocument(document), {
+      left: _ => [],
+      right: analysis =>
+        analysis.diagnostics.map(toLspDiagnostic(document.uri, source)),
+    }),
   })
 }
 
-const cancelScheduledAnalysis = (uri: string): undefined => {
+const cancelScheduledAnalysis = (uri: DocumentURI): undefined => {
   const scheduled = scheduledAnalyses.get(uri)
   if (scheduled !== undefined) {
     clearTimeout(scheduled)
@@ -126,11 +159,48 @@ const scheduleAnalysis = (document: TextDocument): undefined => {
   )
 }
 
+const hoverForPosition = (
+  document: TextDocument,
+  position: Position,
+): LspHover | undefined => {
+  const source = document.getText()
+  const offset = offsetAtLineAndColumn(source, {
+    line: position.line + 1,
+    column: position.character + 1,
+  })
+  return either.match(analyzeDocument(document), {
+    left: _ => undefined,
+    right: ({ parsed }) =>
+      option.match(
+        option.flatMap(parsed, program => hoverAt(program, offset)),
+        {
+          none: _ => undefined,
+          some: ({ span, type }) => ({
+            contents: {
+              kind: MarkupKind.Markdown,
+              // The code block gets syntax highlighting.
+              value: ['```plz', type, '```'].join('\n'),
+            },
+            range: rangeOfSpan(source, span),
+          }),
+        },
+      ),
+  })
+}
+
 connection.onInitialize((): InitializeResult => ({
   capabilities: {
     textDocumentSync: TextDocumentSyncKind.Full,
+    hoverProvider: true,
   },
 }))
+
+connection.onHover(({ textDocument, position }) => {
+  const document = documents.get(textDocument.uri)
+  return document === undefined ? undefined : (
+      hoverForPosition(document, position)
+    )
+})
 
 // This also fires when a document is first opened.
 documents.onDidChangeContent(({ document }) => {
@@ -139,6 +209,7 @@ documents.onDidChangeContent(({ document }) => {
 
 documents.onDidClose(({ document }) => {
   cancelScheduledAnalysis(document.uri)
+  analyses.delete(document.uri)
   void connection.sendDiagnostics({ uri: document.uri, diagnostics: [] })
 })
 

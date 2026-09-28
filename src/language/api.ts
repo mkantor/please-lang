@@ -1,9 +1,11 @@
 export {
   analyze,
   diagnose,
+  hoverAt,
   type Analysis,
   type Diagnostic,
   type DiagnosticSeverity,
+  type Hover,
   type ParsedProgram,
 } from './analysis.js'
 export { defaultConfiguration, type Configuration } from './configuration.js'
