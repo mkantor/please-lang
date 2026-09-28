@@ -568,7 +568,7 @@ const spanForLocation = (
  * the path doesn't resolve (elaboration also runs on expressions which aren't
  * located in `program`, e.g. user functions called from the standard library).
  */
-const programWithValueAtKeyPath = (
+export const programWithValueAtKeyPath = (
   program: SemanticGraph,
   keyPath: KeyPath,
   value: SemanticGraph,

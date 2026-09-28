@@ -20,6 +20,7 @@ import {
   makeFunctionNodeFromDefinition,
   makeObjectNode,
   objectNodeFromOrderedEntries,
+  programWithValueAtKeyPath,
   readFunctionExpression,
   replaceAllTypeParametersWithTheirConstraints,
   rigidTypeParameterIdentitiesOrAllWithin,
@@ -54,7 +55,20 @@ export const functionKeywordHandler = (
   context: ExpressionContext,
 ): Either<ElaborationError, FunctionNode> =>
   either.flatMap(
-    elaborateOperands(expression, functionOperandContext(context)),
+    elaborateOperands(
+      expression,
+      functionOperandContext({
+        ...context,
+        // Lookups find parameters and recognize self-references through the
+        // `@function` expressions around them, but upon re-elaboration the
+        // program holds a `FunctionNode` here.
+        program: programWithValueAtKeyPath(
+          context.program,
+          context.location,
+          expression,
+        ),
+      }),
+    ),
     ({ expression, context: operandContext }) =>
       makeFunctionFromElaboratedExpression(expression, {
         // The original `context` is used here; `panicsAreDeferred` applies only

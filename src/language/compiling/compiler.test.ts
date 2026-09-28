@@ -6,6 +6,7 @@ import {
   compileWithoutSpans,
   testCases,
   toSyntaxTree,
+  valueAtKeyPath,
 } from '../../test-utilities.test.js'
 import type { JsonValue } from '../../utility-types.js'
 import type { ElaborationError } from '../errors.js'
@@ -220,6 +221,22 @@ testCases(
   ['{ a: :b, b: { 42 }.0 }', success({ a: '42', b: '42' })],
 
   ['{ a: :b, b: :identity(42) }', success({ a: '42', b: '42' })],
+
+  [
+    '{ m: { x: :g(:a), g: (n: :Integer) => :n }, a: :b, b: :identity(1) }',
+    result => {
+      assert(either.isRight(result))
+      assert.deepEqual(valueAtKeyPath(result.value, ['m', 'x']), '1')
+    },
+  ],
+
+  [
+    '{ m: { n: 5, f: (n: :Integer) => :n, x: :f(:a) }, a: :b, b: :identity(1) }',
+    result => {
+      assert(either.isRight(result))
+      assert.deepEqual(valueAtKeyPath(result.value, ['m', 'x']), '1')
+    },
+  ],
 
   [
     '{ a: @if { true, true, 42 }, :a }',
