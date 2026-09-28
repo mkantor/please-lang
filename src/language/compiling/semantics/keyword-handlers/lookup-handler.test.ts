@@ -182,6 +182,102 @@ compileToInlinePlz('calls of functions referring to enclosing bindings', [
       }
     }`),
   ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m.x
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m.x
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :identity(:f)(1)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: ((n: :Integer) => :m)(1)
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :apply(1)(:f)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: ((n: :Integer) => :m) apply 1
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :option.map(:f)({ tag: some, value: 1 })
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: { tag: some, value: 1 } option.map ((n: :Integer) => :m)
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: (:f >> :identity)(1)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: (((n: :Integer) => :m) flow :identity)(1)
+      }
+      r: :m
+    }`),
+  ],
 ])
 
 const compileAndRun = testCases(

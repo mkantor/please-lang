@@ -11,6 +11,8 @@ import {
   isExpression,
   isFunctionNode,
   lookup,
+  makeRuntimeExpression,
+  programWithValueAtKeyPath,
   readApplyExpression,
   readCheckExpression,
   readFunctionExpression,
@@ -546,7 +548,17 @@ const inferTypeImplementation = (
             ],
           ]),
           assumptions,
-          descendantContext(['1', 'function', '1', 'body']),
+          contextWithinExpression(
+            {
+              ...context,
+              program: programWithValueAtKeyPath(
+                context.program,
+                context.location,
+                makeRuntimeExpression(functionExpressionResult.value),
+              ),
+            },
+            ['1', 'function', '1', 'body'],
+          ),
         ),
       )
     } else {
