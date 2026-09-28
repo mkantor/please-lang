@@ -69,6 +69,15 @@ export type ExpressionContext = {
     FunctionParameterTypeInfo
   >
   /**
+   * The latest elaborated value of each binding (a plain object's property,
+   * which `@lookup`s can find). Properties which didn't need elaborating aren't
+   * recorded.
+   */
+  readonly mutableBindingValues: Map<
+    KeyPathStringifiedForInternalUse,
+    SemanticGraph
+  >
+  /**
    * Source spans for the program being elaborated, keyed by stringified key
    * path (matching `location`). This is used to attach spans to errors. It's
    * absent when elaborating from a sourceless origin.
@@ -181,6 +190,7 @@ export const makeInitialElaborationContext = (
   location: [],
   mutableInferenceCache: new Map(),
   mutableFunctionParameterCache: new Map(),
+  mutableBindingValues: new Map(),
   program:
     typeof program === 'string' ? program : objectNodeFromMolecule(program),
   sourceSpans: spans,
@@ -250,7 +260,7 @@ export const elaborateOperands = (
       elaborateProperties(orderedEntriesOfObjectNode(operands), context, {
         keyPathPrefix: ['1'],
         skipReelaboration: true,
-        propertyZeroMayBeAKeyword: false,
+        arePlainObjectProperties: false,
       }),
       ({ properties: elaboratedOperands, program }) => ({
         expression: withPhantomData<OperandsElaborated>()(
@@ -298,7 +308,7 @@ const elaborateWithinMolecule = (
       {
         keyPathPrefix: [],
         skipReelaboration: context.skipReelaboration,
-        propertyZeroMayBeAKeyword: true,
+        arePlainObjectProperties: true,
       },
     )
     if (either.isLeft(propertiesResult)) {
@@ -334,6 +344,7 @@ const elaborateWithinMolecule = (
         while (madeProgress && keysNeedingReelaboration.size > 0) {
           madeProgress = false
           for (const key of keysNeedingReelaboration) {
+            const location = [...context.location, key]
             const value = possibleExpressionAsObjectNode[key]
             if (value === undefined) {
               keysNeedingReelaboration.delete(key)
@@ -345,7 +356,7 @@ const elaborateWithinMolecule = (
             }
             const reelaborationResult = elaborateWithContext(serialized.value, {
               ...context,
-              location: [...context.location, key],
+              location,
               program: updatedProgram,
               skipReelaboration: true,
             })
@@ -358,7 +369,11 @@ const elaborateWithinMolecule = (
             possibleExpressionAsObjectNode[key] = reelaborationResult.value
             updatedProgram = programWithValueAtKeyPath(
               updatedProgram,
-              [...context.location, key],
+              location,
+              reelaborationResult.value,
+            )
+            context.mutableBindingValues.set(
+              stringifyKeyPathForInternalUse(location),
               reelaborationResult.value,
             )
             keysNeedingReelaboration.delete(key)
@@ -435,10 +450,13 @@ const elaborateProperties = (
     readonly keyPathPrefix: KeyPath
     readonly skipReelaboration: true | undefined
     /**
-     * When `true`, property `0` is left escaped (it may be a keyword, in which
-     * case `handleObjectNodeWhichMayBeAExpression` unescapes it instead).
+     * Whether the properties are a plain object's rather than a keyword
+     * expression's operands. A plain object's properties are bindings, so their
+     * elaborated values are recorded in `mutableBindingValues`. Its property `0`
+     * may be a keyword, so it's left escaped for
+     * `handleObjectNodeWhichMayBeAExpression` to unescape.
      */
-    readonly propertyZeroMayBeAKeyword: boolean
+    readonly arePlainObjectProperties: boolean
   },
 ): Either<
   ElaborationError,
@@ -490,6 +508,12 @@ const elaborateProperties = (
             location,
             elaborationResult.value,
           )
+          if (options.arePlainObjectProperties) {
+            context.mutableBindingValues.set(
+              stringifyKeyPathForInternalUse(location),
+              elaborationResult.value,
+            )
+          }
           if (!(updatedKey in properties)) {
             orderedKeysAccumulator.push(updatedKey)
           }
@@ -510,7 +534,7 @@ const elaborateProperties = (
   // At this point `properties` may still have raw escape sequences.
   for (const [key, value] of Object.entries(properties)) {
     const valueUpdateResult =
-      options.propertyZeroMayBeAKeyword && key === '0' ?
+      options.arePlainObjectProperties && key === '0' ?
         either.makeRight(value)
       : unescapeIfAtom(value)
     if (either.isLeft(valueUpdateResult)) {

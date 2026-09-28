@@ -136,6 +136,36 @@ export const parseAndCompileAndRun = (input: string): ProgramResult => {
   return runtimeOutput
 }
 
+const compileToInlinePlzExactly = testCases(
+  (input: string) =>
+    either.flatMap(either.flatMap(parse(input), compileWithoutSpans), output =>
+      unparse(output, inlinePlz),
+    ),
+  input => `compiling \`${input}\``,
+)
+
+/**
+ * Expected outputs may be laid out over several lines, since they're
+ * reformatted as inline plz before being compared.
+ */
+export const compileToInlinePlz = (
+  suiteName: string,
+  cases: Parameters<typeof compileToInlinePlzExactly>[1],
+) =>
+  compileToInlinePlzExactly(
+    suiteName,
+    cases.map(([input, check]) => [
+      input,
+      typeof check === 'function' ? check : (
+        either.flatMap(check, expected =>
+          either.flatMap(parse(expected), syntaxTree =>
+            unparse(syntaxTree, inlinePlz),
+          ),
+        )
+      ),
+    ]),
+  )
+
 const unparseAndRoundtripWithMultipleNotations = <Error, Value>(
   f: (input: string) => Either<Error, Value>,
 ) => {
