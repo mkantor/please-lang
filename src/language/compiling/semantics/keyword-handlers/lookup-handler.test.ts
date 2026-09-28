@@ -170,6 +170,49 @@ compileToInlinePlz('calls of functions referring to enclosing bindings', [
   ],
   [
     `{
+      m: {
+        g: 1
+        f: (n: :Integer) => {
+          v: :m.g
+          io: @runtime { context => :context.log(:n) }
+        }
+        x: :f(1)
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        g: 1
+        f: (n: :Integer) => {
+          v: :m.g
+          io: @runtime { context => :context.log(:n) }
+        }
+        x: {
+          v: 1
+          io: @runtime { context => :context.log(1) }
+        }
+      }
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => (k: :Integer) => :m
+        g: 42
+        x: :f(1)
+        y: :x(2)
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => (k: :Integer) => :m
+        g: 42
+        x: (k: :Integer) => :m
+        y: :m
+      }
+    }`),
+  ],
+  [
+    `{
       f: (a: :Integer) => {
         g: (b: :Integer) => :f
         r: :g(1)
@@ -262,6 +305,42 @@ compileToInlinePlz('calls of functions referring to enclosing bindings', [
       r: :m
     }`),
   ],
+  // `x` refers to an enclosing object, so it stays deferred, but `g` can be
+  // read through the reference.
+  [
+    `{
+      m: {
+        g: 1
+        f: (_: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m.g
+    }`,
+    either.makeRight(`{
+      m: {
+        g: 1
+        f: (_: :Integer) => :m
+        x: :f(1)
+      }
+      r: 1
+    }`),
+  ],
+  [
+    `{
+      m: {
+        g: 1
+        x: :f(1)
+        f: (n: :Integer) => :m.g
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        g: 1
+        x: 1
+        f: (n: :Integer) => :m.g
+      }
+    }`),
+  ],
   [
     `{
       m: {
@@ -276,6 +355,47 @@ compileToInlinePlz('calls of functions referring to enclosing bindings', [
         x: (((n: :Integer) => :m) flow :identity)(1)
       }
       r: :m
+    }`),
+  ],
+  [
+    `{
+      o: (c: :Integer) => {
+        m: {
+          v: 1
+          f: (n: :Integer) => {
+            a: :m.v
+            b: @if {
+              condition: :c integer.is_greater_than 0
+              then: (m: :Integer) => :m
+              else: 0
+            }
+          }
+          y: :f(1)
+        }
+      }
+    }`,
+    either.makeRight(`{
+      o: (c: :Integer) => {
+        m: {
+          v: 1
+          f: (n: :Integer) => {
+            a: :m.v
+            b: @if {
+              condition: :c integer.is_greater_than 0
+              then: (m: :Integer) => :m
+              else: 0
+            }
+          }
+          y: {
+            a: 1
+            b: @if {
+              condition: :c integer.is_greater_than 0
+              then: (m: :Integer) => :m
+              else: 0
+            }
+          }
+        }
+      }
     }`),
   ],
 ])
@@ -353,11 +473,57 @@ compileAndRun('self-references to bindings enclosing a function', [
     }.main`,
     either.makeRight('done'),
   ],
+  // Calls made while `m` is being elaborated use its finished parts.
+  [
+    `{
+      m: {
+        g: 1
+        f: (n: :Integer) => :m.g
+        x: :f(1)
+      }
+    }.m.x`,
+    either.makeRight('1'),
+  ],
+  [
+    `{
+      m: {
+        sub: {
+          g: 1
+          f: (n: :Integer) => :m.sub.g
+          x: :f(1)
+        }
+      }
+    }.m.sub.x`,
+    either.makeRight('1'),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => @if { :n > 0, then: :m.f(:n - 1), else: done }
+        x: :f(3)
+      }
+    }.m.x`,
+    either.makeRight('done'),
+  ],
 ])
 
 compileAndRun('unbounded recursion within a self-referential function', [
   [
     '{ f: (n: :Integer) => :f(1), main: :f(0) }.main',
+    output => {
+      assert(either.isLeft(output))
+      assert('kind' in output.value)
+      assert.deepEqual(output.value.kind, 'panic')
+      assert.match(output.value.message, /evaluation did not terminate/)
+    },
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m.f(:n + 1)
+        x: :f(1)
+      }
+    }`,
     output => {
       assert(either.isLeft(output))
       assert('kind' in output.value)
