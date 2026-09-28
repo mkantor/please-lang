@@ -1,5 +1,5 @@
 import either, { type Either } from '@matt.kantor/either'
-import option from '@matt.kantor/option'
+import option, { type Option } from '@matt.kantor/option'
 import type { ElaborationError } from '../../../errors.js'
 import {
   applyKeyPathToType,
@@ -7,10 +7,15 @@ import {
   containsAnyUnelaboratedNodes,
   elaborateOperands,
   inferType,
+  isExpression,
+  isObjectNode,
+  makeIndexExpression,
   readIndexExpression,
+  readLookupExpression,
   stringifyResolvedTypeForEndUser,
   type Expression,
   type ExpressionContext,
+  type IndexExpression,
   type SemanticGraph,
 } from '../../../semantics.js'
 import { applyTypeKeyPathToSemanticGraph } from '../../../semantics/semantic-graph.js'
@@ -60,11 +65,11 @@ const checkKeyPathExistsInType = (
   )
 
 export const indexKeywordHandler = (
-  expression: Expression,
+  unelaboratedExpression: Expression,
   context: ExpressionContext,
 ): Either<ElaborationError, SemanticGraph> =>
   either.flatMap(
-    elaborateOperands(expression, context),
+    elaborateOperands(unelaboratedExpression, context),
     ({ expression, context }) =>
       either.flatMap(readIndexExpression(expression), indexExpression => {
         const {
@@ -80,11 +85,18 @@ export const indexKeywordHandler = (
               checkKeyPathExistsInType(object, typeKeyPath, context),
               _ =>
                 (
-                  containsAnyUnelaboratedNodes(object) ||
-                  containsAnyUnelaboratedNodes(query)
+                  !isReadableAlong(
+                    object,
+                    typeKeyPath,
+                    unelaboratedExpression,
+                  ) || containsAnyUnelaboratedNodes(query)
                 ) ?
-                  // The object isn't ready, so keep the @index unelaborated.
-                  either.makeRight(indexExpression)
+                  either.makeRight(
+                    residualIndexExpression(
+                      unelaboratedExpression,
+                      indexExpression,
+                    ),
+                  )
                 : option.match(
                     applyTypeKeyPathToSemanticGraph(object, typeKeyPath),
                     {
@@ -111,3 +123,84 @@ export const indexKeywordHandler = (
         )
       }),
   )
+
+const isElaboratedAlong = (
+  object: SemanticGraph,
+  keyPath: TypeKeyPath,
+): boolean => {
+  const [firstKey, ...remainingKeyPath] = keyPath
+  const next =
+    (
+      typeof firstKey === 'string' &&
+      isObjectNode(object) &&
+      !isExpression(object)
+    ) ?
+      object[firstKey]
+    : undefined
+  return next === undefined ?
+      !containsAnyUnelaboratedNodes(object)
+    : isElaboratedAlong(next, remainingKeyPath)
+}
+
+/**
+ * Only `keyPath` matters for an object from a `@lookup`. Any other object is
+ * discarded once read, which would lose the effects of its unelaborated parts.
+ */
+const isReadableAlong = (
+  object: SemanticGraph,
+  keyPath: TypeKeyPath,
+  unelaboratedExpression: Expression,
+): boolean =>
+  isElaboratedAlong(object, keyPath) &&
+  option.match(objectLookupOf(unelaboratedExpression), {
+    none: _ => isElaboratedButForReferences(object),
+    some: _ => true,
+  })
+
+const isElaboratedButForReferences = (node: SemanticGraph): boolean =>
+  isReference(node) ||
+  (isObjectNode(node) && !isExpression(node) ?
+    Object.values(node).every(isElaboratedButForReferences)
+  : !containsAnyUnelaboratedNodes(node))
+
+const isReference = (node: SemanticGraph): boolean =>
+  either.match(readLookupExpression(node), {
+    left: _ =>
+      either.match(readIndexExpression(node), {
+        left: _ => false,
+        right: ({ 1: { object, query } }) =>
+          isReference(object) && !containsAnyUnelaboratedNodes(query),
+      }),
+    right: _ => true,
+  })
+
+/**
+ * The residual of `:a.b` keeps `:a` as its object. The value `:a` refers to
+ * may contain `:a.b` itself.
+ */
+const residualIndexExpression = (
+  unelaboratedExpression: Expression,
+  elaboratedIndexExpression: IndexExpression,
+): IndexExpression =>
+  option.match(objectLookupOf(unelaboratedExpression), {
+    none: _ => elaboratedIndexExpression,
+    some: object =>
+      makeIndexExpression({
+        object,
+        query: elaboratedIndexExpression[1].query,
+      }),
+  })
+
+/**
+ * The object of an `@index` as it was in the source, if it was a `@lookup`.
+ */
+const objectLookupOf = (
+  unelaboratedExpression: Expression,
+): Option<Expression> =>
+  either.match(readIndexExpression(unelaboratedExpression), {
+    left: _ => option.none,
+    right: ({ 1: { object } }) =>
+      isExpression(object) && object['0'] === '@lookup' ?
+        option.makeSome(object)
+      : option.none,
+  })

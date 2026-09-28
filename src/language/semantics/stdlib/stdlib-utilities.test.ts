@@ -1,10 +1,7 @@
 import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
-import {
-  parseAndCompileAndRun,
-  testCases,
-} from '../../../test-utilities.test.js'
+import { compileAndRun } from '../../../test-utilities.test.js'
 import {
   isFunctionNode,
   makeFunctionExpression,
@@ -131,11 +128,6 @@ test('a computed parameter bound forces lifting', _ => {
     signature.parameter,
   )
 })
-
-const compileAndRun = testCases(
-  parseAndCompileAndRun,
-  input => `running \`${input}\``,
-)
 
 compileAndRun('recursion through host-implemented functions', [
   [
