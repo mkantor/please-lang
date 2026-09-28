@@ -1,4 +1,5 @@
 import either, { type Either } from '@matt.kantor/either'
+import option from '@matt.kantor/option'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
 import { compile } from './language/compiling.js'
@@ -109,6 +110,21 @@ export const toSyntaxTree = (input: JsonValue): SyntaxTree =>
   : orderedRecord.make(
       Object.entries(input).map(([key, value]) => [key, toSyntaxTree(value)]),
     )
+
+export const valueAtKeyPath = (
+  value: Atom | Molecule,
+  keyPath: readonly string[],
+): Atom | Molecule | undefined =>
+  keyPath.reduce<Atom | Molecule | undefined>(
+    (valueSoFar, key) =>
+      valueSoFar === undefined || typeof valueSoFar === 'string' ?
+        undefined
+      : option.match(orderedRecord.get(valueSoFar, key), {
+          none: _ => undefined,
+          some: propertyValue => propertyValue,
+        }),
+    value,
+  )
 
 export const compileWithoutSpans = (syntaxTree: SyntaxTree) =>
   compile(defaultConfiguration)(syntaxTree, emptyExpressionSpans)

@@ -20,6 +20,7 @@ import {
   makeFunctionNodeFromDefinition,
   makeObjectNode,
   objectNodeFromOrderedEntries,
+  programWithValueAtKeyPath,
   readFunctionExpression,
   replaceAllTypeParametersWithTheirConstraints,
   rigidTypeParameterIdentitiesOrAllWithin,
@@ -54,7 +55,7 @@ export const functionKeywordHandler = (
   context: ExpressionContext,
 ): Either<ElaborationError, FunctionNode> =>
   either.flatMap(
-    elaborateOperands(expression, functionOperandContext(context)),
+    elaborateOperands(expression, functionOperandContext(expression, context)),
     ({ expression, context: operandContext }) =>
       makeFunctionFromElaboratedExpression(expression, {
         // The original `context` is used here; `panicsAreDeferred` applies only
@@ -69,9 +70,18 @@ export const functionKeywordHandler = (
  * the body is elaborated at the definition site ahead of application).
  */
 const functionOperandContext = (
+  expression: Expression,
   context: ExpressionContext,
 ): ExpressionContext => ({
   ...context,
+  // Lookups find parameters and recognize self-references through the
+  // `@function` expressions around them, but upon re-elaboration the program
+  // holds a `FunctionNode` here.
+  program: programWithValueAtKeyPath(
+    context.program,
+    context.location,
+    expression,
+  ),
   // `@panic`s inside functions shouldn't fire while elaborating the body, only
   // when the function is eventually called.
   panicsAreDeferred: true,

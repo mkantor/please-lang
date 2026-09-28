@@ -5,6 +5,7 @@ import {
   parseAndCompileAndRun,
   testCases,
   toSyntaxTree,
+  valueAtKeyPath,
 } from '../../../../test-utilities.test.js'
 import { parse } from '../../../parsing/parser.js'
 import { elaborationSuite, success } from '../test-utilities.test.js'
@@ -114,6 +115,23 @@ compileSuite('self-referential lookups', [
     '{ f: (n: :Integer) => :f(:n) }',
     output => {
       assert(either.isRight(output))
+      assert.deepEqual(
+        JSON.stringify(output.value).match(/@function/g)?.length,
+        1,
+        'the recursive definition should appear exactly once',
+      )
+    },
+  ],
+
+  [
+    '{ m: { f: (n: :Integer) => { self: :f, parent: :m }, x: :a }, a: :b, b: :identity(1) }',
+    output => {
+      assert(either.isRight(output))
+      assert.deepEqual(
+        valueAtKeyPath(output.value, ['m', 'x']),
+        '1',
+        '`m` should have been re-elaborated',
+      )
       assert.deepEqual(
         JSON.stringify(output.value).match(/@function/g)?.length,
         1,
