@@ -80,6 +80,7 @@ import {
   typeParameterIdentitiesWithinType,
 } from './type-parameter-analysis.js'
 import {
+  alternativesOf,
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForTypeParameters,
@@ -585,14 +586,18 @@ const inferTypeImplementation = (
             } = argumentTypeResult.value
             // Supply type arguments to the return type based on the inferred
             // argument type.
+            const returnTypeInferredFrom = (argumentTypeToInferFrom: Type) =>
+              supplyTypeArguments(
+                combinedReturnType,
+                getTypesForTypeParameters({
+                  parameterType: combinedParameterType,
+                  argumentType: argumentTypeToInferFrom,
+                }),
+              )
             const typeArguments = getTypesForTypeParameters({
               parameterType: combinedParameterType,
               argumentType,
             })
-            const eagerReturnType = supplyTypeArguments(
-              combinedReturnType,
-              typeArguments,
-            )
             const boundTypeParameters = new Set(
               typeArguments.keys().map(typeParameter => typeParameter.identity),
             )
@@ -602,6 +607,27 @@ const inferTypeImplementation = (
                 .flatMap(enclosingParameterType =>
                   typeParameterIdentitiesWithinType(enclosingParameterType),
                 ),
+            )
+            const leavesTypeParametersUninstantiated =
+              !typeParameterIdentitiesWithinType(combinedParameterType)
+                .difference(boundTypeParameters)
+                .difference(typeParametersWithinEnclosingParameterTypes)
+                .isDisjointFrom(
+                  typeParameterIdentitiesWithinType(combinedReturnType),
+                )
+            const eagerReturnType = option.match(
+              // Type parameters shouldn't escape into the return type.
+              leavesTypeParametersUninstantiated ?
+                alternativesOf(argumentType)
+              : option.none,
+              {
+                none: _ =>
+                  supplyTypeArguments(combinedReturnType, typeArguments),
+                some: alternatives =>
+                  // An argument's alternatives are checked with separate type
+                  // arguments, so the return type is inferred the same way.
+                  unionOfTypes(alternatives.map(returnTypeInferredFrom)),
+              },
             )
             const typeParametersMentionedInThisSignature =
               typeParameterIdentitiesWithinType(appliedFunctionType)

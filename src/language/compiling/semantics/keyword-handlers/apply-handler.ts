@@ -2,6 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { ElaborationError } from '../../../errors.js'
 import {
+  alternativesOf,
   applicableFunctionSignatures,
   attachSpanIfAbsent,
   containedTypeParameters,
@@ -70,17 +71,45 @@ const checkArgumentType = (
   ) {
     return either.makeRight(undefined)
   } else {
-    const simplifiedParameterType =
-      (
-        parameterType.kind === 'parameter' &&
-        !rigidTypeParameters.has(parameterType.identity)
-      ) ?
-        parameterType.constraint.assignableTo
-      : parameterType
-    return either.makeLeft({
-      kind: 'typeMismatch',
-      message: `argument with type \`${stringifyResolvedTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyResolvedTypeForEndUser(simplifiedParameterType)}\``,
-    })
+    // Type arguments can't be inferred from an argument whose upper bound is a
+    // union (e.g. an `@if` whose condition isn't known yet), so its members are
+    // checked individually (every one must be valid).
+    const hasTypeArgumentsToInfer =
+      parameterType.kind !== 'parameter' &&
+      !typeParameterIdentitiesWithinType(parameterType).isSubsetOf(
+        rigidTypeParameters,
+      )
+    return option.match(
+      hasTypeArgumentsToInfer ? alternativesOf(argumentType) : option.none,
+      {
+        none: _ => {
+          const simplifiedParameterType =
+            (
+              parameterType.kind === 'parameter' &&
+              !rigidTypeParameters.has(parameterType.identity)
+            ) ?
+              parameterType.constraint.assignableTo
+            : parameterType
+          return either.makeLeft({
+            kind: 'typeMismatch',
+            message: `argument with type \`${stringifyResolvedTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyResolvedTypeForEndUser(simplifiedParameterType)}\``,
+          })
+        },
+        some: alternatives =>
+          either.map(
+            either.sequence(
+              alternatives.map(alternative =>
+                checkArgumentType(
+                  alternative,
+                  parameterType,
+                  rigidTypeParameters,
+                ),
+              ),
+            ),
+            _ => undefined,
+          ),
+      },
+    )
   }
 }
 

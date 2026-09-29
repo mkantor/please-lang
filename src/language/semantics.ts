@@ -125,6 +125,7 @@ export {
   type TypeRenderingOptions,
 } from './semantics/semantic-graph.js'
 export {
+  alternativesOf,
   applicableFunctionSignatures,
   applyKeyPathToType,
   containedTypeParameters,
