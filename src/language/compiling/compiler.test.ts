@@ -1861,6 +1861,69 @@ testCases(
     },
   ],
 
+  [':apply(1)(:identity)', success('1')],
+
+  [':apply(1)((x: :Integer) => :x)', success('1')],
+
+  [
+    `{
+      apply2: (a: ?t) => (f: :t ~> ?b) => :f(:a)
+      r: :apply2(1)(:identity)
+    }.r`,
+    success('1'),
+  ],
+
+  [
+    `{
+      at_one: (f: :Something ~> :Something) => :f(1)
+      inc: (n: :Integer) => :n + 1
+      r: :apply(:inc)(:at_one)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      twice: (f: :Integer ~> :Integer) => (x: :Integer) => :f(:f(:x))
+      inc: (n: :Integer) => :n + 1
+      r: :apply(:inc)(:twice)(5)
+    }.r`,
+    success('7'),
+  ],
+
+  [
+    `(a: :Integer) => :apply(1)((x: :a) => :x)`,
+    result => {
+      // `1` isn't necessarily an `a`.
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:apply("not an integer")((n: :Integer) => :n)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(a: :Integer) => :apply(1)((x: :a) => { p: :x, q: :identity })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{ k: (f: (b => :b)) => :f(1), r: :k(_ => hello) }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
   [
     `(x: { a: :Atom }) =>
       ((h: :x.a ~> :Atom) => :h(forged))((v: :x.a) => :v)`,
