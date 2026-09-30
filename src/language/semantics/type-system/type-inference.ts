@@ -83,6 +83,7 @@ import {
   alternativesOf,
   applicableFunctionSignatures,
   applyKeyPathToType,
+  argumentWithOwnTypeParametersInstantiated,
   getTypesForTypeParameters,
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArguments,
@@ -115,6 +116,21 @@ export const rigidTypeParameterIdentities = (
         ]),
       ),
   )
+
+/**
+ * Like `rigidTypeParameterIdentities`, but where rigidity can't be determined
+ * (e.g. contexts external to the program), every type parameter is assumed
+ * rigid.
+ */
+export const rigidTypeParameterIdentitiesOrAllWithin = (
+  context: ExpressionContext,
+  type: Type,
+): ReadonlySet<symbol> =>
+  context.isExternalToProgram === true ?
+    typeParameterIdentitiesWithinType(type)
+  : either.unwrapOrElse(rigidTypeParameterIdentities(context), _ =>
+      typeParameterIdentitiesWithinType(type),
+    )
 
 export const inferType = (
   node: SemanticGraph,
@@ -584,29 +600,28 @@ const inferTypeImplementation = (
               value: argumentType,
               assumptionsUsed: assumptionsUsedByArgument,
             } = argumentTypeResult.value
-            // Supply type arguments to the return type based on the inferred
-            // argument type.
-            const returnTypeInferredFrom = (argumentTypeToInferFrom: Type) =>
-              supplyTypeArguments(
-                combinedReturnType,
-                getTypesForTypeParameters({
-                  parameterType: combinedParameterType,
-                  argumentType: argumentTypeToInferFrom,
-                }),
-              )
-            const typeArguments = getTypesForTypeParameters({
-              parameterType: combinedParameterType,
-              argumentType,
-            })
-            const boundTypeParameters = new Set(
-              typeArguments.keys().map(typeParameter => typeParameter.identity),
-            )
             const typeParametersWithinEnclosingParameterTypes = new Set(
               parameterTypes
                 .values()
                 .flatMap(enclosingParameterType =>
                   typeParameterIdentitiesWithinType(enclosingParameterType),
                 ),
+            )
+            // A generic argument's own type parameters are instantiated before
+            // type arguments are inferred from it, so they don't escape.
+            const typeArgumentsInferredFrom = (argumentTypeToInferFrom: Type) =>
+              getTypesForTypeParameters({
+                parameterType: combinedParameterType,
+                argumentType: argumentWithOwnTypeParametersInstantiated({
+                  argumentType: argumentTypeToInferFrom,
+                  parameterType: combinedParameterType,
+                  rigidTypeParameters: () =>
+                    typeParametersWithinEnclosingParameterTypes,
+                }),
+              })
+            const typeArguments = typeArgumentsInferredFrom(argumentType)
+            const boundTypeParameters = new Set(
+              typeArguments.keys().map(typeParameter => typeParameter.identity),
             )
             const leavesTypeParametersUninstantiated =
               !typeParameterIdentitiesWithinType(combinedParameterType)
@@ -626,7 +641,14 @@ const inferTypeImplementation = (
                 some: alternatives =>
                   // An argument's alternatives are checked with separate type
                   // arguments, so the return type is inferred the same way.
-                  unionOfTypes(alternatives.map(returnTypeInferredFrom)),
+                  unionOfTypes(
+                    alternatives.map(alternative =>
+                      supplyTypeArguments(
+                        combinedReturnType,
+                        typeArgumentsInferredFrom(alternative),
+                      ),
+                    ),
+                  ),
               },
             )
             const typeParametersMentionedInThisSignature =

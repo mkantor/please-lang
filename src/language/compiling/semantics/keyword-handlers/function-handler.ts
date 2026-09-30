@@ -8,6 +8,7 @@ import type {
 } from '../../../errors.js'
 import type { Atom } from '../../../parsing.js'
 import {
+  argumentWithOwnTypeParametersInstantiated,
   asSemanticGraph,
   elaborateOperands,
   elaborateWithContext,
@@ -21,6 +22,7 @@ import {
   objectNodeFromOrderedEntries,
   readFunctionExpression,
   replaceAllTypeParametersWithTheirConstraints,
+  rigidTypeParameterIdentitiesOrAllWithin,
   serialize,
   stringifyKeyPathForInternalUse,
   types,
@@ -212,7 +214,16 @@ const apply = (
                       new Map(
                         getTypesForTypeParameters({
                           parameterType: signature.parameter,
-                          argumentType,
+                          argumentType:
+                            argumentWithOwnTypeParametersInstantiated({
+                              argumentType,
+                              parameterType: signature.parameter,
+                              rigidTypeParameters: () =>
+                                rigidTypeParameterIdentitiesOrAllWithin(
+                                  applySiteContext,
+                                  argumentType,
+                                ),
+                            }),
                         })
                           .entries()
                           .map(([typeParameter, specialization]) => [

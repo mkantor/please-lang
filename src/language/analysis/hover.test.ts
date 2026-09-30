@@ -324,6 +324,35 @@ hoverCases('generic function applications', [
     'overlay :: (?top: {}) ~> (?base: {}) ~> {}',
   ],
   [['{ m: { f: :identity }, r: :m.f.g(1) }', 'f.g'], 'f :: ?value ~> :value'],
+  [['{ f: :apply(1)(:identity) }', 'apply'], 'apply :: 1 ~> (1 ~> 1) ~> 1'],
+])
+
+testCases(
+  (source: string) => hoverIn(source, 'f:'),
+  source => source,
+)('calls with generic arguments', [
+  ['{ f: :apply(1)(:identity) }', 'f :: 1'],
+  ['{ f: :apply(1)((x: :Integer) => :x) }', 'f :: 1'],
+  [
+    '{ f: :apply(:identity)((g: :Something ~> :Something) => :g(1)) }',
+    'f :: 1',
+  ],
+  [
+    '{ inc: (n: :Integer) => :n + 1, f: :identity >> :inc }',
+    'f :: :Integer ~> :Integer',
+  ],
+  [
+    '{ f: (a: :Integer) => :identity >> ((x: :a) => :x) }',
+    'f :: (?a: :Integer) ~> :a ~> :a',
+  ],
+  [
+    '{ f: (a: :Integer) => :apply(:a)(:identity) }',
+    'f :: (?a: :Integer) ~> :a',
+  ],
+  [
+    '{ f: (a: :Integer) => :apply(:a)((x: ?c) => :x) }',
+    'f :: (?a: :Integer) ~> :a',
+  ],
 ])
 
 hoverCases('the name of a parameter', [
