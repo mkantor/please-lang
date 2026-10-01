@@ -1,3 +1,4 @@
+export { canonicalSpellingOf } from './type-system/canonical-type-spellings.js'
 export { typeFromSemanticGraph } from './type-system/literal-type.js'
 export * as types from './type-system/prelude-types.js'
 export { isAssignable } from './type-system/subtyping.js'

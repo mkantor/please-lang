@@ -102,6 +102,23 @@ testCases(
   ],
 ])
 
+testCases(
+  (source: string) => hoverIn(source, 'f:'),
+  source => source,
+)('types written the way the prelude names them', [
+  ['{ f: false | true }', 'f :: :Boolean'],
+  ['{ f: { a: false | true } }', 'f :: {| a: :Boolean |}'],
+  [
+    '{ f: @runtime { context => :context.arguments.lookup(x) } }',
+    'f :: :Option(:Atom)',
+  ],
+  [
+    '{ f: :option.make_some(@runtime { context => :context.arguments.lookup(x) }) }',
+    'f :: :Option(:Option(:Atom))',
+  ],
+  ['{ f: false | true | maybe }', 'f :: false | true | maybe'],
+])
+
 const program = `{
   count: 3,
   double: (n: :Integer) => :n |> :integer.add(:n),

@@ -64,7 +64,7 @@ suite('unresolved conditionals are reported as `@if`s', () => {
   test('`@if`-shaped types are reported with `@if` syntax', () => {
     assertMessageContains(
       '(b: :Boolean) => @if { :b, then: yes, else: no } ~ :Nothing',
-      'inferred to have type `@if { condition: (?b: false | true), then: yes, else: no }`',
+      'inferred to have type `@if { condition: (?b: :Boolean), then: yes, else: no }`',
     )
   })
 
@@ -74,7 +74,7 @@ suite('unresolved conditionals are reported as `@if`s', () => {
     // type itself), but is it worth the effort/complexity?
     assertMessageContains(
       '(b: :Boolean) => { true: yes, false: no }.:b ~ :Nothing',
-      'inferred to have type `@if { condition: (?b: false | true), then: yes, else: no }`',
+      'inferred to have type `@if { condition: (?b: :Boolean), then: yes, else: no }`',
     )
   })
 
