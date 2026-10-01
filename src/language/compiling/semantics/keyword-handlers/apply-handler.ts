@@ -71,9 +71,9 @@ const checkArgumentType = (
   ) {
     return either.makeRight(undefined)
   } else {
-    // Type arguments can't be inferred from an argument whose upper bound is a
-    // union (e.g. an `@if` whose condition isn't known yet), so its members are
-    // checked individually (every one must be valid).
+    // Type arguments can't be inferred from a stuck argument or one whose upper
+    // bound is a union (e.g. an `@if` whose condition isn't known yet), so its
+    // alternatives are checked individually (every one must be valid).
     const hasTypeArgumentsToInfer =
       parameterType.kind !== 'parameter' &&
       !typeParameterIdentitiesWithinType(parameterType).isSubsetOf(

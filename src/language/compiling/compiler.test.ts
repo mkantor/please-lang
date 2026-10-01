@@ -1966,6 +1966,28 @@ testCases(
 
   [
     `{
+      takes: (g: :Integer ~> :Integer) => :g(1)
+      k: (b: :Boolean) => (h: :Integer ~> :Integer) =>
+        :takes(@if { :b, then: :h, else: :h })
+      r: :k(true)((n: :Integer) => :n + 1)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      app: (g: ?a ~> ?b) => (x: :a) => :g(:x)
+      k: (b: :Boolean) => (h: :Integer ~> :Integer) =>
+        :app(@if { :b, then: :h, else: :h })(hello)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       get: (x: { a: :Integer }) => :x.a
       k: (v: { a: 1 } | { a: 2 }) => :get(:v)
       r: :k({ a: 2 })

@@ -166,5 +166,12 @@ suite('an argument whose upper bound is a union', () => {
       '(x: :Something) => :x + 1',
       'argument with type `?x`',
     )
+    assertMessageContains(
+      `{
+        get: (y: { a: ?t }) => :y.a
+        k: (x: :Integer) => :get(:x)
+      }`,
+      'argument with type `(?x: :Integer)`',
+    )
   })
 })
