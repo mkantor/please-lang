@@ -331,12 +331,15 @@ export const typeToSemanticGraph = (
   options: TypeRenderingOptions = {},
 ): SemanticGraph => {
   const type = simplifyType(unsimplifiedType)
+  const typeParametersWithinFunctionParameters =
+    typeParameterIdentitiesWithinFunctionParameters(type)
+  const typeParametersInScope = options.typeParametersInScope ?? new Set()
   const introducibleTypeParameterIdentities =
     options.typeParametersInScope === undefined ?
       option.none
     : option.makeSome(
-        typeParameterIdentitiesWithinFunctionParameters(type).difference(
-          options.typeParametersInScope,
+        typeParametersWithinFunctionParameters.difference(
+          typeParametersInScope,
         ),
       )
   return typeToSemanticGraphImplementation(type, {
@@ -348,10 +351,15 @@ export const typeToSemanticGraph = (
           typeParameterIdentitiesReferredToWhenRendering(
             type,
             introducibleTypeParameterIdentities,
+          ).union(
+            typeParametersWithinFunctionParameters.intersection(
+              typeParametersInScope,
+            ),
           ),
         )
       : option.none,
     rememberReferenceToTypeParameter: _ => undefined,
+    withinConditional: false,
   })
 }
 
@@ -369,6 +377,7 @@ const typeParameterIdentitiesReferredToWhenRendering = (
     introducibleTypeParameterIdentities,
     typeParameterIdentitiesReferredTo: option.none,
     rememberReferenceToTypeParameter: identity => referredTo.add(identity),
+    withinConditional: false,
   })
   return referredTo
 }
@@ -395,6 +404,10 @@ type TypeParameterRenderingState = {
    * reference (like the `:a` in `(?a: :Integer) ~> :a`).
    */
   readonly rememberReferenceToTypeParameter: (identity: symbol) => void
+  /**
+   * Whether the type is in an `@if`.
+   */
+  readonly withinConditional: boolean
 }
 
 const typeToSemanticGraphImplementation = (
@@ -407,16 +420,27 @@ const typeToSemanticGraphImplementation = (
     introducibleTypeParameterIdentities,
     typeParameterIdentitiesReferredTo,
     rememberReferenceToTypeParameter,
+    withinConditional,
   } = state
 
   const recurseWithSameTypeParameters = (type: Type) =>
     typeToSemanticGraphImplementation(type, state)
 
-  const isIntroducible = (typeParameter: TypeParameter): boolean =>
-    option.match(introducibleTypeParameterIdentities, {
-      none: _ => true,
-      some: identities => identities.has(typeParameter.identity),
+  const recurseWithinConditional = (type: Type) =>
+    typeToSemanticGraphImplementation(type, {
+      ...state,
+      withinConditional: true,
     })
+
+  const isBoundOutsideType = (typeParameter: TypeParameter): boolean =>
+    option.match(introducibleTypeParameterIdentities, {
+      none: _ => false,
+      some: identities => !identities.has(typeParameter.identity),
+    })
+
+  const constraintIsNotWorthStating = (typeParameter: TypeParameter): boolean =>
+    withinConditional ||
+    isCanonicalTopType(typeParameter.constraint.assignableTo)
 
   const isReferredTo = (typeParameter: TypeParameter): boolean =>
     option.match(typeParameterIdentitiesReferredTo, {
@@ -432,18 +456,18 @@ const typeToSemanticGraphImplementation = (
   const conditionAsWritten = (condition: Type): SemanticGraph =>
     condition.kind === 'intrinsicApplication' ?
       option.match(condition.functionKeyPath, {
-        none: _ => recurseWithSameTypeParameters(condition),
+        none: _ => recurseWithinConditional(condition),
         some: functionKeyPath =>
           condition.parameterTypes.reduce<SemanticGraph>(
             (partiallyApplied, parameterType) =>
               makeApplyExpression({
                 function: partiallyApplied,
-                argument: recurseWithSameTypeParameters(parameterType),
+                argument: recurseWithinConditional(parameterType),
               }),
             keyPathToLookupExpression(functionKeyPath),
           ),
       })
-    : recurseWithSameTypeParameters(condition)
+    : recurseWithinConditional(condition)
 
   return option.match(canonicalSpellingOf(type), {
     none: _ =>
@@ -469,8 +493,8 @@ const typeToSemanticGraphImplementation = (
             some: branches =>
               makeIfExpression({
                 condition: conditionAsWritten(type.key),
-                then: recurseWithSameTypeParameters(branches.then),
-                else: recurseWithSameTypeParameters(branches.else),
+                then: recurseWithinConditional(branches.then),
+                else: recurseWithinConditional(branches.else),
               }),
             none: _ =>
               makeIndexExpression({
@@ -518,36 +542,34 @@ const typeToSemanticGraphImplementation = (
           ),
         opaque: type => typeSymbolToSemanticGraph(type.symbol),
         parameter: type => {
-          if (alreadyIntroducedTypeParameterIdentities.has(type.identity)) {
+          if (
+            alreadyIntroducedTypeParameterIdentities.has(type.identity) ||
+            (isBoundOutsideType(type) && constraintIsNotWorthStating(type))
+          ) {
             rememberReferenceToTypeParameter(type.identity)
-            return isIntroducible(type) ?
-                makeLookupExpression(type.name)
-              : referenceToTypeParameterBoundOutsideType(type)
-          } else if (isIntroducible(type) && !isReferredTo(type)) {
+            return isBoundOutsideType(type) ?
+                referenceToTypeParameterBoundOutsideType(type)
+              : makeLookupExpression(type.name)
+          } else if (!isReferredTo(type)) {
             // Type parameters occurring only once are shown as their constraints.
             return recurseWithSameTypeParameters(type.constraint.assignableTo)
           } else {
             // Side effect: remember the type parameter. This is a direct mutation
             // because it needs to be visible to usages not in this call stack.
             alreadyIntroducedTypeParameterIdentities.add(type.identity)
-            if (!isIntroducible(type)) {
-              return makeCheckExpression({
-                value: referenceToTypeParameterBoundOutsideType(type),
-                type: recurseWithSameTypeParameters(
-                  type.constraint.assignableTo,
-                ),
-              })
-            } else {
-              return makeHoleExpressionWithExtantTypeParameter(
-                type.name,
-                makeObjectNode({
-                  assignableTo: recurseWithSameTypeParameters(
-                    type.constraint.assignableTo,
-                  ),
-                }),
-                type,
-              )
-            }
+            const constraint = recurseWithSameTypeParameters(
+              type.constraint.assignableTo,
+            )
+            return isBoundOutsideType(type) ?
+                makeCheckExpression({
+                  value: referenceToTypeParameterBoundOutsideType(type),
+                  type: constraint,
+                })
+              : makeHoleExpressionWithExtantTypeParameter(
+                  type.name,
+                  makeObjectNode({ assignableTo: constraint }),
+                  type,
+                )
           }
         },
         union: type => {
