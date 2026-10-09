@@ -8,17 +8,12 @@ import { quoteAtomIfNecessary } from '../../unparsing/plz-utilities.js'
 import { keyColor, punctuation } from '../../unparsing/unparsing-utilities.js'
 import { stringifyTypeForEndUser } from '../semantic-graph.js'
 import { asUnionWithLiteralAtomMembers } from './subtyping.js'
-import { makeFunctionType } from './type-formats/function-type.js'
 import {
   makeIndexedAccessType,
   type IndexedAccessType,
 } from './type-formats/indexed-access-type.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
-import { makeObjectType } from './type-formats/object-type.js'
-import {
-  makeTypeParameter,
-  type TypeParameter,
-} from './type-formats/type-parameter-type.js'
+import type { TypeParameter } from './type-formats/type-parameter-type.js'
 import type { Type } from './type-formats/type.js'
 import { makeUnionType, type UnionType } from './type-formats/union-type.js'
 
@@ -50,131 +45,6 @@ export type TypeKeyPathStringifiedForInternalUse = WithPhantomData<
   string,
   IsKeyPathStringifiedForInternalUse
 >
-
-/**
- * If the given `KeyPath` is not valid for the given `Type`, the given `Type` is
- * returned unchanged (and `operation` is never called).
- */
-export const updateTypeAtKeyPathIfValid = (
-  type: Type,
-  keyPath: TypeKeyPath,
-  // TODO: `operation` should be able to update `Atom`s.
-  operation: (typeAtKeyPath: Exclude<Type, UnionType>) => Type,
-): Type => {
-  const [firstKey, ...remainingKeyPath] = keyPath
-  if (firstKey === undefined) {
-    // If the key path is empty, this is the type to operate on.
-    if (type.kind === 'union') {
-      return makeUnionType(
-        [...type.members].flatMap(member => {
-          if (typeof member === 'string') {
-            return member
-          } else {
-            const result = operation(member)
-            if (result.kind === 'union') {
-              return [...result.members]
-            } else {
-              return [result]
-            }
-          }
-        }),
-      )
-    } else {
-      return operation(type)
-    }
-  } else {
-    return matchTypeFormat<Type>(type, {
-      function: type => {
-        switch (firstKey) {
-          case functionParameterKey:
-            return makeFunctionType({
-              parameter: updateTypeAtKeyPathIfValid(
-                type.signature.parameter,
-                remainingKeyPath,
-                operation,
-              ),
-              return: type.signature.return,
-            })
-          case functionReturnKey:
-            return makeFunctionType({
-              return: updateTypeAtKeyPathIfValid(
-                type.signature.return,
-                remainingKeyPath,
-                operation,
-              ),
-              parameter: type.signature.parameter,
-            })
-          default:
-            return type
-        }
-      },
-      application: type => type,
-      indexedAccess: type => type,
-      intrinsicApplication: type => type,
-      object: type => {
-        if (typeof firstKey === 'string') {
-          const next = type.children[firstKey]
-          if (next === undefined) {
-            return type
-          } else {
-            return makeObjectType(
-              {
-                ...type.children,
-                [firstKey]: updateTypeAtKeyPathIfValid(
-                  next,
-                  remainingKeyPath,
-                  operation,
-                ),
-              },
-              type.excess,
-            )
-          }
-        } else {
-          return type
-        }
-      },
-      opaque: type => type,
-      parameter: type => {
-        switch (firstKey) {
-          case typeParameterAssignableToConstraintKey:
-            return makeTypeParameter(
-              type.name,
-              {
-                assignableTo: updateTypeAtKeyPathIfValid(
-                  type.constraint.assignableTo,
-                  remainingKeyPath,
-                  operation,
-                ),
-              },
-              type.valueKeyPath,
-            )
-          default:
-            return type
-        }
-      },
-      union: type =>
-        makeUnionType(
-          [...type.members].flatMap(member => {
-            if (typeof member === 'string') {
-              // An atom can't satisfy a (non-empty) key path.
-              return member
-            } else {
-              const manipulatedMember = updateTypeAtKeyPathIfValid(
-                member,
-                keyPath,
-                operation,
-              )
-              if (manipulatedMember.kind === 'union') {
-                return [...manipulatedMember.members]
-              } else {
-                return [manipulatedMember]
-              }
-            }
-          }),
-        ),
-    })
-  }
-}
 
 export const stringifyTypeKeyPathForEndUser = (
   keyPath: TypeKeyPath,

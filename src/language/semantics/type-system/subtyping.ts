@@ -14,16 +14,12 @@ import {
   unionOfTypes,
   type UnionType,
 } from './type-formats/union-type.js'
-import { updateTypeAtKeyPathIfValid } from './type-key-path.js'
+import { containedTypeParameters } from './type-parameter-analysis.js'
 import {
-  containedTypeParameters,
-  findKeyPathsToTypeParameter,
-} from './type-parameter-analysis.js'
-import {
-  getTypesForTypeParameters,
+  reduceStuckApplication,
   replaceAllTypeParametersWithTheirConstraints,
+  resolveApplication,
   supplyTypeArgument,
-  supplyTypeArguments,
   upperBoundOfStuckType,
 } from './type-substitution.js'
 
@@ -41,6 +37,15 @@ export const isAssignable = ({
 
   return (
     source === target || // in this case there's no reason to spend time checking structural assignability
+    // A stuck application target can be compared by what it reduces to. When
+    // the source is also an application, the source case below compares them
+    // structurally.
+    (target.kind === 'application' &&
+      source.kind !== 'application' &&
+      option.match(reduceStuckApplication(target), {
+        none: _ => false,
+        some: reducedTarget => isAssignable({ source, target: reducedTarget }),
+      })) ||
     (target.kind === 'intrinsicApplication' ?
       // An intrinsic application behaves as its (concrete) upper bound when
       // appearing as the target, mirroring the source case below. This ensures
@@ -52,7 +57,7 @@ export const isAssignable = ({
       })
     : matchTypeFormat(source, {
         application: source =>
-          target.kind === 'application' ?
+          (target.kind === 'application' &&
             // Two stuck applications are assignable when their functions and
             // arguments are mutually assignable.
             isAssignable({
@@ -70,30 +75,23 @@ export const isAssignable = ({
             isAssignable({
               source: target.argument,
               target: source.argument,
-            })
-          : (
-            // When the stuck application's signature is concrete, its return
-            // type (with any contained type parameters bound from the argument
-            // type) serves as an upper bound on what the application will
-            // produce. This condition allows stuck applications be assigned to
-            // (rigid) type parameters.
-            source.function.kind === 'function' &&
-            isAssignable({
-              source: supplyTypeArguments(
-                source.function.signature.return,
-                getTypesForTypeParameters({
-                  parameterType: source.function.signature.parameter,
-                  argumentType: source.argument,
-                }),
-              ),
-              target,
-            })
-          ) ?
-            true
-          : option.match(upperBoundOfStuckType(source), {
-              none: _ => false,
-              some: upperBound => isAssignable({ source: upperBound, target }),
-            }),
+            })) ||
+          // When the stuck application's signature is concrete, it can be
+          // compared by what it would produce if it were reduced now. This
+          // allows stuck applications to be assigned to (rigid) type
+          // parameters.
+          // TODO: That isn't always an upper bound on what it will produce (see
+          // `resolveApplication`), so this can accept too much.
+          option.match(resolveApplication(source), {
+            none: _ => false,
+            some: resolvedSource =>
+              isAssignable({ source: resolvedSource, target }),
+          }) ||
+          option.match(upperBoundOfStuckType(source), {
+            none: _ => false,
+            // TODO: This case can also accept too much.
+            some: upperBound => isAssignable({ source: upperBound, target }),
+          }),
         function: source =>
           matchTypeFormat(target, {
             function: target => {
@@ -158,30 +156,20 @@ export const isAssignable = ({
                       targetParameterTypeParameters.get(stringifiedKeyPath)
 
                     if (correspondingTargetTypeParameter !== undefined) {
-                      const locationsOfSourceTypeParameterInSourceReturn =
-                        findKeyPathsToTypeParameter(
-                          source.signature.return,
+                      // TODO: Substituting into the return type collapses stuck
+                      // `@if`s into unions of branch types, even when the
+                      // supplied type argument doesn't concretize the
+                      // condition. The result is that functions returning stuck
+                      // `@if`s aren't assignable to their own types.
+                      sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
+                        supplyTypeArgument(
+                          sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
                           sourceTypeParameter,
+                          unionOfTypes([
+                            ...correspondingTargetTypeParameter.typeParameters
+                              .members,
+                          ]),
                         )
-
-                      for (const locationOfSourceTypeParameterInSourceReturn of locationsOfSourceTypeParameterInSourceReturn) {
-                        sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
-                          updateTypeAtKeyPathIfValid(
-                            sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
-                            locationOfSourceTypeParameterInSourceReturn,
-                            typeAtKeyPath => {
-                              if (
-                                typeAtKeyPath.kind === 'parameter' &&
-                                typeAtKeyPath.identity ===
-                                  sourceTypeParameter.identity
-                              ) {
-                                return correspondingTargetTypeParameter.typeParameters
-                              } else {
-                                return typeAtKeyPath
-                              }
-                            },
-                          )
-                      }
                     }
                   }
                 }
@@ -216,11 +204,19 @@ export const isAssignable = ({
             union: target => isNonUnionAssignableToUnion({ source, target }),
           }),
         indexedAccess: source =>
+          (target.kind === 'indexedAccess' &&
+            isAssignable({ source: source.object, target: target.object }) &&
+            isAssignable({ source: source.key, target: target.key }) &&
+            isAssignable({ source: target.key, target: source.key })) ||
           option.match(upperBoundOfStuckType(source), {
             none: _ => false,
             some: upperBound => isAssignable({ source: upperBound, target }),
           }),
         intrinsicApplication: source =>
+          isAssignable({
+            source: source.computeUpperBound(source.parameterTypes),
+            target,
+          }) ||
           option.match(upperBoundOfStuckType(source), {
             none: _ => false,
             some: upperBound => isAssignable({ source: upperBound, target }),

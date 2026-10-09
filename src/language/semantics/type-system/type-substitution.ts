@@ -554,21 +554,49 @@ export const applyTypeToArgumentType = (
   )
 
 /**
- * Recursively replace stuck applications with what they are known to produce.
- * Type parameters are preserved.
+ * What a stuck application would produce if it were reduced now, i.e. its
+ * return type with type arguments inferred from its argument (or `none` if its
+ * function isn't concrete).
+ *
+ * This is an approximation which can be wider or narrower than what the
+ * application will reduce to (instantiating type parameters can change which
+ * type arguments are inferred).
+ */
+export const resolveApplication = (type: ApplicationType): Option<Type> =>
+  type.function.kind === 'function' ?
+    applyTypeToArgumentType(type.function, type.argument)
+  : option.none
+
+/**
+ * What a stuck application will definitively reduce to, if that's knowable
+ * (i.e. its function is concrete, its argument contains no type parameters, and
+ * its function's parameter type doesn't mention the type parameters it's stuck
+ * on). This is NOT an approximation like `resolveApplication`.
+ */
+export const reduceStuckApplication = (type: ApplicationType): Option<Type> =>
+  (
+    type.function.kind === 'function' &&
+    typeParameterIdentitiesWithinType(type.argument).size === 0 &&
+    typeParameterIdentitiesWithinType(
+      type.function.signature.parameter,
+    ).isDisjointFrom(type.parametersStuckOn)
+  ) ?
+    applyTypeToArgumentType(type.function, type.argument)
+  : option.none
+
+/**
+ * Recursively replace stuck applications with what they would produce if they
+ * were reduced now (see `resolveApplication`). Type parameters are preserved.
  */
 export const withStuckApplicationsResolved = (type: Type): Type =>
   // Avoid infinite recursion when we hit the top type.
   isCanonicalTopType(type) ? type : (
     matchTypeFormat(type, {
       application: type =>
-        // Resolve the application.
-        type.function.kind === 'function' ?
-          option.match(applyTypeToArgumentType(type.function, type.argument), {
-            none: _ => type,
-            some: withStuckApplicationsResolved,
-          })
-        : type,
+        option.match(resolveApplication(type), {
+          none: _ => type,
+          some: withStuckApplicationsResolved,
+        }),
       function: type =>
         makeFunctionType({
           parameter: withStuckApplicationsResolved(type.signature.parameter),
