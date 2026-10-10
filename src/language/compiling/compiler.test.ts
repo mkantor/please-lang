@@ -2761,6 +2761,110 @@ testCases(
   ],
 
   [
+    `:option.make_some ~ (1 ~> :Option(1))`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:option.map ~ ((:Integer ~> :Atom) ~> :Option(:Integer) ~> :Option(:Atom))`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:apply ~ (1 ~> (:Integer ~> :Atom) ~> :Atom)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:+ ~ (2 ~> 1 ~> 3)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:atom.append ~ (a ~> b ~> ba)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:option.make_some ~ (1 ~> :Option(2))`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:option.map ~ ((:Integer ~> :Atom) ~> :Option(:Atom) ~> :Option(:Atom))`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:+ ~ (2 ~> 1 ~> 4)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:+ ~ (a ~> 1 ~> 3)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (o: :Option(:Integer)) => :option.get_or_else(0)(:o)
+      g: (o: :Option(:Integer)) => :o option.map :integer.add(1)
+      h: (o: :Option(:Integer)) => :option.map(:identity)(:o)
+      i: (o: :Option(:Integer)) => :option.flat_map(:option.make_some)(:o)
+      check_f: :f ~ (:Option(:Integer) ~> :Integer)
+      check_g: :g ~ (:Option(:Integer) ~> :Option(:Integer))
+      check_h: :h ~ (:Option(:Integer) ~> :Option(:Integer))
+      check_i: :i ~ (:Option(:Integer) ~> :Option(:Integer))
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (o: :Option(:Atom)) => :option.map(:integer.add(1))(:o)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (o: :Option(:Integer)) => :option.get_or_else(0)(:o)
+      check: :f ~ (:Option(:Integer) ~> :Boolean)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
     `{
       f: (key: @union { a, c }) => (x: :Integer) =>
         :object.lookup(:key)({ a: :x, b: hello }) ~ @union {

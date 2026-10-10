@@ -8,6 +8,7 @@ import {
   type ExcessClause,
   type ObjectType,
 } from './type-formats/object-type.js'
+import type { TypeParameter } from './type-formats/type-parameter-type.js'
 import { isCanonicalTopType, type Type } from './type-formats/type.js'
 import {
   makeUnionType,
@@ -16,10 +17,11 @@ import {
 } from './type-formats/union-type.js'
 import { containedTypeParameters } from './type-parameter-analysis.js'
 import {
+  getTypesForTypeParameters,
   reduceStuckApplication,
   replaceAllTypeParametersWithTheirConstraints,
   resolveApplication,
-  supplyTypeArgument,
+  supplyTypeArguments,
   upperBoundOfStuckType,
 } from './type-substitution.js'
 
@@ -94,102 +96,41 @@ export const isAssignable = ({
           }),
         function: source =>
           matchTypeFormat(target, {
-            function: target => {
+            function: target =>
               // Functions are contravariant in parameters, covariant in return
+              // types. The source's type parameters are instantiated from the
+              // target's parameter type. For example, when checking whether
+              // `?a ~> :Option(:a)` is assignable to `1 ~> :Option(1)`, `a` is
+              // instantiated as `1`.
+              // TODO: Substituting into the return type collapses stuck `@if`s
+              // into unions of branch types, even when the supplied type
+              // argument doesn't concretize the condition. The result is that
+              // functions returning stuck `@if`s aren't assignable to their own
               // types.
-              if (
-                source.signature.parameter.kind === 'parameter' &&
-                source.signature.return.kind === 'parameter' &&
-                source.signature.parameter.identity ===
-                  source.signature.return.identity
-              ) {
-                // The source is an identity function (`a => a`), which means
-                // this much simpler check can be performed. This also allows
-                // correctly handling the fact that `a => a` is assignable to a
-                // type like `atom => atom`.
-                return (
-                  isAssignable({
-                    source: target.signature.parameter,
-                    target: target.signature.return,
-                  }) &&
-                  isAssignable({
-                    source: target.signature.parameter,
-                    target: source.signature.parameter.constraint.assignableTo,
-                  })
-                )
-              } else {
-                const sourceParameterTypeParameters = containedTypeParameters(
+              option.match(
+                typeArgumentsForSourceFunction(
                   source.signature.parameter,
-                )
-                const targetParameterTypeParameters = containedTypeParameters(
                   target.signature.parameter,
-                )
-
-                // An example showing how this will be used: When checking
-                // whether `{ a: (a <: atom) } => a` is assignable to `{ a: (b
-                // <: "a") } => b`, the parameter types are compatible if `{ a:
-                // (b <: "a") }` is assignable to `{ a: atom }` (it is).
-                let sourceParameterWithTypeParametersReplacedByConstraints =
-                  source.signature.parameter
-
-                // An example showing how this will be used: When checking
-                // whether `a => { a: a, b: atom }` is assignable to `(b <:
-                // atom) => { a: b }`, the return types are compatible if `{ a:
-                // b, b: atom }` is assignable to `{ a: b }` (it is).
-                let sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
-                  source.signature.return
-
-                for (const [
-                  stringifiedKeyPath,
-                  sourceTypeParametersAtThisKeyPath,
-                ] of sourceParameterTypeParameters) {
-                  for (const sourceTypeParameter of sourceTypeParametersAtThisKeyPath
-                    .typeParameters.members) {
-                    sourceParameterWithTypeParametersReplacedByConstraints =
-                      supplyTypeArgument(
-                        sourceParameterWithTypeParametersReplacedByConstraints,
-                        sourceTypeParameter,
-                        sourceTypeParameter.constraint.assignableTo,
-                      )
-
-                    const correspondingTargetTypeParameter =
-                      targetParameterTypeParameters.get(stringifiedKeyPath)
-
-                    if (correspondingTargetTypeParameter !== undefined) {
-                      // TODO: Substituting into the return type collapses stuck
-                      // `@if`s into unions of branch types, even when the
-                      // supplied type argument doesn't concretize the
-                      // condition. The result is that functions returning stuck
-                      // `@if`s aren't assignable to their own types.
-                      sourceReturnWithTypeParametersReplacedByTargetTypeParameters =
-                        supplyTypeArgument(
-                          sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
-                          sourceTypeParameter,
-                          unionOfTypes([
-                            ...correspondingTargetTypeParameter.typeParameters
-                              .members,
-                          ]),
-                        )
-                    }
-                  }
-                }
-
-                return (
-                  // Contravariant parameter check:
-                  isAssignable({
-                    source: target.signature.parameter,
-                    target:
-                      sourceParameterWithTypeParametersReplacedByConstraints,
-                  }) &&
-                  // Covariant return type check:
-                  isAssignable({
-                    source:
-                      sourceReturnWithTypeParametersReplacedByTargetTypeParameters,
-                    target: target.signature.return,
-                  })
-                )
-              }
-            },
+                ),
+                {
+                  none: _ => false,
+                  some: typeArguments =>
+                    isAssignable({
+                      source: target.signature.parameter,
+                      target: supplyTypeArguments(
+                        source.signature.parameter,
+                        typeArguments,
+                      ),
+                    }) &&
+                    isAssignable({
+                      source: supplyTypeArguments(
+                        source.signature.return,
+                        typeArguments,
+                      ),
+                      target: target.signature.return,
+                    }),
+                },
+              ),
             application: _target => false,
             indexedAccess: _target => false,
             intrinsicApplication: _target => {
@@ -379,6 +320,46 @@ export const isAssignable = ({
           }),
       }))
   )
+}
+
+/**
+ * Type arguments for the type parameters in `sourceFunctionParameterType`.
+ */
+const typeArgumentsForSourceFunction = (
+  sourceFunctionParameterType: Type,
+  targetFunctionParameterType: Type,
+): Option<ReadonlyMap<TypeParameter, Type>> => {
+  const boundTypeArguments = getTypesForTypeParameters({
+    parameterType: sourceFunctionParameterType,
+    argumentType: targetFunctionParameterType,
+  })
+  const boundIdentities = new Set(
+    boundTypeArguments.keys().map(typeParameter => typeParameter.identity),
+  )
+  const typeArguments = new Map([
+    ...containedTypeParameters(sourceFunctionParameterType)
+      .values()
+      .flatMap(({ typeParameters }) => typeParameters.members)
+      .filter(typeParameter => !boundIdentities.has(typeParameter.identity))
+      .map((typeParameter): readonly [TypeParameter, Type] => [
+        typeParameter,
+        typeParameter.constraint.assignableTo,
+      ]),
+    ...boundTypeArguments,
+  ])
+  return (
+      boundTypeArguments.entries().every(([typeParameter, typeArgument]) =>
+        isAssignable({
+          source: typeArgument,
+          target: supplyTypeArguments(
+            typeParameter.constraint.assignableTo,
+            typeArguments,
+          ),
+        }),
+      )
+    ) ?
+      option.makeSome(typeArguments)
+    : option.none
 }
 
 const isStuck = (type: Exclude<Type, UnionType>): boolean =>

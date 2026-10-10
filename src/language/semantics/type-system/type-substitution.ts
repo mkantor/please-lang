@@ -356,7 +356,12 @@ export const getTypesForTypeParameters = ({
 
       object: parameterType => {
         if (argumentType.kind !== 'object') {
-          return new Map()
+          return argumentType.kind === 'parameter' ?
+              getTypesForTypeParameters({
+                parameterType,
+                argumentType: argumentType.constraint.assignableTo,
+              })
+            : new Map()
         } else {
           // Type parameters in excess bounds unify against everything the
           // argument could hold beyond the parameter's required properties.
@@ -436,18 +441,28 @@ export const getTypesForTypeParameters = ({
         : new Map(),
 
       union: parameterType => {
-        const argumentCandidates = [
-          argumentType,
-          ...(argumentType.kind === 'union' ?
-            // These additional candidates enable alignment between parameter
-            // unions and argument unions. For example, given a `parameterType`
-            // of `(A <: atom) | object` and an `argumentType` of `atom |
-            // object`, `A` should be inferred as `atom`.
-            [...argumentType.members].flatMap((member): readonly Type[] =>
+        // Union members as additional candidates enable alignment between
+        // parameter unions and argument unions. For example, given a
+        // `parameterType` of `(A <: atom) | object` and an `argumentType` of
+        // `atom | object`, `A` should be inferred as `atom`.
+        const unionMembersOf = (type: Type): readonly Type[] =>
+          type.kind === 'union' ?
+            [...type.members].flatMap((member): readonly Type[] =>
               typeof member === 'string' ? [makeUnionType([member])] : [member],
             )
+          : []
+        const argumentCandidates = [
+          argumentType,
+          ...unionMembersOf(argumentType),
+          // A type parameter argument may not fit any parameter member as a
+          // whole while its constraint's members do.
+          ...(argumentType.kind === 'parameter' ?
+            [
+              argumentType.constraint.assignableTo,
+              ...unionMembersOf(argumentType.constraint.assignableTo),
+            ]
           : []),
-        ] as const
+        ]
         return [...parameterType.members]
           .flatMap(parameterMember =>
             typeof parameterMember === 'string' ?
