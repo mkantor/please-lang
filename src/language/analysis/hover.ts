@@ -36,12 +36,56 @@ export const hoverAt = (
   program: ParsedProgram,
   offset: number,
 ): Option<Hover> =>
-  option.flatMap(locationAtOffset(program, offset), ({ keyPath, span }) =>
-    option.map(typeAtLocation(program, keyPath), type => ({
-      span,
-      type: renderType(type, typeParametersInScopeAt(program, keyPath)),
+  option.flatMap(hoverTargetAt(program, offset), target =>
+    option.map(typeOfTarget(program, target), type => ({
+      span: target.span,
+      type: renderType(type, typeParametersInScopeAt(program, target.keyPath)),
     })),
   )
+
+type HoverTarget = {
+  readonly span: Span // The span that was pointed at.
+  readonly keyPath: KeyPath // From the program root.
+  readonly role: TargetRole
+}
+
+type TargetRole =
+  /**
+   * The name operand of a `@lookup`/`@hole` (`a` in `:a`, `t` in `?t`).
+   */
+  | {
+      readonly kind: 'nameOperand'
+      readonly expression: KeyPath
+    }
+  /**
+   * A query component of an `@index` expression (`b` in `x.b.c`).
+   */
+  | {
+      readonly kind: 'queryComponent'
+      readonly expression: KeyPath
+      readonly componentIndex: number
+    }
+  /**
+   * An unannotated function parameter's name (`a` in `a => …`).
+   */
+  | {
+      readonly kind: 'parameterName'
+      readonly functionExpression: KeyPath
+    }
+  /**
+   * Anything else.
+   */
+  | { readonly kind: 'other' }
+
+const hoverTargetAt = (
+  program: ParsedProgram,
+  offset: number,
+): Option<HoverTarget> =>
+  option.map(locationAtOffset(program, offset), ({ keyPath, span }) => ({
+    span,
+    keyPath,
+    role: roleAt(program, keyPath),
+  }))
 
 const renderType = (
   type: Type,
@@ -118,45 +162,51 @@ const isNarrower = (candidate: Location, incumbent: Location): boolean => {
   )
 }
 
-const typeAtLocation = (
+const typeOfTarget = (
   program: ParsedProgram,
-  keyPath: KeyPath,
-): Option<Type> =>
+  { keyPath, role }: HoverTarget,
+): Option<Type> => {
+  switch (role.kind) {
+    case 'nameOperand':
+      return inferredTypeAt(program, role.expression)
+    case 'queryComponent':
+      return typeOfPartialIndex(program, role.expression, role.componentIndex)
+    case 'parameterName':
+      // Describe the parameter type of the function, which can come from its
+      // context (e.g. `@runtime`).
+      return option.flatMap(
+        inferredTypeAt(program, role.functionExpression),
+        functionType =>
+          functionType.kind !== 'function' ? option.none
+          : functionType.signature.parameter.kind === 'parameter' ?
+            option.makeSome(
+              functionType.signature.parameter.constraint.assignableTo,
+            )
+          : option.makeSome(functionType.signature.parameter),
+      )
+    case 'other':
+      return inferredTypeAt(program, keyPath)
+  }
+}
+
+const roleAt = (program: ParsedProgram, keyPath: KeyPath): TargetRole =>
   option.match(roleOfAtomAt(program, keyPath), {
-    none: _ => inferredTypeAt(program, keyPath),
-    some: role =>
-      role.kind === 'nameOperand' ?
-        inferredTypeAt(program, role.expression)
-      : typeOfPartialIndex(program, role.expression, role.componentIndex),
+    none: _ =>
+      option.match(unannotatedParameterNameAt(program, keyPath), {
+        none: _ => ({ kind: 'other' }),
+        some: role => role,
+      }),
+    some: role => role,
   })
 
 /**
  * For keyword expressions with atom operands, hover shouldn't show the literal
  * atom type even though the atom is the most deeply-nested expression.
- * `AtomRole` models the "roles" for these atoms, which determines what type to
- * show in tooltips.
  */
-type AtomRole =
-  /**
-   * The name operand of a `@lookup`/`@hole` (`a` in `:a`, `t` in `?t`).
-   */
-  | {
-      readonly kind: 'nameOperand'
-      readonly expression: KeyPath
-    }
-  /**
-   * A query component of an `@index` expression (`b` in `x.b.c`).
-   */
-  | {
-      readonly kind: 'queryComponent'
-      readonly expression: KeyPath
-      readonly componentIndex: number
-    }
-
 const roleOfAtomAt = (
   program: ParsedProgram,
   keyPath: KeyPath,
-): Option<AtomRole> => {
+): Option<TargetRole> => {
   const { length } = keyPath
   const lastKey = keyPath[length - 1]
   const enclosesAnOperand = keyPath[length - 2] === '1'
@@ -180,6 +230,28 @@ const roleOfAtomAt = (
   } else {
     return option.none
   }
+}
+
+/**
+ * `a` in `a => …`.
+ */
+const unannotatedParameterNameAt = (
+  program: ParsedProgram,
+  keyPath: KeyPath,
+): Option<TargetRole> => {
+  const functionExpression = keyPath.slice(0, -2)
+  const [operandsKey, operandKey] = keyPath.slice(-2)
+  return (
+      operandsKey === '1' &&
+        operandKey === 'parameter' &&
+        isExpressionAt(program, functionExpression, readFunctionExpression)
+    ) ?
+      option.flatMap(nodeAt(program, keyPath), node =>
+        typeof node === 'string' ?
+          option.makeSome({ kind: 'parameterName', functionExpression })
+        : option.none,
+      )
+    : option.none
 }
 
 const isExpressionAt = (

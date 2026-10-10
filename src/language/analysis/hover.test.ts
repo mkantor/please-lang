@@ -211,6 +211,60 @@ hoverCases('type parameters in `@if`s', [
   ],
 ])
 
+hoverCases('type parameters which share a name', [
+  // `option.get_or_else`'s type parameter is also named `a`.
+  [
+    ['{ f: (a: :Integer) => :option.get_or_else(:a) }', 'f:'],
+    'f :: (?a: :Integer) ~> :Option(?a2) ~> :a2 | :a',
+  ],
+  [
+    ['(a: :Integer) => { x: :a, y: :a, h: :option.get_or_else(:a) }', '{ x'],
+    '{ x: :a, y: :a, h: :option.get_or_else(:a) } :: {| x: :a ~ :Integer, y: :a, h: :Option(?a2) ~> :a2 | :a |}',
+  ],
+  [
+    ['(a: :Integer) => { x: :a, h: :option.get_or_else }', '{ x'],
+    '{ x: :a, h: :option.get_or_else } :: {| x: :Integer, h: ?b ~> :Option(?a) ~> :a | :b |}',
+  ],
+])
+
+hoverCases('a type parameter bound by more than one function', [
+  [
+    ['{ f: { i: :identity, j: :identity } }', 'f:'],
+    'f :: {| i: ?a ~> :a, j: ?a ~> :a |}',
+  ],
+  [
+    ['{ f: :option.map }', 'option.map'],
+    [
+      'option :: {|',
+      '  type: ?a ~> :Option(:a)',
+      '  none: {|',
+      '    tag: none',
+      '  |}',
+      '  make_some: ?a ~> :Option(:a)',
+      '  map: (?a ~> ?b) ~> :Option(:a) ~> :Option(:b)',
+      '  flat_map: (?a ~> :Option(?b)) ~> :Option(:a) ~> :Option(:b)',
+      '  get_or_else: ?b ~> :Option(?a) ~> :a | :b',
+      '  is_some: :Option(:Something) ~> :Boolean',
+      '  is_none: :Option(:Something) ~> :Boolean',
+      '|}',
+    ].join('\n'),
+  ],
+])
+
+hoverCases('the name of a parameter', [
+  [['(a: :Integer) => :a', 'a:'], 'a :: :Integer'],
+  [['a => :a', 'a =>'], 'a :: :Something'],
+  [['_ => 1', '_ =>'], '_ :: :Something'],
+  [['{ f: (g: :Atom ~> :Atom) => :g, h: :f(x => :x) }', 'x =>'], 'x :: :Atom'],
+  [
+    ['@runtime { context => :context.program.start_time }', 'context =>'],
+    hover => {
+      assert.ok(hover !== undefined)
+      assert.match(hover, /^context :: \{\|\n {2}arguments: /)
+    },
+  ],
+])
+
 hoversIn(`{
   f: (x: :Atom) => {
     callback: (k: :x ~> :Integer) => 1

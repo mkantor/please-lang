@@ -41,6 +41,7 @@ import {
 import { nodeTag } from './semantic-graph-node-tag.js'
 import {
   canonicalSpellingOf,
+  containedTypeParameters,
   functionParameterKey,
   functionReturnKey,
   isCanonicalTopType,
@@ -48,8 +49,10 @@ import {
   simplifyType,
   typeParameterAssignableToConstraintKey,
   typeParameterIdentitiesWithinFunctionParameters,
+  typeParameterIdentitiesWithinType,
   types,
   withStuckApplicationsResolved,
+  type FunctionType,
   type IndexedAccessType,
   type TypeKeyPath,
 } from './type-system.js'
@@ -342,24 +345,32 @@ export const typeToSemanticGraph = (
           typeParametersInScope,
         ),
       )
+  const typeParameterIdentitiesReferredTo =
+    options.unreferencedTypeParametersAsConstraints === true ?
+      option.makeSome(
+        typeParameterIdentitiesReferredToWhenRendering(
+          type,
+          introducibleTypeParameterIdentities,
+        ).union(
+          typeParametersWithinFunctionParameters.intersection(
+            typeParametersInScope,
+          ),
+        ),
+      )
+    : option.none
   return typeToSemanticGraphImplementation(type, {
     alreadyIntroducedTypeParameterIdentities: new Set(),
+    typeParameterNames: new Map(),
+    reservedNames: namesOfTypeParametersBoundOutside(
+      type,
+      introducibleTypeParameterIdentities,
+      typeParameterIdentitiesReferredTo,
+    ),
     introducibleTypeParameterIdentities,
-    typeParameterIdentitiesReferredTo:
-      options.unreferencedTypeParametersAsConstraints === true ?
-        option.makeSome(
-          typeParameterIdentitiesReferredToWhenRendering(
-            type,
-            introducibleTypeParameterIdentities,
-          ).union(
-            typeParametersWithinFunctionParameters.intersection(
-              typeParametersInScope,
-            ),
-          ),
-        )
-      : option.none,
+    typeParameterIdentitiesReferredTo,
     rememberReferenceToTypeParameter: _ => undefined,
     withinConditional: false,
+    typeParameterIdentitiesBoundByEnclosingFunctionTypes: new Set(),
   })
 }
 
@@ -374,12 +385,62 @@ const typeParameterIdentitiesReferredToWhenRendering = (
   const referredTo = new Set<symbol>()
   typeToSemanticGraphImplementation(type, {
     alreadyIntroducedTypeParameterIdentities: new Set(),
+    typeParameterNames: new Map(),
+    reservedNames: new Set(),
     introducibleTypeParameterIdentities,
     typeParameterIdentitiesReferredTo: option.none,
     rememberReferenceToTypeParameter: identity => referredTo.add(identity),
     withinConditional: false,
+    typeParameterIdentitiesBoundByEnclosingFunctionTypes: new Set(),
   })
   return referredTo
+}
+
+/**
+ * The names a rendering of `type` uses to refer to type parameters bound
+ * outside it.
+ */
+const namesOfTypeParametersBoundOutside = (
+  type: Type,
+  introducibleTypeParameterIdentities: Option<ReadonlySet<symbol>>,
+  typeParameterIdentitiesReferredTo: Option<ReadonlySet<symbol>>,
+): ReadonlySet<Atom> =>
+  option.match(introducibleTypeParameterIdentities, {
+    none: _ => new Set(),
+    some: introducibleIdentities =>
+      new Set(
+        containedTypeParameters(type)
+          .values()
+          .flatMap(({ typeParameters }) => typeParameters.members)
+          .filter(
+            typeParameter =>
+              !introducibleIdentities.has(typeParameter.identity) &&
+              option.match(typeParameterIdentitiesReferredTo, {
+                none: _ => true,
+                some: referredTo => referredTo.has(typeParameter.identity),
+              }),
+          )
+          .map(typeParameter =>
+            option.match(typeParameter.valueKeyPath, {
+              none: _ => typeParameter.name,
+              some: ([rootKey]) => rootKey,
+            }),
+          ),
+      ),
+  })
+
+/**
+ * `name` if it isn't in use, otherwise `name2`, `name3`, etc.
+ */
+const firstUnusedName = (
+  name: Atom,
+  namesInUse: ReadonlySet<Atom>,
+  suffix = 1,
+): Atom => {
+  const candidate = suffix === 1 ? name : `${name}${suffix}`
+  return namesInUse.has(candidate) ?
+      firstUnusedName(name, namesInUse, suffix + 1)
+    : candidate
 }
 
 type TypeParameterRenderingState = {
@@ -388,6 +449,17 @@ type TypeParameterRenderingState = {
    * occurrences elsewhere in the type.
    */
   readonly alreadyIntroducedTypeParameterIdentities: Set<symbol>
+  /**
+   * Names for type parameters that are unique within the rendered type even
+   * when the type parameters' own names aren't. Mutable for the same reason as
+   * `alreadyIntroducedTypeParameterIdentities`.
+   */
+  readonly typeParameterNames: Map<symbol, Atom>
+  /**
+   * Names introduced type parameters mustn't be written with, because the
+   * rendered type uses them to refer to something else.
+   */
+  readonly reservedNames: ReadonlySet<Atom>
   /**
    * When present, only these type parameters are "introduced" in the rendered
    * type (displayed with their constraint); others are rendered as references.
@@ -408,6 +480,11 @@ type TypeParameterRenderingState = {
    * Whether the type is in an `@if`.
    */
   readonly withinConditional: boolean
+  /**
+   * Type parameters that enclosing function types bind. Nested function types
+   * don't bind these again, because calling the enclosing function fixes them.
+   */
+  readonly typeParameterIdentitiesBoundByEnclosingFunctionTypes: ReadonlySet<symbol>
 }
 
 const typeToSemanticGraphImplementation = (
@@ -417,14 +494,74 @@ const typeToSemanticGraphImplementation = (
   const type = simplifyType(unsimplifiedType)
   const {
     alreadyIntroducedTypeParameterIdentities,
+    typeParameterNames,
+    reservedNames,
     introducibleTypeParameterIdentities,
     typeParameterIdentitiesReferredTo,
     rememberReferenceToTypeParameter,
     withinConditional,
+    typeParameterIdentitiesBoundByEnclosingFunctionTypes,
   } = state
 
   const recurseWithSameTypeParameters = (type: Type) =>
     typeToSemanticGraphImplementation(type, state)
+
+  /**
+   * A function type binds the type parameters its parameter mentions (unless an
+   * enclosing function type already does). For example, when two functions
+   * share a type parameter (as standard library functions can), each introduces
+   * its own `?a` rather than the second referring to the first's.
+   */
+  const functionTypeWithItsOwnIntroductions = (
+    type: FunctionType,
+  ): SemanticGraph => {
+    const mentionedByParameter = typeParameterIdentitiesWithinType(
+      type.signature.parameter,
+    )
+    const boundHere = option
+      .match(introducibleTypeParameterIdentities, {
+        none: _ => mentionedByParameter,
+        some: introducibleIdentities =>
+          mentionedByParameter.intersection(introducibleIdentities),
+      })
+      .difference(typeParameterIdentitiesBoundByEnclosingFunctionTypes)
+    const introducedOutside = boundHere.intersection(
+      alreadyIntroducedTypeParameterIdentities,
+    )
+    const stateWithinFunctionType = {
+      ...state,
+      typeParameterIdentitiesBoundByEnclosingFunctionTypes:
+        typeParameterIdentitiesBoundByEnclosingFunctionTypes.union(boundHere),
+    }
+    // Side effect: scope introductions to this function type. Ones made outside
+    // it are set aside while it's rendered and restored afterwards, and ones
+    // made within it are forgotten.
+    boundHere.forEach(identity =>
+      alreadyIntroducedTypeParameterIdentities.delete(identity),
+    )
+    const rendered = makeFunctionExpression(
+      objectNodeFromOrderedEntries([
+        [
+          ignoredKey,
+          typeToSemanticGraphImplementation(
+            type.signature.parameter,
+            stateWithinFunctionType,
+          ),
+        ],
+      ]),
+      typeToSemanticGraphImplementation(
+        type.signature.return,
+        stateWithinFunctionType,
+      ),
+    )
+    boundHere.forEach(identity =>
+      alreadyIntroducedTypeParameterIdentities.delete(identity),
+    )
+    introducedOutside.forEach(identity =>
+      alreadyIntroducedTypeParameterIdentities.add(identity),
+    )
+    return rendered
+  }
 
   const recurseWithinConditional = (type: Type) =>
     typeToSemanticGraphImplementation(type, {
@@ -447,6 +584,24 @@ const typeToSemanticGraphImplementation = (
       none: _ => true,
       some: identities => identities.has(typeParameter.identity),
     })
+
+  const nameOfIntroducedTypeParameter = (
+    typeParameter: TypeParameter,
+  ): Atom => {
+    const existingName = typeParameterNames.get(typeParameter.identity)
+    if (existingName !== undefined) {
+      return existingName
+    } else {
+      const name = firstUnusedName(
+        typeParameter.name,
+        new Set([...reservedNames, ...typeParameterNames.values()]),
+      )
+      // Side effect: remember the name, so occurrences of the same type
+      // parameter use it.
+      typeParameterNames.set(typeParameter.identity, name)
+      return name
+    }
+  }
 
   /**
    * A stuck application is typically shown as its upper bound. `@if` conditions
@@ -477,16 +632,7 @@ const typeToSemanticGraphImplementation = (
             function: recurseWithSameTypeParameters(type.function),
             argument: recurseWithSameTypeParameters(type.argument),
           }),
-        function: type =>
-          makeFunctionExpression(
-            objectNodeFromOrderedEntries([
-              [
-                ignoredKey,
-                recurseWithSameTypeParameters(type.signature.parameter),
-              ],
-            ]),
-            recurseWithSameTypeParameters(type.signature.return),
-          ),
+        function: functionTypeWithItsOwnIntroductions,
         indexedAccess: type =>
           option.match(conditionalBranches(type), {
             // Convert conditional indexed access types to `@if` expressions.
@@ -549,7 +695,7 @@ const typeToSemanticGraphImplementation = (
             rememberReferenceToTypeParameter(type.identity)
             return isBoundOutsideType(type) ?
                 referenceToTypeParameterBoundOutsideType(type)
-              : makeLookupExpression(type.name)
+              : makeLookupExpression(nameOfIntroducedTypeParameter(type))
           } else if (!isReferredTo(type)) {
             // Type parameters occurring only once are shown as their constraints.
             return recurseWithSameTypeParameters(type.constraint.assignableTo)
@@ -557,19 +703,25 @@ const typeToSemanticGraphImplementation = (
             // Side effect: remember the type parameter. This is a direct mutation
             // because it needs to be visible to usages not in this call stack.
             alreadyIntroducedTypeParameterIdentities.add(type.identity)
-            const constraint = recurseWithSameTypeParameters(
-              type.constraint.assignableTo,
-            )
-            return isBoundOutsideType(type) ?
-                makeCheckExpression({
-                  value: referenceToTypeParameterBoundOutsideType(type),
-                  type: constraint,
-                })
-              : makeHoleExpressionWithExtantTypeParameter(
-                  type.name,
-                  makeObjectNode({ assignableTo: constraint }),
-                  type,
-                )
+            if (isBoundOutsideType(type)) {
+              return makeCheckExpression({
+                value: referenceToTypeParameterBoundOutsideType(type),
+                type: recurseWithSameTypeParameters(
+                  type.constraint.assignableTo,
+                ),
+              })
+            } else {
+              const name = nameOfIntroducedTypeParameter(type)
+              return makeHoleExpressionWithExtantTypeParameter(
+                name,
+                makeObjectNode({
+                  assignableTo: recurseWithSameTypeParameters(
+                    type.constraint.assignableTo,
+                  ),
+                }),
+                type,
+              )
+            }
           }
         },
         union: type => {
