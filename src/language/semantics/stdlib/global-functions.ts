@@ -33,6 +33,8 @@ import {
 import {
   anyValue,
   functionParameter,
+  named,
+  parameterTypeParameter,
   objectOfFunctionsParameter,
   taggedParameter,
   typeOfParameter,
@@ -45,9 +47,23 @@ import {
   preludeFunction,
 } from './stdlib-utilities.js'
 
-const A = makeTypeParameter('a', { assignableTo: types.something })
-const B = makeTypeParameter('b', { assignableTo: types.something })
-const C = makeTypeParameter('c', { assignableTo: types.something })
+const identityValue = parameterTypeParameter('value')
+
+const applyArgument = parameterTypeParameter('argument')
+const applyResult = makeTypeParameter('result', {
+  assignableTo: types.something,
+})
+
+const assumeType = parameterTypeParameter('type')
+const assumeValue = parameterTypeParameter('value')
+
+const flowValue = parameterTypeParameter('value')
+const flowIntermediate = makeTypeParameter('intermediate', {
+  assignableTo: types.something,
+})
+const flowResult = makeTypeParameter('result', {
+  assignableTo: types.something,
+})
 
 /**
  * Computes the upper bound of `match`'s return type, which is the union of each
@@ -116,16 +132,26 @@ const matcheeParameter: Parameter<TaggedNode> = {
 }
 
 export const globalFunctions = {
-  identity: preludeFunction(['identity'], [anyValue(A)], A, either.makeRight),
+  identity: preludeFunction(
+    ['identity'],
+    [named('value', anyValue(identityValue))],
+    identityValue,
+    either.makeRight,
+  ),
 
-  // a ~> ((a ~> b) ~> b)
+  // ?argument ~> (:argument ~> ?result) ~> :result
   apply: preludeFunction(
     ['apply'],
     [
-      anyValue(A),
-      functionParameter(makeFunctionType({ parameter: A, return: B })),
+      named('argument', anyValue(applyArgument)),
+      named(
+        'function',
+        functionParameter(
+          makeFunctionType({ parameter: applyArgument, return: applyResult }),
+        ),
+      ),
     ],
-    B,
+    applyResult,
     argument =>
       either.makeRight((functionToApply, contextOfApplication) =>
         functionToApply(
@@ -138,12 +164,15 @@ export const globalFunctions = {
       ),
   ),
 
-  // a ~> something ~> a
+  // ?type ~> ?value ~> :type
   // terminates with a `typeMismatch` error the value doesn't typecheck
   assume: preludeFunction(
     ['assume'],
-    [anyValue(A), anyValue(types.something)],
-    A,
+    [
+      named('type', anyValue(assumeType)),
+      named('value', anyValue(assumeValue)),
+    ],
+    assumeType,
     type =>
       either.makeRight(value =>
         either.flatMap(
@@ -165,15 +194,25 @@ export const globalFunctions = {
       ),
   ),
 
-  // (b ~> c) ~> (a ~> b) ~> (a ~> c)
+  // (?intermediate ~> ?result) ~> (?value ~> :intermediate) ~> :value ~> :result
   flow: preludeFunction(
     ['flow'],
     [
-      functionParameter(makeFunctionType({ parameter: B, return: C })),
-      functionParameter(makeFunctionType({ parameter: A, return: B })),
-      anyValue(A),
+      named(
+        'second',
+        functionParameter(
+          makeFunctionType({ parameter: flowIntermediate, return: flowResult }),
+        ),
+      ),
+      named(
+        'first',
+        functionParameter(
+          makeFunctionType({ parameter: flowValue, return: flowIntermediate }),
+        ),
+      ),
+      named('value', anyValue(flowValue)),
     ],
-    C,
+    flowResult,
     secondFunction =>
       either.makeRight(firstFunction =>
         either.makeRight((firstArgument, contextOfApplication) =>
@@ -200,7 +239,10 @@ export const globalFunctions = {
 
   match: preludeFunction(
     ['match'],
-    [objectOfFunctionsParameter, matcheeParameter],
+    [
+      named('cases', objectOfFunctionsParameter),
+      named('matchee', matcheeParameter),
+    ],
     types.something,
     cases =>
       either.makeRight((argument, contextOfApplication) => {

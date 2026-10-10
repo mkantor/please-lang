@@ -28,7 +28,6 @@ import {
 import {
   makeFunctionType,
   makeIntrinsicApplicationType,
-  makeTypeParameter,
   type FunctionType,
   type Type,
   type TypeParameter,
@@ -43,6 +42,7 @@ import {
 } from '../type-system/type-substitution.js'
 import {
   parameterTypeDependsOnPrecedingParameters,
+  parameterTypeParameter,
   typeOfParameter,
   type AnyParameter,
   type NonEmptyParameters,
@@ -376,31 +376,23 @@ const serializeAppliedFunction =
       ),
     )
 
-const synthesizeTypeParameterName = (index: number) => {
-  if (index < 0 || !Number.isInteger(index)) {
-    throw new Error('Index was negative or non-integral. This is a bug!')
-  } else {
-    const wraparoundCount = Math.floor(index / 26)
-    const suffix = wraparoundCount === 0 ? '' : String(wraparoundCount)
-    return String.fromCharCode((index % 26) + 97).concat(suffix)
-  }
-}
-
 const synthesizedTypeParameters = (
   parameters: NonEmptyParameters,
 ): readonly [TypeParameter, ...TypeParameter[]] => {
   const [firstParameter, ...restParameters] = parameters
   return restParameters.reduce<readonly [TypeParameter, ...TypeParameter[]]>(
-    (mintedSoFar, parameter, index) => [
+    (mintedSoFar, parameter) => [
       ...mintedSoFar,
-      makeTypeParameter(synthesizeTypeParameterName(index + 1), {
-        assignableTo: typeOfParameter(parameter, mintedSoFar),
-      }),
+      parameterTypeParameter(
+        parameter.name,
+        typeOfParameter(parameter, mintedSoFar),
+      ),
     ],
     [
-      makeTypeParameter(synthesizeTypeParameterName(0), {
-        assignableTo: typeOfParameter(firstParameter, []),
-      }),
+      parameterTypeParameter(
+        firstParameter.name,
+        typeOfParameter(firstParameter, []),
+      ),
     ],
   )
 }

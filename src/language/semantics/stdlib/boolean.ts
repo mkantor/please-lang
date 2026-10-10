@@ -5,6 +5,7 @@ import { types } from '../type-system.js'
 import {
   anyValue,
   booleanParameter,
+  named,
   nodeIsBoolean,
   type BooleanNode,
 } from './parameters.js'
@@ -24,7 +25,7 @@ export const boolean = {
 
   is: preludeFunction(
     ['boolean', 'is'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.boolean,
     argument => either.makeRight(nodeIsBoolean(argument) ? 'true' : 'false'),
     computeIsReturnType(types.boolean),
@@ -32,7 +33,7 @@ export const boolean = {
 
   from: preludeFunction(
     ['boolean', 'from'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.option(types.boolean),
     argument =>
       either.makeRight(
@@ -48,14 +49,14 @@ export const boolean = {
 
   not: preludeFunction(
     ['boolean', 'not'],
-    [booleanParameter],
+    [named('subject', booleanParameter)],
     types.boolean,
     argument => either.makeRight(argument === 'true' ? 'false' : 'true'),
   ),
 
   and: preludeFunction(
     ['boolean', 'and'],
-    [booleanParameter, booleanParameter],
+    [named('other', booleanParameter), named('subject', booleanParameter)],
     types.boolean,
     argument2 =>
       either.makeRight(argument1 =>
@@ -69,7 +70,7 @@ export const boolean = {
 
   or: preludeFunction(
     ['boolean', 'or'],
-    [booleanParameter, booleanParameter],
+    [named('other', booleanParameter), named('subject', booleanParameter)],
     types.boolean,
     argument2 =>
       either.makeRight(argument1 =>

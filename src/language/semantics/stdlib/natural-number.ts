@@ -1,7 +1,7 @@
 import either from '@matt.kantor/either'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
 import { makeUnionType, types } from '../type-system.js'
-import { anyValue, naturalNumberParameter } from './parameters.js'
+import { anyValue, named, naturalNumberParameter } from './parameters.js'
 import {
   computeFromReturnType,
   computeIsReturnType,
@@ -13,7 +13,7 @@ export const natural_number = {
 
   is: preludeFunction(
     ['natural_number', 'is'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.boolean,
     argument =>
       either.makeRight(
@@ -29,7 +29,7 @@ export const natural_number = {
 
   from: preludeFunction(
     ['natural_number', 'from'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.option(types.naturalNumber),
     argument =>
       either.makeRight(
@@ -48,7 +48,10 @@ export const natural_number = {
 
   modulo: preludeFunction(
     ['natural_number', 'modulo'],
-    [naturalNumberParameter, naturalNumberParameter],
+    [
+      named('divisor', naturalNumberParameter),
+      named('dividend', naturalNumberParameter),
+    ],
     types.naturalNumber,
     number2 =>
       either.makeRight(number1 =>

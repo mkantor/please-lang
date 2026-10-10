@@ -55,7 +55,7 @@ export const option = (value: Type) =>
     }),
   ])
 
-const A = makeTypeParameter('a', { assignableTo: something })
+const logValue = makeTypeParameter('value', { assignableTo: something })
 
 export const runtimeContext = makeExactObjectType({
   arguments: makeExactObjectType({
@@ -64,6 +64,6 @@ export const runtimeContext = makeExactObjectType({
   environment: makeExactObjectType({
     lookup: makeFunctionType({ parameter: atom, return: option(atom) }),
   }),
-  log: makeFunctionType({ parameter: A, return: A }),
+  log: makeFunctionType({ parameter: logValue, return: logValue }),
   program: makeExactObjectType({ start_time: atom }),
 })

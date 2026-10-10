@@ -11,7 +11,9 @@ import {
 import {
   anyValue,
   functionParameter,
+  named,
   nodeIsOptionLike,
+  parameterTypeParameter,
   optionParameter,
 } from './parameters.js'
 import {
@@ -19,14 +21,30 @@ import {
   preludeFunction,
 } from './stdlib-utilities.js'
 
-const A = makeTypeParameter('a', { assignableTo: types.something })
-const B = makeTypeParameter('b', { assignableTo: types.something })
+const typeValue = parameterTypeParameter('value')
+
+const makeSomeValue = parameterTypeParameter('value')
+
+const mapValue = makeTypeParameter('value', { assignableTo: types.something })
+const mapResult = makeTypeParameter('result', { assignableTo: types.something })
+
+const flatMapValue = makeTypeParameter('value', {
+  assignableTo: types.something,
+})
+const flatMapResult = makeTypeParameter('result', {
+  assignableTo: types.something,
+})
+
+const getOrElseFallback = parameterTypeParameter('fallback')
+const getOrElseValue = makeTypeParameter('value', {
+  assignableTo: types.something,
+})
 
 export const option = {
   type: preludeFunction(
     ['option', 'type'],
-    [anyValue(A)],
-    types.option(A),
+    [named('value', anyValue(typeValue))],
+    types.option(typeValue),
     value =>
       either.makeRight(
         makeUnionExpression(
@@ -48,8 +66,8 @@ export const option = {
 
   make_some: preludeFunction(
     ['option', 'make_some'],
-    [anyValue(A)],
-    types.option(A),
+    [named('value', anyValue(makeSomeValue))],
+    types.option(makeSomeValue),
     value =>
       either.makeRight(
         objectNodeFromOrderedEntries([
@@ -59,14 +77,19 @@ export const option = {
       ),
   ),
 
-  // (a ~> b) ~> option(a) ~> option(b)
+  // (?value ~> ?result) ~> :Option(:value) ~> :Option(:result)
   map: preludeFunction(
     ['option', 'map'],
     [
-      functionParameter(makeFunctionType({ parameter: A, return: B })),
-      optionParameter(A),
+      named(
+        'transform',
+        functionParameter(
+          makeFunctionType({ parameter: mapValue, return: mapResult }),
+        ),
+      ),
+      named('subject', optionParameter(mapValue)),
     ],
-    types.option(B),
+    types.option(mapResult),
     transform =>
       either.makeRight((optionValue, contextOfApplication) =>
         optionValue.tag === 'none' ?
@@ -88,16 +111,22 @@ export const option = {
       ),
   ),
 
-  // (a ~> option(b)) ~> option(a) ~> option(b)
+  // (?value ~> :Option(?result)) ~> :Option(:value) ~> :Option(:result)
   flat_map: preludeFunction(
     ['option', 'flat_map'],
     [
-      functionParameter(
-        makeFunctionType({ parameter: A, return: types.option(B) }),
+      named(
+        'transform',
+        functionParameter(
+          makeFunctionType({
+            parameter: flatMapValue,
+            return: types.option(flatMapResult),
+          }),
+        ),
       ),
-      optionParameter(A),
+      named('subject', optionParameter(flatMapValue)),
     ],
-    types.option(B),
+    types.option(flatMapResult),
     transform =>
       either.makeRight((optionValue, contextOfApplication) =>
         optionValue.tag === 'none' ?
@@ -123,8 +152,11 @@ export const option = {
 
   get_or_else: preludeFunction(
     ['option', 'get_or_else'],
-    [anyValue(B), optionParameter(A)],
-    makeUnionType([A, B]),
+    [
+      named('fallback', anyValue(getOrElseFallback)),
+      named('subject', optionParameter(getOrElseValue)),
+    ],
+    makeUnionType([getOrElseValue, getOrElseFallback]),
     fallback =>
       either.makeRight(optionValue =>
         either.makeRight(
@@ -135,14 +167,14 @@ export const option = {
 
   is_some: preludeFunction(
     ['option', 'is_some'],
-    [optionParameter(types.something)],
+    [named('subject', optionParameter(types.something))],
     types.boolean,
     optionValue => either.makeRight(String(optionValue.tag === 'some')),
   ),
 
   is_none: preludeFunction(
     ['option', 'is_none'],
-    [optionParameter(types.something)],
+    [named('subject', optionParameter(types.something))],
     types.boolean,
     optionValue => either.makeRight(String(optionValue.tag === 'none')),
   ),

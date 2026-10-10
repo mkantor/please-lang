@@ -1,7 +1,7 @@
 import either from '@matt.kantor/either'
 import { objectNodeFromOrderedEntries } from '../object-node.js'
 import { makeUnionType, types } from '../type-system.js'
-import { anyValue, integerParameter } from './parameters.js'
+import { anyValue, integerParameter, named } from './parameters.js'
 import {
   closedOver,
   computeFromReturnType,
@@ -19,7 +19,7 @@ export const integer = {
 
   add: preludeFunction(
     ['integer', 'add'],
-    [integerParameter, integerParameter],
+    [named('addend', integerParameter), named('subject', integerParameter)],
     types.integer,
     // FIXME: It's wasteful to always convert here.
     //
@@ -36,7 +36,7 @@ export const integer = {
 
   equals: preludeFunction(
     ['integer', 'equals'],
-    [integerParameter, integerParameter],
+    [named('other', integerParameter), named('subject', integerParameter)],
     types.boolean,
     number2 =>
       either.makeRight(number1 =>
@@ -46,7 +46,7 @@ export const integer = {
 
   is: preludeFunction(
     ['integer', 'is'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.boolean,
     argument =>
       either.makeRight(
@@ -62,7 +62,7 @@ export const integer = {
 
   from: preludeFunction(
     ['integer', 'from'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.option(types.integer),
     argument =>
       either.makeRight(
@@ -84,7 +84,7 @@ export const integer = {
 
   is_greater_than: preludeFunction(
     ['integer', 'is_greater_than'],
-    [integerParameter, integerParameter],
+    [named('other', integerParameter), named('subject', integerParameter)],
     types.boolean,
     number2 =>
       either.makeRight(number1 =>
@@ -94,7 +94,7 @@ export const integer = {
 
   is_less_than: preludeFunction(
     ['integer', 'is_less_than'],
-    [integerParameter, integerParameter],
+    [named('other', integerParameter), named('subject', integerParameter)],
     types.boolean,
     number2 =>
       either.makeRight(number1 =>
@@ -104,7 +104,7 @@ export const integer = {
 
   multiply: preludeFunction(
     ['integer', 'multiply'],
-    [integerParameter, integerParameter],
+    [named('factor', integerParameter), named('subject', integerParameter)],
     types.integer,
     number2 =>
       either.makeRight(number1 =>
@@ -115,7 +115,7 @@ export const integer = {
 
   subtract: preludeFunction(
     ['integer', 'subtract'],
-    [integerParameter, integerParameter],
+    [named('subtrahend', integerParameter), named('subject', integerParameter)],
     types.integer,
     number2 =>
       either.makeRight(number1 =>

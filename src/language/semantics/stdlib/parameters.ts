@@ -9,6 +9,7 @@ import {
 import type { SemanticGraph } from '../semantic-graph.js'
 import {
   makeObjectType,
+  makeTypeParameter,
   makeUnionType,
   types,
   type Type,
@@ -32,6 +33,30 @@ export type ParameterTypeFromPrecedingParameters = (
 
 export type AnyParameter = Parameter<SemanticGraph>
 
+/**
+ * A `Parameter` of a specific function, with its name.
+ */
+export type NamedParameter<Value extends SemanticGraph> = Parameter<Value> & {
+  readonly name: Atom
+}
+
+export type AnyNamedParameter = NamedParameter<SemanticGraph>
+
+export const named = <Value extends SemanticGraph>(
+  name: Atom,
+  parameter: Parameter<Value>,
+): NamedParameter<Value> => ({ ...parameter, name })
+
+/**
+ * A type parameter typing a whole parameter of a standard library function,
+ * e.g. `?fallback` (but not `?value`) in `option.get_or_else`'s
+ * `?fallback ~> :Option(?value) ~> :value | :fallback`.
+ */
+export const parameterTypeParameter = (
+  name: Atom,
+  assignableTo: Type = types.something,
+): TypeParameter => makeTypeParameter(name, { assignableTo })
+
 export const typeOfParameter = (
   parameter: AnyParameter,
   precedingTypeParameters: readonly TypeParameter[],
@@ -45,8 +70,8 @@ export const parameterTypeDependsOnPrecedingParameters = (
 ): boolean => typeof parameter.type === 'function'
 
 export type NonEmptyParameters = readonly [
-  AnyParameter,
-  ...(readonly AnyParameter[]),
+  AnyNamedParameter,
+  ...(readonly AnyNamedParameter[]),
 ]
 
 export type BooleanNode = 'true' | 'false'

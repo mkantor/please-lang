@@ -24,7 +24,12 @@ import {
   excessBoundForKey,
 } from '../type-system/subtyping.js'
 import { concreteUpperBound } from '../type-system/type-substitution.js'
-import { anyValue, atomParameter, objectParameter } from './parameters.js'
+import {
+  anyValue,
+  atomParameter,
+  named,
+  objectParameter,
+} from './parameters.js'
 import { computeFromReturnType } from './return-type-refiners.js'
 import { preludeFunction } from './stdlib-utilities.js'
 
@@ -310,7 +315,7 @@ export const object = {
 
   lookup: preludeFunction(
     ['object', 'lookup'],
-    [atomParameter, objectParameter],
+    [named('key', atomParameter), named('subject', objectParameter)],
     types.option(types.something),
     key =>
       either.makeRight(argument => {
@@ -329,7 +334,7 @@ export const object = {
 
   from: preludeFunction(
     ['object', 'from'],
-    [anyValue(types.something)],
+    [named('value', anyValue(types.something))],
     types.option(types.object),
     argument =>
       either.makeRight(
@@ -345,7 +350,7 @@ export const object = {
 
   from_property: preludeFunction(
     ['object', 'from_property'],
-    [atomParameter, anyValue(types.something)],
+    [named('key', atomParameter), named('value', anyValue(types.something))],
     types.object,
     key =>
       either.makeRight(value =>
@@ -356,7 +361,7 @@ export const object = {
 
   overlay: preludeFunction(
     ['object', 'overlay'],
-    [objectParameter, objectParameter],
+    [named('top', objectParameter), named('base', objectParameter)],
     types.object,
     // `object1` supplies the initial property order with `object2` overwriting
     // values for shared keys in-place. New keys from `object2` are appended at
