@@ -420,7 +420,9 @@ const typeOfPartialIndex = (
       either.match(
         typeKeyPathFromObjectNode(
           objectNodeFromOrderedEntries(
-            orderedEntriesOfObjectNode(query).slice(0, componentIndex + 1),
+            orderedEntriesOfObjectNode(query).filter(
+              ([key, _component]) => Number(key) <= componentIndex,
+            ),
           ),
           inferenceContextAt(program, queryKeyPath),
         ),

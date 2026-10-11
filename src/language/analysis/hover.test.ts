@@ -470,6 +470,11 @@ hoversIn(`{
   ['three.four', 'three :: {| four: 4 |}'],
 ])
 
+hoversIn('@index { object: { b: { c: 1 } }, query: { 1: c, 0: b } }')(
+  'components of an index query written out of order',
+  [['b }', 'b :: {| c: 1 |}']],
+)
+
 hoversIn('{\n  a: 1,\n\n  b: 2,\n}')('positions describing nothing', [
   ['\n\n', undefined],
   ['{', undefined],
