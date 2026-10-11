@@ -143,7 +143,7 @@ hoversIn(`{
   [':Integer', ':Integer :: :Integer'],
   ['Integer)', 'Integer :: :Integer'],
   ['|>', '|> :: ?value ~> :value'],
-  ['add(:n)', 'add :: :Integer ~> :Integer ~> :Integer'],
+  ['add(:n)', 'add :: (?addend: :Integer) ~> (?subject: :Integer) ~> :Integer'],
 ])
 
 const limitOrZeroProgram = `{
@@ -252,11 +252,24 @@ hoverCases('a type parameter bound by more than one function', [
       '  map: (?value ~> ?result) ~> :Option(:value) ~> :Option(:result)',
       '  flat_map: (?value ~> :Option(?result)) ~> :Option(:value) ~> :Option(:result)',
       '  get_or_else: ?fallback ~> :Option(?value) ~> :value | :fallback',
-      '  is_some: :Option(:Something) ~> :Boolean',
-      '  is_none: :Option(:Something) ~> :Boolean',
+      '  is_some: (?subject: :Option(:Something)) ~> :Boolean',
+      '  is_none: (?subject: :Option(:Something)) ~> :Boolean',
       '|}',
     ].join('\n'),
   ],
+])
+
+hoverCases('standard library parameters', [
+  [['{ f: :object.overlay }', 'f:'], 'f :: (?top: {}) ~> (?base: {}) ~> {}'],
+  [
+    ['{ f: :flow(:integer.add(1)) }', 'f:'],
+    'f :: (?value ~> :Integer) ~> :value ~> :Integer',
+  ],
+  [
+    ['{ f: :option.map(:boolean.is) }', 'f:'],
+    'f :: :Option(:Something) ~> :Option(:Boolean)',
+  ],
+  [['{ f: :object.overlay({ b: 1 }) }', 'f:'], 'f :: (?base: {}) ~> { b: 1 }'],
 ])
 
 hoverCases('the name of a parameter', [
@@ -385,7 +398,7 @@ suite('rendering', () => {
       [
         'integer :: {|',
         '  type: :Integer',
-        '  add: :Integer ~> :Integer ~> :Integer',
+        '  add: (?addend: :Integer) ~> (?subject: :Integer) ~> :Integer',
       ].join('\n'),
     )
     assert.ok(!hover.endsWith('\n'))

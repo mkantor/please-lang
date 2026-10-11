@@ -55,7 +55,10 @@ export const named = <Value extends SemanticGraph>(
 export const parameterTypeParameter = (
   name: Atom,
   assignableTo: Type = types.something,
-): TypeParameter => makeTypeParameter(name, { assignableTo })
+): TypeParameter => ({
+  ...makeTypeParameter(name, { assignableTo }),
+  isTypeOfStandardLibraryParameter: true,
+})
 
 export const typeOfParameter = (
   parameter: AnyParameter,
