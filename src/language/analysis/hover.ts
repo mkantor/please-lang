@@ -1,7 +1,6 @@
 import either, { type Either } from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import { stripVTControlCharacters } from 'node:util'
-import type { Atom } from '../parsing.js'
 import {
   applicableFunctionSignatures,
   applyKeyPathToSemanticGraph,
@@ -12,6 +11,8 @@ import {
   isObjectNode,
   keyPathFromInternalUse,
   makeFunctionType,
+  objectNodeFromOrderedEntries,
+  orderedEntriesOfObjectNode,
   readApplyExpression,
   readCheckExpression,
   readFunctionExpression,
@@ -22,6 +23,8 @@ import {
   rigidTypeParameterIdentities,
   stringifyResolvedTypeForEndUser,
   supplyTypeArguments,
+  typeKeyPathFromObjectNode,
+  type ExpressionContext,
   type FunctionType,
   type KeyPath,
   type SemanticGraph,
@@ -412,24 +415,28 @@ const typeOfPartialIndex = (
   componentIndex: number,
 ): Option<Type> => {
   const queryKeyPath = [...expression, '1', 'query']
-  const componentKeys = Array.from({ length: componentIndex + 1 }, (_, index) =>
-    String(index),
-  )
-  const components = componentKeys.flatMap((componentKey): readonly Atom[] =>
-    option.match(nodeAt(program, [...queryKeyPath, componentKey]), {
-      none: _ => [],
-      some: component => (typeof component === 'string' ? [component] : []),
-    }),
-  )
-  return components.length !== componentKeys.length ?
-      // Part of the query is computed, fall back to the deepest index.
-      // TODO: This is wrong unless the happens to be last. Use each component's
-      // inferred type instead (like `typeKeyPathFromObjectNode`).
-      inferredTypeAt(program, expression)
-    : option.flatMap(
-        inferredTypeAt(program, [...expression, '1', 'object']),
-        objectType => applyKeyPathToType(objectType, components),
+  return option.flatMap(nodeAt(program, queryKeyPath), query =>
+    isObjectNode(query) ?
+      either.match(
+        typeKeyPathFromObjectNode(
+          objectNodeFromOrderedEntries(
+            orderedEntriesOfObjectNode(query).filter(
+              ([key, _component]) => Number(key) <= componentIndex,
+            ),
+          ),
+          inferenceContextAt(program, queryKeyPath),
+        ),
+        {
+          left: _ => option.none,
+          right: typeKeyPath =>
+            option.flatMap(
+              inferredTypeAt(program, [...expression, '1', 'object']),
+              objectType => applyKeyPathToType(objectType, typeKeyPath),
+            ),
+        },
       )
+    : option.none,
+  )
 }
 
 const inferredTypeAt = (
@@ -441,18 +448,23 @@ const inferredTypeAt = (
       inferTypeOfTypeAnnotation
     : inferType
   return option.flatMap(nodeAt(program, keyPath), node =>
-    either.match(
-      // The context's inference caches hold details from elaboration. Inferring
-      // with fresh caches would give less-resolved (but still valid) answers.
-      inferTypeOfNode(node, {
-        ...program.context,
-        location: keyPath,
-        cacheKeyPrefixOverride: undefined,
-      }),
-      { left: _ => option.none, right: type => option.makeSome(type) },
-    ),
+    either.match(inferTypeOfNode(node, inferenceContextAt(program, keyPath)), {
+      left: _ => option.none,
+      right: type => option.makeSome(type),
+    }),
   )
 }
+
+const inferenceContextAt = (
+  program: ParsedProgram,
+  keyPath: KeyPath,
+): ExpressionContext => ({
+  // The context's inference caches hold details from elaboration. Inferring
+  // with fresh caches would give less-resolved (but still valid) answers.
+  ...program.context,
+  location: keyPath,
+  cacheKeyPrefixOverride: undefined,
+})
 
 /**
  * Whether `keyPath` is in a type position (e.g. a parameter annotation). In
