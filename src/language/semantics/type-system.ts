@@ -37,6 +37,7 @@ export { simplifyType } from './type-system/type-simplification.js'
 export {
   applicableFunctionSignatures,
   applyKeyPathToType,
+  getTypesForFlexibleTypeParameters,
   getTypesForTypeParameters,
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArgument,

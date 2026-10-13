@@ -3,11 +3,16 @@ import option, { type Option } from '@matt.kantor/option'
 import { stripVTControlCharacters } from 'node:util'
 import type { Atom } from '../parsing.js'
 import {
+  applicableFunctionSignatures,
   applyKeyPathToSemanticGraph,
   applyKeyPathToType,
+  getTypesForFlexibleTypeParameters,
   inferType,
   inferTypeOfTypeAnnotation,
+  isObjectNode,
   keyPathFromInternalUse,
+  makeFunctionType,
+  readApplyExpression,
   readCheckExpression,
   readFunctionExpression,
   readHoleExpression,
@@ -16,6 +21,8 @@ import {
   readObjectTypeExpression,
   rigidTypeParameterIdentities,
   stringifyResolvedTypeForEndUser,
+  supplyTypeArguments,
+  type FunctionType,
   type KeyPath,
   type SemanticGraph,
   type Type,
@@ -37,10 +44,25 @@ export const hoverAt = (
   offset: number,
 ): Option<Hover> =>
   option.flatMap(hoverTargetAt(program, offset), target =>
-    option.map(typeOfTarget(program, target), type => ({
-      span: target.span,
-      type: renderType(type, typeParametersInScopeAt(program, target.keyPath)),
-    })),
+    option.map(typeOfTarget(program, target), type => {
+      const typeParametersInScope = typeParametersInScopeAt(
+        program,
+        target.keyPath,
+      )
+      return {
+        span: target.span,
+        type: renderType(
+          option.match(
+            typeAtApplication(program, target, type, typeParametersInScope),
+            {
+              none: _ => type,
+              some: instantiatedType => instantiatedType,
+            },
+          ),
+          typeParametersInScope,
+        ),
+      }
+    }),
   )
 
 type HoverTarget = {
@@ -106,6 +128,126 @@ const renderType = (
 }
 
 const multipleLineNotation: Notation = { ...prettyPlz, suffix: '' }
+
+/**
+ * The target's type as instantiated by the arguments it's applied to. For
+ * example, `+` in `1 + 2` is `2 ~> 1 ~> 3`.
+ */
+const typeAtApplication = (
+  program: ParsedProgram,
+  target: HoverTarget,
+  functionType: Type,
+  typeParametersInScope: ReadonlySet<symbol>,
+): Option<Type> =>
+  option.flatMap(appliedExpressionAt(program, target), functionExpression =>
+    option.flatMap(
+      option.sequence(
+        argumentsOf(program, functionExpression).map(argument =>
+          inferredTypeAt(program, argument),
+        ),
+      ),
+      argumentTypes =>
+        instantiatedFunctionType(
+          functionType,
+          argumentTypes,
+          typeParametersInScope,
+        ),
+    ),
+  )
+
+/**
+ * The target's expression, if it could be applied.
+ */
+const appliedExpressionAt = (
+  program: ParsedProgram,
+  { keyPath, role }: HoverTarget,
+): Option<KeyPath> => {
+  switch (role.kind) {
+    case 'nameOperand':
+      return option.makeSome(role.expression)
+    case 'queryComponent':
+      return option.flatMap(
+        nodeAt(program, [...role.expression, '1', 'query']),
+        query =>
+          (
+            isObjectNode(query) &&
+            Object.keys(query).length === role.componentIndex + 1
+          ) ?
+            option.makeSome(role.expression)
+          : option.none,
+      )
+    case 'other':
+      return option.makeSome(keyPath)
+    case 'parameterName':
+      return option.none
+  }
+}
+
+/**
+ * The arguments the function at `functionExpression` is applied to where it's
+ * written, innermost first: `:f(1)(2)` applies `f` to `1`, then the result to
+ * `2`.
+ */
+const argumentsOf = (
+  program: ParsedProgram,
+  functionExpression: KeyPath,
+): readonly KeyPath[] => {
+  const applyExpression = functionExpression.slice(0, -2)
+  const [operandsKey, operandKey] = functionExpression.slice(-2)
+  return (
+      operandsKey === '1' &&
+        operandKey === 'function' &&
+        isExpressionAt(program, applyExpression, readApplyExpression)
+    ) ?
+      [
+        [...applyExpression, '1', 'argument'],
+        ...argumentsOf(program, applyExpression),
+      ]
+    : []
+}
+
+/**
+ * `functionType` as instantiated by successive arguments of the given types.
+ */
+const instantiatedFunctionType = (
+  functionType: Type,
+  argumentTypes: readonly Type[],
+  rigidTypeParameters: ReadonlySet<symbol>,
+): Option<Type> => {
+  const [argumentType, ...remainingArgumentTypes] = argumentTypes
+  return argumentType === undefined ?
+      option.makeSome(functionType)
+    : option.flatMap(soleSignature(functionType), signature => {
+        const typeArguments = getTypesForFlexibleTypeParameters({
+          parameterType: signature.parameter,
+          argumentType,
+          rigidTypeParameters,
+        })
+        return option.map(
+          instantiatedFunctionType(
+            supplyTypeArguments(signature.return, typeArguments),
+            remainingArgumentTypes,
+            rigidTypeParameters,
+          ),
+          instantiatedReturnType =>
+            makeFunctionType({
+              parameter: supplyTypeArguments(
+                signature.parameter,
+                typeArguments,
+              ),
+              return: instantiatedReturnType,
+            }),
+        )
+      })
+}
+
+const soleSignature = (type: Type): Option<FunctionType['signature']> =>
+  option.flatMap(applicableFunctionSignatures(type), signatures => {
+    const [signature, ...additionalSignatures] = signatures
+    return signature === undefined || additionalSignatures.length > 0 ?
+        option.none
+      : option.makeSome(signature)
+  })
 
 const typeParametersInScopeAt = (
   program: ParsedProgram,

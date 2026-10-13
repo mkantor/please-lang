@@ -7,7 +7,7 @@ import {
   containedTypeParameters,
   containsAnyUnelaboratedNodes,
   elaborateOperands,
-  getTypesForTypeParameters,
+  getTypesForFlexibleTypeParameters,
   inferType,
   isAssignable,
   isExpression,
@@ -34,24 +34,13 @@ const checkArgumentType = (
   parameterType: Type,
   rigidTypeParameters: ReadonlySet<symbol>,
 ): Either<ElaborationError, undefined> => {
-  // Instantiate the applied function's own ("flexible") type parameters from
-  // the argument before the assignability check. Type parameters bound by
-  // enclosing not-yet-applied functions are "rigid" (their types are decided
-  // when those functions are eventually applied, not by this argument).
-  const typeArguments = getTypesForTypeParameters({
-    parameterType,
-    argumentType,
-  })
-  const flexibleTypeArguments = new Map(
-    typeArguments
-      .entries()
-      .filter(
-        ([typeParameter]) => !rigidTypeParameters.has(typeParameter.identity),
-      ),
-  )
   const instantiatedParameterType = supplyTypeArguments(
     parameterType,
-    flexibleTypeArguments,
+    getTypesForFlexibleTypeParameters({
+      parameterType,
+      argumentType,
+      rigidTypeParameters,
+    }),
   )
   if (
     isAssignable({ source: argumentType, target: instantiatedParameterType })

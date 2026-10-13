@@ -137,13 +137,16 @@ hoversIn(`{
   [':double(:count)', ':double(:count) :: 6'],
   [':count)', ':count :: 3'],
   ['3,', '3 :: 3'],
-  ['double(:count)', 'double :: :Integer ~> :Integer'],
+  ['double(:count)', 'double :: 3 ~> 6'],
   ['count)', 'count :: 3'],
   ['n: :Integer', 'n :: :Integer'],
   [':Integer', ':Integer :: :Integer'],
   ['Integer)', 'Integer :: :Integer'],
-  ['|>', '|> :: ?value ~> :value'],
-  ['add(:n)', 'add :: (?addend: :Integer) ~> (?subject: :Integer) ~> :Integer'],
+  [
+    '|>',
+    '|> :: ((?subject: :Integer) ~> :Integer) ~> (:n ~ :Integer) ~> :Integer',
+  ],
+  ['add(:n)', 'add :: (:n ~ :Integer) ~> (?subject: :Integer) ~> :Integer'],
 ])
 
 const limitOrZeroProgram = `{
@@ -270,6 +273,49 @@ hoverCases('standard library parameters', [
     'f :: :Option(:Something) ~> :Option(:Boolean)',
   ],
   [['{ f: :object.overlay({ b: 1 }) }', 'f:'], 'f :: (?base: {}) ~> { b: 1 }'],
+])
+
+hoverCases('generic function applications', [
+  [['1 + 2', '+'], '+ :: 2 ~> 1 ~> 3'],
+  [
+    ['(x: { a: :Integer }) => :x object.overlay { b: 1 }', 'overlay'],
+    'overlay :: {| b: 1 |} ~> { a: :x.a ~ :Integer } ~> { a: :x.a, b: 1 }',
+  ],
+  [
+    [
+      '(o: :Option(:Integer)) => :o match { some: v => :v, none: _ => 0 }',
+      'match',
+    ],
+    [
+      'match :: {|',
+      '  some: ?v ~> :v',
+      '  none: :Something ~> 0',
+      '|} ~> (:o ~ :Option(:Integer)) ~> :Integer',
+    ].join('\n'),
+  ],
+  [['(x => :x)(1)', '=>'], 'x => :x :: 1 ~> 1'],
+  [
+    [
+      '{ g: (limit: :Integer) => { f: (n: :Integer) => @if { :n > :limit, then: :n, else: :f(:n + 1) }, r: :f(1) } }',
+      'f(1)',
+    ],
+    [
+      'f :: 1 ~> @if {',
+      '  condition: 1 integer.is_greater_than :limit',
+      '  then: 1',
+      '  else: :Integer',
+      '}',
+    ].join('\n'),
+  ],
+  [
+    [':object.overlay({ b: 1 })', 'overlay'],
+    'overlay :: {| b: 1 |} ~> (?base: {}) ~> { b: 1 }',
+  ],
+  [
+    [':object.overlay', 'overlay'],
+    'overlay :: (?top: {}) ~> (?base: {}) ~> {}',
+  ],
+  [['{ m: { f: :identity }, r: :m.f.g(1) }', 'f.g'], 'f :: ?value ~> :value'],
 ])
 
 hoverCases('the name of a parameter', [

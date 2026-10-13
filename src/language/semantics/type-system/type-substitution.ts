@@ -497,6 +497,28 @@ export const getTypesForTypeParameters = ({
 }
 
 /**
+ * Like `getTypesForTypeParameters`, but only for the applied function's own
+ * type parameters, not `rigidTypeParameters` (whose types aren't determined by
+ * this argument).
+ */
+export const getTypesForFlexibleTypeParameters = ({
+  parameterType,
+  argumentType,
+  rigidTypeParameters,
+}: {
+  readonly parameterType: Type
+  readonly argumentType: Type
+  readonly rigidTypeParameters: ReadonlySet<symbol>
+}): ReadonlyMap<TypeParameter, Type> =>
+  new Map(
+    getTypesForTypeParameters({ parameterType, argumentType })
+      .entries()
+      .filter(
+        ([typeParameter]) => !rigidTypeParameters.has(typeParameter.identity),
+      ),
+  )
+
+/**
  * If `type` can be applied as a function, returns its signatures. Multiple
  * signatures may be returned if `type` is a union or a type parameter
  * constrained to a union. Returns `none` for anything that isn't applicable as
