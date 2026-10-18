@@ -140,6 +140,7 @@ export {
   supplyTypeArgument,
   supplyTypeArguments,
   typeFromSemanticGraph,
+  typeKeyPathFromObjectNode,
   typeParameterAssignableToConstraintKey,
   typeParameterIdentitiesWithinType,
   types,
