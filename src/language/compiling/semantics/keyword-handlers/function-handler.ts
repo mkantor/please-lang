@@ -16,7 +16,7 @@ import {
   getTypesForTypeParameters,
   ignoredKey,
   inferType,
-  makeFunctionNode,
+  makeFunctionNodeFromDefinition,
   makeObjectNode,
   objectNodeFromOrderedEntries,
   readFunctionExpression,
@@ -93,12 +93,9 @@ const makeFunctionFromElaboratedExpression = (
           })
         } else {
           return either.makeRight(
-            makeFunctionNode({
+            makeFunctionNodeFromDefinition({
               signature: inferredType.signature,
-              serialize: () => either.makeRight(functionExpression),
-              parameterName: option.makeSome(
-                getParameterName(functionExpression),
-              ),
+              definition: { expression: functionExpression, context },
               call: (argument, applySiteContext) =>
                 apply(functionExpression, inferredType.signature, argument, {
                   functionDefinitionContext: context,
@@ -273,10 +270,12 @@ const apply = (
                     // Include the function itself to allow recursion.
                     [
                       ownKey,
-                      makeFunctionNode({
+                      makeFunctionNodeFromDefinition({
                         signature,
-                        serialize: () => either.makeRight(expression),
-                        parameterName: option.makeSome(parameterName),
+                        definition: {
+                          expression,
+                          context: functionDefinitionContext,
+                        },
                         call: (argument, applySiteContextOfNestedApplication) =>
                           apply(expression, signature, argument, {
                             functionDefinitionContext,
