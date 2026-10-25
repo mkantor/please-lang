@@ -116,6 +116,7 @@ const parameterFreeStuckIntrinsicApplication = makeIntrinsicApplicationType(
       makeObjectType({ value: exactEmptyObject }),
     ]),
   option.none,
+  option.none,
 )
 const parameterFreeStuckIndexedAccess = makeIndexedAccessType(
   parameterFreeStuckIntrinsicApplication,
@@ -126,6 +127,7 @@ const integerBoundStuckIndexedAccess = makeIndexedAccessType(
     [makeUnionType(['0']), object],
     _argumentValues => either.makeRight(something),
     _parameterTypes => makeObjectType({ value: integer }),
+    option.none,
     option.none,
   ),
   makeUnionType(['value']),
@@ -1832,6 +1834,7 @@ const stuckIntrinsicApplicationSpanningTopTypeMembers =
     [object],
     _argumentValues => either.makeRight(something),
     _parameterTypes => makeUnionType(['an atom', makeObjectType({})]),
+    option.none,
     option.none,
   )
 

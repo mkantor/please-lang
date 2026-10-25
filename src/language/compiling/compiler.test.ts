@@ -2775,6 +2775,86 @@ testCases(
 
   [
     `{
+      f: (n: :Integer) => @if { :n > 0, then: :n, else: 0 }
+      check: :f ~ ((?n: :Integer) ~> @if { :n > 0, then: :n, else: 0 })
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => @if { :n > 0, then: :n, else: 0 }
+      g: (x: :Integer) => :f(:x) ~ @if { :x > 0, then: :x, else: 0 }
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => @if { :n > 0, then: :n, else: 0 }
+      g: (x: :Integer) => :f(:x) ~ (:x | 0)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      k: (a: :Integer) => (b: :Boolean) =>
+        @if { :b, then: :a, else: :a } ~ :a
+      r: :k(2)(true)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      k: (a: :Integer) => (b: :Boolean) => {
+        f: (y: :a) => :y
+        r: :f(@if { :b, then: :a, else: :a })
+      }.r
+      s: :k(2)(false)
+    }.s`,
+    success('2'),
+  ],
+
+  [
+    `(a: :Integer) => (b: :Boolean) => {
+      f: (y: :a) => :y
+      r: :f(@if { :b, then: :a, else: 1 })
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(k: b | c) => (cond: :Boolean) =>
+      :object.lookup(@if { :cond, then: a, else: :k })({ a: 1, b: 2, c: 3 })
+        ~ { tag: some, value: 1 | 2 | 3 }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `(k: b | c) => (x: a | :k) =>
+      :object.lookup(:x)({ a: 1, b: 2, c: 3 })
+        ~ ({ tag: some, value: 1 } | { tag: none })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
       f: (x: {| de: :Atom |}) => :x
       check: :f ~ ({| de: :Atom |} ~> {| de: :Atom |})
     }`,
@@ -2840,6 +2920,94 @@ testCases(
     }`,
     result => {
       assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `(cases: { [:Atom]: :Nothing ~> :Something }) => :match(:cases)({ tag: a })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(n: :Integer) => true ~ (:n > 0)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(n: :Integer) => (:n < 0) ~ (:n > 0)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(n: :Integer) => {
+      a: (:n > 0) ~ (:n > 0)
+      b: (:n > 0) ~ :Boolean
+      c: (:n > 0) ~ ((:n > 0) | 5)
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:integer.subtract ~ :integer.add`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:integer.add ~ :+`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `{
+      f: (n: :Integer) => {
+        x: @if { :n < 0, then: :n, else: 0 }
+        y: :x ~ @if { :n > 0, then: :n, else: 0 }
+      }
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      f: (x: :Integer) => { a: :x } object.overlay { b: 1 }
+      check: :f ~ ((?x: :Integer) ~> ({ a: :x } object.overlay { b: 1 }))
+    }`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:match ~ ({| a: :Integer ~> :Integer |} ~> {| tag: a, value: :Integer |} ~> :Integer)`,
+    result => {
+      assert(either.isRight(result))
+    },
+  ],
+
+  [
+    `:match ~ (({| a: :Integer ~> :Integer |} | {| b: :Atom ~> :Atom |}) ~> {| tag: c |} ~> :Something)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
     },
   ],
 

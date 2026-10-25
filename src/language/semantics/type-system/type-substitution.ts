@@ -246,17 +246,35 @@ export const concreteUpperBound = (type: Type): Type =>
     object: _ => type,
     opaque: _ => type,
     parameter: type => concreteUpperBound(type.constraint.assignableTo),
-    union: _ => type,
+    union: type => {
+      const members = [...type.members]
+      const boundedMembers = members.map(member =>
+        typeof member === 'string' ? member : concreteUpperBound(member),
+      )
+      return (
+          boundedMembers.every((member, index) => member === members[index])
+        ) ?
+          type
+        : unionOfTypes(
+            boundedMembers.map(member =>
+              typeof member === 'string' ? makeUnionType([member]) : member,
+            ),
+          )
+    },
   })
 
 /**
  * The most specific resolvable upper bound of a stuck type, or `none` when
- * nothing further can be resolved.
+ * nothing further can be resolved. It can still contain type parameters (e.g.
+ * in an `@if`'s branches).
  */
 export const upperBoundOfStuckType = (
   stuckType: ApplicationType | IndexedAccessType | IntrinsicApplicationType,
 ): Option<Type> => {
-  const substituted = replaceAllTypeParametersWithTheirConstraints(stuckType)
+  const substituted =
+    stuckType.kind === 'indexedAccess' ?
+      replaceTypeParametersWithTheirConstraintsKeyFirst(stuckType)
+    : replaceAllTypeParametersWithTheirConstraints(stuckType)
   if (substituted !== stuckType) {
     return option.makeSome(substituted)
   } else {
@@ -284,6 +302,23 @@ export const upperBoundOfStuckType = (
         return option.none
     }
   }
+}
+
+/**
+ * Replaces the type parameters in an indexed access's key with their
+ * constraints, keeping others. If it's still an indexed access after that,
+ * they're all replaced.
+ */
+const replaceTypeParametersWithTheirConstraintsKeyFirst = (
+  indexedAccess: IndexedAccessType,
+): Type => {
+  const reduced = reduceIndexedAccess(
+    indexedAccess.object,
+    replaceAllTypeParametersWithTheirConstraints(indexedAccess.key),
+  )
+  return reduced.kind === 'indexedAccess' ?
+      replaceAllTypeParametersWithTheirConstraints(indexedAccess)
+    : reduced
 }
 
 const upperBoundOfResolvableStuckType = (
@@ -652,6 +687,11 @@ export const withStuckApplicationsResolved = (type: Type): Type =>
             withStuckApplicationsResolved(
               type.computeUpperBound(parameterTypes),
             ),
+          option.map(
+            type.computeLowerBound,
+            computeLowerBound => parameterTypes =>
+              withStuckApplicationsResolved(computeLowerBound(parameterTypes)),
+          ),
           type.functionKeyPath,
         ),
       object: type =>
@@ -785,6 +825,7 @@ const reduceIntrinsicApplication = (
     argumentValues: readonly SemanticGraph[],
   ) => Either<FunctionNodeCallError, Type>,
   computeUpperBound: (parameterTypes: readonly Type[]) => Type,
+  computeLowerBound: Option<(parameterTypes: readonly Type[]) => Type>,
   functionKeyPath: Option<NonEmptyKeyPath>,
 ): Type => {
   const argumentPossibilities = parameterTypes.map(enumerateInhabitants)
@@ -792,6 +833,7 @@ const reduceIntrinsicApplication = (
     parameterTypes,
     reduce,
     computeUpperBound,
+    computeLowerBound,
     functionKeyPath,
   )
   return option.match(option.sequence(argumentPossibilities), {
@@ -811,11 +853,16 @@ const reduceIntrinsicApplication = (
  * Attempt to reduce a (possibly stuck) indexed access.
  */
 const reduceIndexedAccess = (object: Type, key: Type): Type => {
-  // A stuck intrinsic application used as a key is reduced to its upper bound
-  // so indexing can proceed (e.g. `{ false: …, true: … }[boolean]`).
+  // A stuck intrinsic application key is reduced to its upper bound so indexing
+  // can proceed (e.g. `{ false: …, true: … }[boolean]`), but not while it
+  // mentions type parameters (since instantiating them later could produce
+  // something more specific).
   const keyForIndexing =
-    key.kind === 'intrinsicApplication' ?
-      replaceAllTypeParametersWithTheirConstraints(key)
+    (
+      key.kind === 'intrinsicApplication' &&
+      containedTypeParameters(key).size === 0
+    ) ?
+      key.computeUpperBound(key.parameterTypes)
     : key
   return either.match(atomKeyPathComponentFromType(keyForIndexing), {
     left: _ =>
@@ -896,6 +943,7 @@ export const supplyTypeArgument = (
           ),
           type.reduce,
           type.computeUpperBound,
+          type.computeLowerBound,
           type.functionKeyPath,
         ),
       indexedAccess: type =>
