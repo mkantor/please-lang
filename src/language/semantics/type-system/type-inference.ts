@@ -1384,8 +1384,8 @@ const resolveEnclosingFunctionParameters = (
 
 /**
  * Recursively widen every closed object type (one whose excess clauses have
- * bottom-typed `values`) to an open one. Other excess bounds are preserved as
- * written.
+ * bottom-typed `values`) to an open one, except within the arguments of stuck
+ * applications. Other excess bounds are preserved as written.
  *
  * Type parameters are kept by reference (their identities matter), so their
  * constraints are not adjusted here; make sure constraints are inexact while
@@ -1395,10 +1395,12 @@ const recursivelyOpenObjectTypes = (type: Type): Type =>
   // Avoid infinite recursion when we hit the top type.
   isCanonicalTopType(type) ? type : (
     matchTypeFormat<Type>(type, {
+      // Widening an argument would make this a different application, so only
+      // the function (and thereby the result) is widened.
       application: type =>
         makeApplicationType(
           recursivelyOpenObjectTypes(type.function),
-          recursivelyOpenObjectTypes(type.argument),
+          type.argument,
           type.parametersStuckOn,
         ),
       function: type =>
@@ -1411,12 +1413,18 @@ const recursivelyOpenObjectTypes = (type: Type): Type =>
           recursivelyOpenObjectTypes(type.object),
           recursivelyOpenObjectTypes(type.key),
         ),
+      // Likewise, only the bounds are widened here.
       intrinsicApplication: type =>
         makeIntrinsicApplicationType(
-          type.parameterTypes.map(recursivelyOpenObjectTypes),
+          type.parameterTypes,
           type.reduce,
           parameterTypes =>
             recursivelyOpenObjectTypes(type.computeUpperBound(parameterTypes)),
+          option.map(
+            type.computeLowerBound,
+            computeLowerBound => parameterTypes =>
+              recursivelyOpenObjectTypes(computeLowerBound(parameterTypes)),
+          ),
           type.functionKeyPath,
         ),
       object: type =>

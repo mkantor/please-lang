@@ -692,8 +692,10 @@ const typeToSemanticGraphImplementation = (
               )
             )
         },
-        // A stuck intrinsic application is displayed as its (concrete) upper bound,
-        // which is also how it behaves for assignability.
+        // TODO: Display intrinsic applications as written (like `@if`
+        // conditions). The upper bound is only correct for a source, which can
+        // result in confusing error messages like "the value `true` is not
+        // assignable to the type `:Boolean`".
         intrinsicApplication: type =>
           recurseWithSameTypeParameters(
             type.computeUpperBound(type.parameterTypes),

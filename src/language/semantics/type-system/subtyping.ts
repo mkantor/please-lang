@@ -2,6 +2,7 @@ import type { Option } from '@matt.kantor/option'
 import option from '@matt.kantor/option'
 import type { Atom } from '../../parsing.js'
 import { atom, pendingTypeSymbol, something } from './prelude-types.js'
+import type { IntrinsicApplicationType } from './type-formats/intrinsic-application-type.js'
 import { matchTypeFormat } from './type-formats/match-type-format.js'
 import {
   makeObjectType,
@@ -19,7 +20,6 @@ import { containedTypeParameters } from './type-parameter-analysis.js'
 import {
   getTypesForTypeParameters,
   reduceStuckApplication,
-  replaceAllTypeParametersWithTheirConstraints,
   resolveApplication,
   supplyTypeArguments,
   upperBoundOfStuckType,
@@ -48,277 +48,268 @@ export const isAssignable = ({
         none: _ => false,
         some: reducedTarget => isAssignable({ source, target: reducedTarget }),
       })) ||
-    (target.kind === 'intrinsicApplication' ?
-      // An intrinsic application behaves as its (concrete) upper bound when
-      // appearing as the target, mirroring the source case below. This ensures
-      // structurally-equivalent-but-not-identical intrinsic applications are
-      // mutually assignable.
-      isAssignable({
-        source,
-        target: replaceAllTypeParametersWithTheirConstraints(target),
-      })
-    : matchTypeFormat(source, {
-        application: source =>
-          (target.kind === 'application' &&
-            // Two stuck applications are assignable when their functions and
-            // arguments are mutually assignable.
+    // A stuck intrinsic application's result isn't known yet, so a source
+    // must be assignable to whatever it turns out to be.
+    (target.kind === 'intrinsicApplication' &&
+      (isSameIntrinsicApplication(source, target) ||
+        option.match(target.computeLowerBound, {
+          none: _ => false,
+          some: computeLowerBound =>
             isAssignable({
-              source: source.function,
-              target: target.function,
-            }) &&
-            isAssignable({
-              source: target.function,
-              target: source.function,
-            }) &&
-            isAssignable({
-              source: source.argument,
-              target: target.argument,
-            }) &&
-            isAssignable({
-              source: target.argument,
-              target: source.argument,
-            })) ||
-          // When the stuck application's signature is concrete, it can be
-          // compared by what it would produce if it were reduced now. This
-          // allows stuck applications to be assigned to (rigid) type
-          // parameters.
-          // TODO: That isn't always an upper bound on what it will produce (see
-          // `resolveApplication`), so this can accept too much.
-          option.match(resolveApplication(source), {
-            none: _ => false,
-            some: resolvedSource =>
-              isAssignable({ source: resolvedSource, target }),
-          }) ||
-          option.match(upperBoundOfStuckType(source), {
-            none: _ => false,
-            // TODO: This case can also accept too much.
-            some: upperBound => isAssignable({ source: upperBound, target }),
-          }),
-        function: source =>
-          matchTypeFormat(target, {
-            function: target =>
-              // Functions are contravariant in parameters, covariant in return
-              // types. The source's type parameters are instantiated from the
-              // target's parameter type. For example, when checking whether
-              // `?a ~> :Option(:a)` is assignable to `1 ~> :Option(1)`, `a` is
-              // instantiated as `1`.
-              // TODO: Substituting into the return type collapses stuck `@if`s
-              // into unions of branch types, even when the supplied type
-              // argument doesn't concretize the condition. The result is that
-              // functions returning stuck `@if`s aren't assignable to their own
-              // types.
-              option.match(
-                typeArgumentsForSourceFunction(
-                  source.signature.parameter,
-                  target.signature.parameter,
-                ),
-                {
-                  none: _ => false,
-                  some: typeArguments =>
-                    isAssignable({
-                      source: target.signature.parameter,
-                      target: supplyTypeArguments(
-                        source.signature.parameter,
-                        typeArguments,
-                      ),
-                    }) &&
-                    isAssignable({
-                      source: supplyTypeArguments(
-                        source.signature.return,
-                        typeArguments,
-                      ),
-                      target: target.signature.return,
-                    }),
-                },
+              source,
+              target: computeLowerBound(target.parameterTypes),
+            }),
+        }))) ||
+    matchTypeFormat(source, {
+      application: source =>
+        (target.kind === 'application' &&
+          // Two stuck applications are assignable when their functions and
+          // arguments are mutually assignable.
+          isAssignable({
+            source: source.function,
+            target: target.function,
+          }) &&
+          isAssignable({
+            source: target.function,
+            target: source.function,
+          }) &&
+          isAssignable({
+            source: source.argument,
+            target: target.argument,
+          }) &&
+          isAssignable({
+            source: target.argument,
+            target: source.argument,
+          })) ||
+        // When the stuck application's signature is concrete, it can be
+        // compared by what it would produce if it were reduced now. This
+        // allows stuck applications to be assigned to (rigid) type
+        // parameters.
+        // TODO: That isn't always an upper bound on what it will produce (see
+        // `resolveApplication`), so this can accept too much.
+        option.match(resolveApplication(source), {
+          none: _ => false,
+          some: resolvedSource =>
+            isAssignable({ source: resolvedSource, target }),
+        }) ||
+        option.match(upperBoundOfStuckType(source), {
+          none: _ => false,
+          // TODO: This case can also accept too much.
+          some: upperBound => isAssignable({ source: upperBound, target }),
+        }),
+      function: source =>
+        matchTypeFormat(target, {
+          function: target =>
+            // Functions are contravariant in parameters, covariant in return
+            // types. The source's type parameters are instantiated from the
+            // target's parameter type. For example, when checking whether
+            // `?a ~> :Option(:a)` is assignable to `1 ~> :Option(1)`, `a` is
+            // instantiated as `1`.
+            // TODO: A function whose result mentions two of its type
+            // parameters (e.g. `(n: :Integer) => (m: :Integer) => :n + :m`)
+            // isn't assignable to its own type.
+            option.match(
+              typeArgumentsForSourceFunction(
+                source.signature.parameter,
+                target.signature.parameter,
               ),
-            application: _target => false,
-            indexedAccess: _target => false,
-            intrinsicApplication: _target => {
-              // This case is handled above.
-              throw new Error(
-                'Intrinsic application target should have already been handled. This is a bug!',
-              )
-            },
-            object: _target => false, // functions are never assignable to objects
-            opaque: target => target.isAssignableFrom(source),
-            parameter: _target => false, // a function type is never directly assignable to a type parameter
-            union: target => isNonUnionAssignableToUnion({ source, target }),
-          }),
-        indexedAccess: source =>
-          (target.kind === 'indexedAccess' &&
-            isAssignable({ source: source.object, target: target.object }) &&
-            isAssignable({ source: source.key, target: target.key }) &&
-            isAssignable({ source: target.key, target: source.key })) ||
-          option.match(upperBoundOfStuckType(source), {
-            none: _ => false,
-            some: upperBound => isAssignable({ source: upperBound, target }),
-          }),
-        intrinsicApplication: source =>
-          isAssignable({
-            source: source.computeUpperBound(source.parameterTypes),
-            target,
-          }) ||
-          option.match(upperBoundOfStuckType(source), {
-            none: _ => false,
-            some: upperBound => isAssignable({ source: upperBound, target }),
-          }),
-        object: source =>
-          matchTypeFormat(target, {
-            function: _target => false, // objects are never assignable to functions
-            application: _target => false,
-            indexedAccess: _target => false,
-            intrinsicApplication: _target => {
-              // This case is handled above.
-              throw new Error(
-                'Intrinsic application target should have already been handled. This is a bug!',
-              )
-            },
-            object: target => {
-              // Every property required by the target must be present and valid
-              // in the source (recursively).
-              const requiredPropertiesAreSatisfied = Object.entries(
-                target.children,
-              ).every(([key, targetChild]) => {
-                const sourceChild = source.children[key]
-                return (
-                  sourceChild !== undefined &&
-                  isAssignable({ source: sourceChild, target: targetChild })
-                )
-              })
-              // Each source property beyond the target's children must fit
-              // within the target's bound for its specific key.
-              const unlistedSourceChildrenAreSatisfied = Object.entries(
-                source.children,
-              ).every(([key, sourceChild]) => {
-                const targetBound = excessBoundForKey(key, target.excess)
-                return (
-                  target.children[key] !== undefined ||
-                  isCanonicalTopType(targetBound) ||
-                  isAssignable({ source: sourceChild, target: targetBound })
-                )
-              })
-              // Whatever the source's clauses admit must fit within the
-              // target's clauses wherever they overlap. A pair of clauses
-              // overlaps only if some key can inhabit both domains while
-              // escaping all later domains. Clauses with no overlap are
-              // irrelevant to subtyping.
-              const sourceExcess = effectiveExcessClauses(source.excess)
-              const targetExcess = effectiveExcessClauses(target.excess)
-              const keysListedBySource = makeUnionType(
-                Object.keys(source.children),
-              )
-              const excessClausesAreSatisfied = sourceExcess.every(
-                (sourceClause, sourceIndex) =>
-                  targetExcess.every((targetClause, targetIndex) => {
-                    const laterDomains = unionOfTypes([
-                      ...sourceExcess
-                        .slice(sourceIndex + 1)
-                        .map(clause => clause.keys),
-                      ...targetExcess
-                        .slice(targetIndex + 1)
-                        .map(clause => clause.keys),
-                    ])
-                    const pairIsUnreachable =
-                      isAssignable({
-                        source: sourceClause.keys,
-                        target: laterDomains,
-                      }) ||
-                      isAssignable({
-                        source: targetClause.keys,
-                        target: laterDomains,
-                      }) ||
-                      isAssignable({
-                        source: targetClause.keys,
-                        target: keysListedBySource,
-                      })
-                    return (
-                      pairIsUnreachable ||
-                      isAssignable({
-                        source: sourceClause.values,
-                        target: targetClause.values,
-                      })
-                    )
+              {
+                none: _ => false,
+                some: typeArguments =>
+                  isAssignable({
+                    source: target.signature.parameter,
+                    target: supplyTypeArguments(
+                      source.signature.parameter,
+                      typeArguments,
+                    ),
+                  }) &&
+                  isAssignable({
+                    source: supplyTypeArguments(
+                      source.signature.return,
+                      typeArguments,
+                    ),
+                    target: target.signature.return,
                   }),
-              )
+              },
+            ),
+          application: _target => false,
+          indexedAccess: _target => false,
+          intrinsicApplication: _target => false,
+          object: _target => false, // functions are never assignable to objects
+          opaque: target => target.isAssignableFrom(source),
+          parameter: _target => false, // a function type is never directly assignable to a type parameter
+          union: target => isNonUnionAssignableToUnion({ source, target }),
+        }),
+      indexedAccess: source =>
+        (target.kind === 'indexedAccess' &&
+          isAssignable({ source: source.object, target: target.object }) &&
+          isAssignable({ source: source.key, target: target.key }) &&
+          isAssignable({ source: target.key, target: source.key })) ||
+        option.match(upperBoundOfStuckType(source), {
+          none: _ => false,
+          some: upperBound => isAssignable({ source: upperBound, target }),
+        }),
+      intrinsicApplication: source =>
+        (target.kind === 'union' &&
+          isNonUnionAssignableToUnion({ source, target })) ||
+        isAssignable({
+          source: source.computeUpperBound(source.parameterTypes),
+          target,
+        }) ||
+        option.match(upperBoundOfStuckType(source), {
+          none: _ => false,
+          some: upperBound => isAssignable({ source: upperBound, target }),
+        }),
+      object: source =>
+        matchTypeFormat(target, {
+          function: _target => false, // objects are never assignable to functions
+          application: _target => false,
+          indexedAccess: _target => false,
+          intrinsicApplication: _target => false,
+          object: target => {
+            // Every property required by the target must be present and valid
+            // in the source (recursively).
+            const requiredPropertiesAreSatisfied = Object.entries(
+              target.children,
+            ).every(([key, targetChild]) => {
+              const sourceChild = source.children[key]
               return (
-                requiredPropertiesAreSatisfied &&
-                unlistedSourceChildrenAreSatisfied &&
-                excessClausesAreSatisfied
+                sourceChild !== undefined &&
+                isAssignable({ source: sourceChild, target: targetChild })
               )
-            },
-            opaque: target => target.isAssignableFrom(source),
-            parameter: _target => false, // an object type is never directly assignable to a type parameter
-            union: target => isNonUnionAssignableToUnion({ source, target }),
-          }),
-        opaque: source => source.isAssignableTo(target),
-        parameter: source =>
-          // A type parameter is only assignable to a type parameter if they are
-          // identical. If the target is a union and the type parameter is a
-          // member of that union (by identity), it's also assignable. Otherwise
-          // the constraint must be assignable to the target.
-          (target.kind === 'parameter' &&
-            source.identity === target.identity) ||
-          (target.kind === 'union' &&
-            isNonUnionAssignableToUnion({ source, target })) ||
-          isAssignable({
-            source: source.constraint.assignableTo,
-            target,
-          }),
-        union: source =>
-          matchTypeFormat(target, {
-            function: target => isUnionAssignableToNonUnion({ source, target }),
-            application: target =>
-              isUnionAssignableToNonUnion({ source, target }),
-            indexedAccess: target =>
-              isUnionAssignableToNonUnion({ source, target }),
-            intrinsicApplication: target =>
-              isUnionAssignableToNonUnion({ source, target }),
-            object: target => isUnionAssignableToNonUnion({ source, target }),
-            opaque: target => isUnionAssignableToNonUnion({ source, target }),
-            parameter: target =>
-              isUnionAssignableToNonUnion({ source, target }),
-            union: target => {
-              // Return true if every member of the source is assignable to some
-              // member of the target.
-              for (const sourceMember of source.members) {
-                const sourceMemberIsAssignableToSomeMemberOfSupertype = (() => {
-                  const preparedTarget = simplifyUnionType(target)
-                  for (const targetMember of preparedTarget.members) {
-                    if (sourceMember === targetMember) {
+            })
+            // Each source property beyond the target's children must fit
+            // within the target's bound for its specific key.
+            const unlistedSourceChildrenAreSatisfied = Object.entries(
+              source.children,
+            ).every(([key, sourceChild]) => {
+              const targetBound = excessBoundForKey(key, target.excess)
+              return (
+                target.children[key] !== undefined ||
+                isCanonicalTopType(targetBound) ||
+                isAssignable({ source: sourceChild, target: targetBound })
+              )
+            })
+            // Whatever the source's clauses admit must fit within the
+            // target's clauses wherever they overlap. A pair of clauses
+            // overlaps only if some key can inhabit both domains while
+            // escaping all later domains. Clauses with no overlap are
+            // irrelevant to subtyping.
+            const sourceExcess = effectiveExcessClauses(source.excess)
+            const targetExcess = effectiveExcessClauses(target.excess)
+            const keysListedBySource = makeUnionType(
+              Object.keys(source.children),
+            )
+            const excessClausesAreSatisfied = sourceExcess.every(
+              (sourceClause, sourceIndex) =>
+                targetExcess.every((targetClause, targetIndex) => {
+                  const laterDomains = unionOfTypes([
+                    ...sourceExcess
+                      .slice(sourceIndex + 1)
+                      .map(clause => clause.keys),
+                    ...targetExcess
+                      .slice(targetIndex + 1)
+                      .map(clause => clause.keys),
+                  ])
+                  const pairIsUnreachable =
+                    isAssignable({
+                      source: sourceClause.keys,
+                      target: laterDomains,
+                    }) ||
+                    isAssignable({
+                      source: targetClause.keys,
+                      target: laterDomains,
+                    }) ||
+                    isAssignable({
+                      source: targetClause.keys,
+                      target: keysListedBySource,
+                    })
+                  return (
+                    pairIsUnreachable ||
+                    isAssignable({
+                      source: sourceClause.values,
+                      target: targetClause.values,
+                    })
+                  )
+                }),
+            )
+            return (
+              requiredPropertiesAreSatisfied &&
+              unlistedSourceChildrenAreSatisfied &&
+              excessClausesAreSatisfied
+            )
+          },
+          opaque: target => target.isAssignableFrom(source),
+          parameter: _target => false, // an object type is never directly assignable to a type parameter
+          union: target => isNonUnionAssignableToUnion({ source, target }),
+        }),
+      opaque: source => source.isAssignableTo(target),
+      parameter: source =>
+        // A type parameter is only assignable to a type parameter if they are
+        // identical. If the target is a union and the type parameter is a
+        // member of that union (by identity), it's also assignable. Otherwise
+        // the constraint must be assignable to the target.
+        (target.kind === 'parameter' && source.identity === target.identity) ||
+        (target.kind === 'union' &&
+          isNonUnionAssignableToUnion({ source, target })) ||
+        isAssignable({
+          source: source.constraint.assignableTo,
+          target,
+        }),
+      union: source =>
+        matchTypeFormat(target, {
+          function: target => isUnionAssignableToNonUnion({ source, target }),
+          application: target =>
+            isUnionAssignableToNonUnion({ source, target }),
+          indexedAccess: target =>
+            isUnionAssignableToNonUnion({ source, target }),
+          intrinsicApplication: target =>
+            isUnionAssignableToNonUnion({ source, target }),
+          object: target => isUnionAssignableToNonUnion({ source, target }),
+          opaque: target => isUnionAssignableToNonUnion({ source, target }),
+          parameter: target => isUnionAssignableToNonUnion({ source, target }),
+          union: target => {
+            // Return true if every member of the source is assignable to some
+            // member of the target.
+            for (const sourceMember of source.members) {
+              const sourceMemberIsAssignableToSomeMemberOfSupertype = (() => {
+                const preparedTarget = simplifyUnionType(target)
+                for (const targetMember of preparedTarget.members) {
+                  if (sourceMember === targetMember) {
+                    return true
+                  } else if (typeof targetMember !== 'string') {
+                    if (
+                      isAssignable({
+                        target: targetMember,
+                        source:
+                          typeof sourceMember !== 'string' ? sourceMember : (
+                            makeUnionType([sourceMember])
+                          ),
+                      })
+                    ) {
                       return true
-                    } else if (typeof targetMember !== 'string') {
-                      if (
-                        isAssignable({
-                          target: targetMember,
-                          source:
-                            typeof sourceMember !== 'string' ? sourceMember : (
-                              makeUnionType([sourceMember])
-                            ),
-                        })
-                      ) {
-                        return true
-                      }
                     }
                   }
-                  // A stuck member can be assignable to the target union even
-                  // if it's not assignable to any single member of it, e.g. the
-                  // stuck type's upper bound could itself be a union which
-                  // spans multiple members.
-                  return (
-                    typeof sourceMember !== 'string' &&
-                    isStuck(sourceMember) &&
-                    isAssignable({ source: sourceMember, target })
-                  )
-                })()
-
-                if (!sourceMemberIsAssignableToSomeMemberOfSupertype) {
-                  return false
                 }
+                // A stuck member can be assignable to the target union even
+                // if it's not assignable to any single member of it, e.g. the
+                // stuck type's upper bound could itself be a union which
+                // spans multiple members.
+                return (
+                  typeof sourceMember !== 'string' &&
+                  isStuck(sourceMember) &&
+                  isAssignable({ source: sourceMember, target })
+                )
+              })()
+
+              if (!sourceMemberIsAssignableToSomeMemberOfSupertype) {
+                return false
               }
-              return true
-            },
-          }),
-      }))
+            }
+            return true
+          },
+        }),
+    })
   )
 }
 
@@ -361,6 +352,30 @@ const typeArgumentsForSourceFunction = (
       option.makeSome(typeArguments)
     : option.none
 }
+
+// TODO: Equivalent applications written differently aren't recognized, so e.g.
+// `(x: …) => :match(:cases)(:x)` isn't assignable to `:match(:cases)`.
+const isSameIntrinsicApplication = (
+  source: Type,
+  target: IntrinsicApplicationType,
+): boolean =>
+  source.kind === 'intrinsicApplication' &&
+  source.reduce === target.reduce &&
+  source.parameterTypes.length === target.parameterTypes.length &&
+  source.parameterTypes.every((sourceParameterType, index) => {
+    const targetParameterType = target.parameterTypes[index]
+    return (
+      targetParameterType !== undefined &&
+      isAssignable({
+        source: sourceParameterType,
+        target: targetParameterType,
+      }) &&
+      isAssignable({
+        source: targetParameterType,
+        target: sourceParameterType,
+      })
+    )
+  })
 
 const isStuck = (type: Exclude<Type, UnionType>): boolean =>
   type.kind === 'parameter' ||
