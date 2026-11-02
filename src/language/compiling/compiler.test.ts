@@ -1861,6 +1861,197 @@ testCases(
     },
   ],
 
+  [':apply(1)(:identity)', success('1')],
+
+  [':apply(1)((x: :Integer) => :x)', success('1')],
+
+  [
+    `{
+      apply2: (a: ?t) => (f: :t ~> ?b) => :f(:a)
+      r: :apply2(1)(:identity)
+    }.r`,
+    success('1'),
+  ],
+
+  [
+    `{
+      at_one: (f: :Something ~> :Something) => :f(1)
+      inc: (n: :Integer) => :n + 1
+      r: :apply(:inc)(:at_one)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      twice: (f: :Integer ~> :Integer) => (x: :Integer) => :f(:f(:x))
+      inc: (n: :Integer) => :n + 1
+      r: :apply(:inc)(:twice)(5)
+    }.r`,
+    success('7'),
+  ],
+
+  [
+    `(a: :Integer) => :apply(1)((x: :a) => :x)`,
+    result => {
+      // `1` isn't necessarily an `a`.
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `:apply("not an integer")((n: :Integer) => :n)`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `(a: :Integer) => :apply(1)((x: :a) => { p: :x, q: :identity })`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{ k: (f: (b => :b)) => :f(1), r: :k(_ => hello) }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      get: (x: { a: :Integer }) => :x.a
+      k: (b: :Boolean) => :get(@if { :b, then: { a: 1 }, else: { a: 2 } })
+      r: :k(false)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      get: (x: { a: ?t }) => :x.a
+      k: (b: :Boolean) =>
+        :get(@if { :b, then: { a: 1 }, else: { a: 2 } }) ~ (1 | 2)
+      r: :k(true)
+    }.r`,
+    success('1'),
+  ],
+
+  [
+    `{
+      k: (a: :Integer) => (b: :Boolean) => {
+        f: (y: { v: :a }) => :y.v
+        r: :f(@if { :b, then: { v: :a }, else: { v: :a } })
+      }.r
+      s: :k(2)(true)
+    }.s`,
+    success('2'),
+  ],
+
+  [
+    `{
+      takes: (g: :Integer ~> :Integer) => :g(1)
+      k: (b: :Boolean) =>
+        :takes(@if { :b, then: (n: :Integer) => :n, else: (n: :Integer) => 0 })
+      r: :k(false)
+    }.r`,
+    success('0'),
+  ],
+
+  [
+    `{
+      takes: (g: :Integer ~> :Integer) => :g(1)
+      k: (b: :Boolean) => (h: :Integer ~> :Integer) =>
+        :takes(@if { :b, then: :h, else: :h })
+      r: :k(true)((n: :Integer) => :n + 1)
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      app: (g: ?a ~> ?b) => (x: :a) => :g(:x)
+      k: (b: :Boolean) => (h: :Integer ~> :Integer) =>
+        :app(@if { :b, then: :h, else: :h })(hello)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      get: (x: { a: :Integer }) => :x.a
+      k: (v: { a: 1 } | { a: 2 }) => :get(:v)
+      r: :k({ a: 2 })
+    }.r`,
+    success('2'),
+  ],
+
+  [
+    `{
+      compose: (f: :Integer ~> :Integer) => (g: :Integer ~> :Integer) =>
+        (x: :Integer) => :f(:g(:x))
+      rep: (n: :Integer) => (f: :Integer ~> :Integer) =>
+        @if { :n > 0, then: :compose(:f)(:rep(:n - 1)(:f)), else: :f }
+      inc: (n: :Integer) => :n + 1
+      r: :rep(3)(:inc)(0)
+    }.r`,
+    success('4'),
+  ],
+
+  [
+    `{
+      get: (x: { a: :Integer }) => :x.a
+      k: (b: :Boolean) => :get(@if { :b, then: { a: 1 }, else: { a: x } })
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      get: (x: { a: :Integer }) => :x.a
+      k: (v: { a: 1 } | { a: x }) => :get(:v)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      get: (x: { a: :Integer }) => :x.a
+      k: (b: :Boolean) => :get(@if { :b, then: { a: 1 }, else: 5 })
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
+  [
+    `{
+      pair: (x: { a: ?t }) => (y: :t) => :y
+      k: (b: :Boolean) =>
+        :pair(@if { :b, then: { a: 1 }, else: { a: 2 } })(hello)
+    }`,
+    result => {
+      assert(either.isLeft(result))
+      assert.deepEqual(result.value.kind, 'typeMismatch')
+    },
+  ],
+
   [
     `(x: { a: :Atom }) =>
       ((h: :x.a ~> :Atom) => :h(forged))((v: :x.a) => :v)`,

@@ -149,3 +149,29 @@ suite('type parameters survive in error messages', () => {
     })
   })
 })
+
+suite('an argument whose upper bound is a union', () => {
+  test('names the alternative which failed', () => {
+    assertMessageContains(
+      `{
+        get: (x: { a: :Integer }) => :x.a
+        k: (b: :Boolean) => :get(@if { :b, { a: 1 }, { a: x } })
+      }`,
+      'argument with type `{| a: x |}`',
+    )
+  })
+
+  test('a type parameter', () => {
+    assertMessageContains(
+      '(x: :Something) => :x + 1',
+      'argument with type `?x`',
+    )
+    assertMessageContains(
+      `{
+        get: (y: { a: ?t }) => :y.a
+        k: (x: :Integer) => :get(:x)
+      }`,
+      'argument with type `(?x: :Integer)`',
+    )
+  })
+})

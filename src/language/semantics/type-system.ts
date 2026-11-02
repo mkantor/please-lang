@@ -35,6 +35,7 @@ export {
 } from './type-system/type-parameter-analysis.js'
 export { simplifyType } from './type-system/type-simplification.js'
 export {
+  alternativesOf,
   applicableFunctionSignatures,
   applyKeyPathToType,
   getTypesForFlexibleTypeParameters,

@@ -24,7 +24,7 @@ export const makeUnionType = <Member extends Atom | Exclude<Type, UnionType>>(
 
 /**
  * Combine `types` into a single type: the sole element when there is exactly
- * one, otherwise a flattened union.
+ * one or flattening leaves only one, otherwise a flattened union.
  *
  * A union containing the top type is the top type, which is returned as-is to
  * preserve its identity.
@@ -33,8 +33,24 @@ export const unionOfTypes = (types: readonly Type[]): Type =>
   types.find(isCanonicalTopType) ??
   (types.length === 1 && types[0] !== undefined ?
     types[0]
-  : makeUnionType(
-      types.flatMap(type =>
-        type.kind === 'union' ? [...type.members] : [type],
+  : soleMemberOrUnion(
+      makeUnionType(
+        types.flatMap(type =>
+          type.kind === 'union' ? [...type.members] : [type],
+        ),
       ),
     ))
+
+/**
+ * `union`'s sole member, if it has only one and isn't an atom.
+ */
+const soleMemberOrUnion = (union: UnionType): Type => {
+  const [soleMember, ...otherMembers] = union.members
+  return (
+      soleMember !== undefined &&
+        typeof soleMember !== 'string' &&
+        otherMembers.length === 0
+    ) ?
+      soleMember
+    : union
+}

@@ -263,6 +263,21 @@ export const concreteUpperBound = (type: Type): Type =>
     },
   })
 
+export const alternativesOf = (type: Type): Option<readonly Type[]> => {
+  const upperBound = concreteUpperBound(type)
+  return (
+    upperBound.kind === 'union' && upperBound.members.size > 1 ?
+      option.makeSome(
+        [...upperBound.members].map(member =>
+          typeof member === 'string' ? makeUnionType([member]) : member,
+        ),
+      )
+    : upperBound !== type && type.kind !== 'parameter' ?
+      option.makeSome([upperBound])
+    : option.none
+  )
+}
+
 /**
  * The most specific resolvable upper bound of a stuck type, or `none` when
  * nothing further can be resolved. It can still contain type parameters (e.g.

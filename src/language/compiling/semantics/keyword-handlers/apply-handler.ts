@@ -2,6 +2,7 @@ import either, { type Either } from '@matt.kantor/either'
 import option, { type Option } from '@matt.kantor/option'
 import type { ElaborationError } from '../../../errors.js'
 import {
+  alternativesOf,
   applicableFunctionSignatures,
   attachSpanIfAbsent,
   containedTypeParameters,
@@ -34,31 +35,110 @@ const checkArgumentType = (
   parameterType: Type,
   rigidTypeParameters: ReadonlySet<symbol>,
 ): Either<ElaborationError, undefined> => {
-  const instantiatedParameterType = supplyTypeArguments(
+  const flexibleTypeArguments = getTypesForFlexibleTypeParameters({
     parameterType,
-    getTypesForFlexibleTypeParameters({
-      parameterType,
-      argumentType,
-      rigidTypeParameters,
-    }),
-  )
+    argumentType,
+    rigidTypeParameters,
+  })
+
+  const isValidWith = (typeArgumentsToTry: ReadonlyMap<TypeParameter, Type>) =>
+    isAssignable({
+      source: argumentType,
+      target: supplyTypeArguments(parameterType, typeArgumentsToTry),
+    })
+
+  // Inferred type arguments can mention the argument's own type parameters (in
+  // `:apply(1)(:identity)`, `apply`'s `?result` becomes `identity`'s `?value`),
+  // which `isValidWith` only instantiates on the argument's side. This version
+  // tries such type arguments at their type parameters' constraints instead.
+  // TODO: Avoiding own type parameters in every type argument at once can
+  // reject a valid argument, e.g. `:apply(:identity)(:twice)(5)`, which only
+  // needs `?result` replaced.
+  const isValidWithOwnTypeParametersAvoided = () =>
+    isValidWith(
+      withTypeArgumentsAvoiding(
+        flexibleTypeArguments,
+        typeParameterIdentitiesWithinType(argumentType)
+          .difference(rigidTypeParameters)
+          .difference(typeParameterIdentitiesWithinType(parameterType)),
+        rigidTypeParameters,
+      ),
+    )
+
   if (
-    isAssignable({ source: argumentType, target: instantiatedParameterType })
+    isValidWith(flexibleTypeArguments) ||
+    isValidWithOwnTypeParametersAvoided()
   ) {
     return either.makeRight(undefined)
   } else {
-    const simplifiedParameterType =
-      (
-        parameterType.kind === 'parameter' &&
-        !rigidTypeParameters.has(parameterType.identity)
-      ) ?
-        parameterType.constraint.assignableTo
-      : parameterType
-    return either.makeLeft({
-      kind: 'typeMismatch',
-      message: `argument with type \`${stringifyResolvedTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyResolvedTypeForEndUser(simplifiedParameterType)}\``,
-    })
+    // Type arguments can't be inferred from a stuck argument or one whose upper
+    // bound is a union (e.g. an `@if` whose condition isn't known yet), so its
+    // alternatives are checked individually (every one must be valid).
+    const hasTypeArgumentsToInfer =
+      parameterType.kind !== 'parameter' &&
+      !typeParameterIdentitiesWithinType(parameterType).isSubsetOf(
+        rigidTypeParameters,
+      )
+    return option.match(
+      hasTypeArgumentsToInfer ? alternativesOf(argumentType) : option.none,
+      {
+        none: _ => {
+          const simplifiedParameterType =
+            (
+              parameterType.kind === 'parameter' &&
+              !rigidTypeParameters.has(parameterType.identity)
+            ) ?
+              parameterType.constraint.assignableTo
+            : parameterType
+          return either.makeLeft({
+            kind: 'typeMismatch',
+            message: `argument with type \`${stringifyResolvedTypeForEndUser(argumentType)}\` is not assignable to the parameter type \`${stringifyResolvedTypeForEndUser(simplifiedParameterType)}\``,
+          })
+        },
+        some: alternatives =>
+          either.map(
+            either.sequence(
+              alternatives.map(alternative =>
+                checkArgumentType(
+                  alternative,
+                  parameterType,
+                  rigidTypeParameters,
+                ),
+              ),
+            ),
+            _ => undefined,
+          ),
+      },
+    )
   }
+}
+
+/**
+ * `typeArguments` with those mentioning any member of `typeParameters` replaced
+ * by its constraint (unless it also mentions a rigid type parameter).
+ */
+const withTypeArgumentsAvoiding = (
+  typeArguments: ReadonlyMap<TypeParameter, Type>,
+  typeParameters: ReadonlySet<symbol>,
+  rigidTypeParameters: ReadonlySet<symbol>,
+): ReadonlyMap<TypeParameter, Type> => {
+  const isReplaceable = (typeArgument: Type) => {
+    const mentioned = typeParameterIdentitiesWithinType(typeArgument)
+    return (
+      !mentioned.isDisjointFrom(typeParameters) &&
+      mentioned.isDisjointFrom(rigidTypeParameters)
+    )
+  }
+  return new Map(
+    typeArguments
+      .entries()
+      .map(([typeParameter, typeArgument]): readonly [TypeParameter, Type] => [
+        typeParameter,
+        isReplaceable(typeArgument) ?
+          typeParameter.constraint.assignableTo
+        : typeArgument,
+      ]),
+  )
 }
 
 /**
