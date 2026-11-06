@@ -569,6 +569,91 @@ export const getTypesForFlexibleTypeParameters = ({
   )
 
 /**
+ * Instantiates a function argument's own type parameters, using what it will be
+ * passed or, if that isn't known yet, what it has to return.
+ */
+export const argumentWithOwnTypeParametersInstantiated = ({
+  argumentType,
+  parameterType,
+  rigidTypeParameters,
+}: {
+  readonly argumentType: Type
+  readonly parameterType: Type
+  readonly rigidTypeParameters: () => ReadonlySet<symbol>
+}): Type =>
+  argumentType.kind === 'function' && parameterType.kind === 'function' ?
+    supplyTypeArguments(
+      argumentType,
+      instantiationsOfArgumentsOwnTypeParameters(
+        argumentType,
+        parameterType,
+        rigidTypeParameters(),
+      ),
+    )
+  : argumentType
+
+const instantiationsOfArgumentsOwnTypeParameters = (
+  argumentType: FunctionType,
+  parameterType: FunctionType,
+  rigidTypeParameters: ReadonlySet<symbol>,
+): ReadonlyMap<TypeParameter, Type> => {
+  const ownTypeParameters =
+    typeParameterIdentitiesWithinType(argumentType).difference(
+      rigidTypeParameters,
+    )
+
+  const instantiationsOfOwnTypeParametersByIdentity = (
+    typeArguments: ReadonlyMap<TypeParameter, Type>,
+  ) =>
+    new Map(
+      typeArguments
+        .entries()
+        .filter(([typeParameter, _typeArgument]) =>
+          ownTypeParameters.has(typeParameter.identity),
+        )
+        .map(
+          ([typeParameter, typeArgument]): readonly [
+            symbol,
+            readonly [TypeParameter, Type],
+          ] => [typeParameter.identity, [typeParameter, typeArgument]],
+        ),
+    )
+
+  const instantiationsFromParameters =
+    instantiationsOfOwnTypeParametersByIdentity(
+      getTypesForTypeParameters({
+        parameterType: argumentType.signature.parameter,
+        argumentType: parameterType.signature.parameter,
+      }),
+    )
+
+  const instantiationsFromReturns = instantiationsOfOwnTypeParametersByIdentity(
+    getTypesForTypeParameters({
+      parameterType: argumentType.signature.return,
+      argumentType: parameterType.signature.return,
+    }),
+  )
+
+  const isFlexibleTypeParameter = (type: Type) =>
+    type.kind === 'parameter' && !rigidTypeParameters.has(type.identity)
+
+  return new Map(
+    ownTypeParameters.values().flatMap(identity => {
+      const fromParameter = instantiationsFromParameters.get(identity)
+      const fromReturn = instantiationsFromReturns.get(identity)
+      const instantiation =
+        (
+          fromParameter !== undefined &&
+          !isFlexibleTypeParameter(fromParameter[1])
+        ) ?
+          fromParameter
+        : (fromReturn ?? fromParameter)
+      return instantiation === undefined ? [] : [instantiation]
+    }),
+  )
+}
+
+/**
  * If `type` can be applied as a function, returns its signatures. Multiple
  * signatures may be returned if `type` is a union or a type parameter
  * constrained to a union. Returns `none` for anything that isn't applicable as

@@ -28,6 +28,7 @@ import {
 import {
   makeFunctionType,
   makeIntrinsicApplicationType,
+  rigidTypeParameterIdentitiesOrAllWithin,
   type FunctionType,
   type Type,
   type TypeParameter,
@@ -36,6 +37,7 @@ import { typeFromSemanticGraph } from '../type-system/literal-type.js'
 import { isAssignable } from '../type-system/subtyping.js'
 import { containedTypeParameters } from '../type-system/type-parameter-analysis.js'
 import {
+  argumentWithOwnTypeParametersInstantiated,
   getTypesForTypeParameters,
   replaceAllTypeParametersWithTheirConstraints,
   supplyTypeArguments,
@@ -338,6 +340,7 @@ const acceptArgument =
                         state.signature.parameter,
                         state.signature.return,
                         argument,
+                        contextOfApplication,
                       ),
                       refinedReturn =>
                         makeNativeFunctionNode({
@@ -451,6 +454,7 @@ const refineReturnedFunctionType = (
   parameterType: Type,
   returnedType: Type,
   argument: SemanticGraph,
+  contextOfApplication: ExpressionContext,
 ): Either<FunctionNodeCallError, FunctionType> =>
   either.flatMap(
     typeFromSemanticGraph(argument, { objectsAreExact: true }),
@@ -459,7 +463,15 @@ const refineReturnedFunctionType = (
         returnedType,
         getTypesForTypeParameters({
           parameterType,
-          argumentType,
+          argumentType: argumentWithOwnTypeParametersInstantiated({
+            argumentType,
+            parameterType,
+            rigidTypeParameters: () =>
+              rigidTypeParameterIdentitiesOrAllWithin(
+                contextOfApplication,
+                argumentType,
+              ),
+          }),
         }),
       )
       return refinedReturnType.kind === 'function' ?

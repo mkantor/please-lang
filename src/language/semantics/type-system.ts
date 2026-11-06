@@ -17,6 +17,7 @@ export {
   inferTypeOfTypeAnnotation,
   resolveParameterTypes,
   rigidTypeParameterIdentities,
+  rigidTypeParameterIdentitiesOrAllWithin,
   typeKeyPathFromObjectNode,
 } from './type-system/type-inference.js'
 export {
@@ -38,6 +39,7 @@ export {
   alternativesOf,
   applicableFunctionSignatures,
   applyKeyPathToType,
+  argumentWithOwnTypeParametersInstantiated,
   getTypesForFlexibleTypeParameters,
   getTypesForTypeParameters,
   replaceAllTypeParametersWithTheirConstraints,

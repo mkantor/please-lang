@@ -4,6 +4,7 @@ import type { ElaborationError } from '../../../errors.js'
 import {
   alternativesOf,
   applicableFunctionSignatures,
+  argumentWithOwnTypeParametersInstantiated,
   attachSpanIfAbsent,
   containedTypeParameters,
   containsAnyUnelaboratedNodes,
@@ -35,11 +36,13 @@ const checkArgumentType = (
   parameterType: Type,
   rigidTypeParameters: ReadonlySet<symbol>,
 ): Either<ElaborationError, undefined> => {
-  const flexibleTypeArguments = getTypesForFlexibleTypeParameters({
-    parameterType,
-    argumentType,
-    rigidTypeParameters,
-  })
+  const flexibleTypeArgumentsInferredFrom = (argumentTypeToInferFrom: Type) =>
+    getTypesForFlexibleTypeParameters({
+      parameterType,
+      argumentType: argumentTypeToInferFrom,
+      rigidTypeParameters,
+    })
+  const flexibleTypeArguments = flexibleTypeArgumentsInferredFrom(argumentType)
 
   const isValidWith = (typeArgumentsToTry: ReadonlyMap<TypeParameter, Type>) =>
     isAssignable({
@@ -50,7 +53,20 @@ const checkArgumentType = (
   // Inferred type arguments can mention the argument's own type parameters (in
   // `:apply(1)(:identity)`, `apply`'s `?result` becomes `identity`'s `?value`),
   // which `isValidWith` only instantiates on the argument's side. This version
-  // tries such type arguments at their type parameters' constraints instead.
+  // instantiates such type parameters before checking validity.
+  const isValidWithOwnTypeParametersInstantiated = () =>
+    isValidWith(
+      flexibleTypeArgumentsInferredFrom(
+        argumentWithOwnTypeParametersInstantiated({
+          argumentType,
+          parameterType,
+          rigidTypeParameters: () => rigidTypeParameters,
+        }),
+      ),
+    )
+
+  // This version tries such type arguments at their type parameters'
+  // constraints.
   // TODO: Avoiding own type parameters in every type argument at once can
   // reject a valid argument, e.g. `:apply(:identity)(:twice)(5)`, which only
   // needs `?result` replaced.
@@ -67,6 +83,7 @@ const checkArgumentType = (
 
   if (
     isValidWith(flexibleTypeArguments) ||
+    isValidWithOwnTypeParametersInstantiated() ||
     isValidWithOwnTypeParametersAvoided()
   ) {
     return either.makeRight(undefined)

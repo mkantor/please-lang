@@ -5,6 +5,7 @@ import {
   applicableFunctionSignatures,
   applyKeyPathToSemanticGraph,
   applyKeyPathToType,
+  argumentWithOwnTypeParametersInstantiated,
   getTypesForFlexibleTypeParameters,
   inferType,
   inferTypeOfTypeAnnotation,
@@ -223,7 +224,11 @@ const instantiatedFunctionType = (
     : option.flatMap(soleSignature(functionType), signature => {
         const typeArguments = getTypesForFlexibleTypeParameters({
           parameterType: signature.parameter,
-          argumentType,
+          argumentType: argumentWithOwnTypeParametersInstantiated({
+            argumentType,
+            parameterType: signature.parameter,
+            rigidTypeParameters: () => rigidTypeParameters,
+          }),
           rigidTypeParameters,
         })
         return option.map(
