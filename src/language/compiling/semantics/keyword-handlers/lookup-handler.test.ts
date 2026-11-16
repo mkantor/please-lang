@@ -1,10 +1,12 @@
 import either from '@matt.kantor/either'
 import assert from 'node:assert'
 import {
+  compileAndRun,
+  compileToInlinePlz,
   compileWithoutSpans,
-  parseAndCompileAndRun,
   testCases,
   toSyntaxTree,
+  valueAtKeyPath,
 } from '../../../../test-utilities.test.js'
 import { parse } from '../../../parsing/parser.js'
 import { elaborationSuite, success } from '../test-utilities.test.js'
@@ -123,6 +125,23 @@ compileSuite('self-referential lookups', [
   ],
 
   [
+    '{ m: { f: (n: :Integer) => { self: :f, parent: :m }, x: :a }, a: :b, b: :identity(1) }',
+    output => {
+      assert(either.isRight(output))
+      assert.deepEqual(
+        valueAtKeyPath(output.value, ['m', 'x']),
+        '1',
+        '`m` should have been re-elaborated',
+      )
+      assert.deepEqual(
+        JSON.stringify(output.value).match(/@function/g)?.length,
+        1,
+        'the recursive definition should appear exactly once',
+      )
+    },
+  ],
+
+  [
     '{ helper: 1, f: (x: :Integer) => :helper }',
     output => {
       assert(either.isRight(output))
@@ -134,10 +153,252 @@ compileSuite('self-referential lookups', [
   ],
 ])
 
-const compileAndRun = testCases(
-  parseAndCompileAndRun,
-  input => `running \`${input}\``,
-)
+compileToInlinePlz('calls of functions referring to enclosing bindings', [
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+    }`),
+  ],
+  [
+    `{
+      m: {
+        g: 1
+        f: (n: :Integer) => {
+          v: :m.g
+          io: @runtime { context => :context.log(:n) }
+        }
+        x: :f(1)
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        g: 1
+        f: (n: :Integer) => {
+          v: :m.g
+          io: @runtime { context => :context.log(:n) }
+        }
+        x: {
+          v: 1
+          io: @runtime { context => :context.log(1) }
+        }
+      }
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => (k: :Integer) => :m
+        g: 42
+        x: :f(1)
+        y: :x(2)
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => (k: :Integer) => :m
+        g: 42
+        x: (k: :Integer) => :m
+        y: :m
+      }
+    }`),
+  ],
+  [
+    `{
+      f: (a: :Integer) => {
+        g: (b: :Integer) => :f
+        r: :g(1)
+      }
+    }`,
+    either.makeRight(`{
+      f: (a: :Integer) => {
+        g: (b: :Integer) => :f
+        r: :f
+      }
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m.x
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m.x
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :identity(:f)(1)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: ((n: :Integer) => :m)(1)
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :apply(1)(:f)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: ((n: :Integer) => :m) apply 1
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: :option.map(:f)({ tag: some, value: 1 })
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: { tag: some, value: 1 } option.map ((n: :Integer) => :m)
+      }
+      r: :m
+    }`),
+  ],
+  // `x` refers to an enclosing object, so it stays deferred, but `g` can be
+  // read through the reference.
+  [
+    `{
+      m: {
+        g: 1
+        f: (_: :Integer) => :m
+        x: :f(1)
+      }
+      r: :m.g
+    }`,
+    either.makeRight(`{
+      m: {
+        g: 1
+        f: (_: :Integer) => :m
+        x: :f(1)
+      }
+      r: 1
+    }`),
+  ],
+  [
+    `{
+      m: {
+        g: 1
+        x: :f(1)
+        f: (n: :Integer) => :m.g
+      }
+    }`,
+    either.makeRight(`{
+      m: {
+        g: 1
+        x: 1
+        f: (n: :Integer) => :m.g
+      }
+    }`),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m
+        x: (:f >> :identity)(1)
+      }
+      r: :m
+    }`,
+    either.makeRight(`{
+      m: {
+        f: (n: :Integer) => :m
+        x: (((n: :Integer) => :m) flow :identity)(1)
+      }
+      r: :m
+    }`),
+  ],
+  [
+    `{
+      o: (c: :Integer) => {
+        m: {
+          v: 1
+          f: (n: :Integer) => {
+            a: :m.v
+            b: @if {
+              condition: :c integer.is_greater_than 0
+              then: (m: :Integer) => :m
+              else: 0
+            }
+          }
+          y: :f(1)
+        }
+      }
+    }`,
+    either.makeRight(`{
+      o: (c: :Integer) => {
+        m: {
+          v: 1
+          f: (n: :Integer) => {
+            a: :m.v
+            b: @if {
+              condition: :c integer.is_greater_than 0
+              then: (m: :Integer) => :m
+              else: 0
+            }
+          }
+          y: {
+            a: 1
+            b: @if {
+              condition: :c integer.is_greater_than 0
+              then: (m: :Integer) => :m
+              else: 0
+            }
+          }
+        }
+      }
+    }`),
+  ],
+])
 
 compileAndRun('types of self-referential lookups', [
   [
@@ -152,9 +413,117 @@ compileAndRun('types of self-referential lookups', [
   ],
 ])
 
+compileAndRun('self-references to bindings enclosing a function', [
+  [
+    `{
+      f: { value: (n: :Integer) => @if { :n > 0, then: :f(:n - 1), else: done } }.value
+      main: :f(3)
+    }.main`,
+    either.makeRight('done'),
+  ],
+  [
+    `{
+      f: :identity((n: :Integer) => @if { :n > 0, then: :f(:n - 1), else: done })
+      main: :f(3)
+    }.main`,
+    either.makeRight('done'),
+  ],
+  [
+    `{
+      f: { value: (n: :Integer) => { number: :n, next: :f } }.value
+      main: :f(1).next(2).number
+    }.main`,
+    either.makeRight('2'),
+  ],
+  [
+    `{
+      m: { f: (n: :Integer) => :m, g: 42 }
+      main: :m.f(1).f(2).g
+    }.main`,
+    either.makeRight('42'),
+  ],
+  [
+    `{
+      a: {
+        b: { f: (n: :Integer) => { x: :a, y: :b } }
+        w: 2
+      }
+      main: :a.b.f(1).y.f(2).x.w
+    }.main`,
+    either.makeRight('2'),
+  ],
+  [
+    `{
+      m: { f: (m: :Integer) => :m, x: :f(1) }
+      main: :m.x
+    }.main`,
+    either.makeRight('1'),
+  ],
+  [
+    `{
+      m: { f: (n: :Integer) => (m: :Integer) => :m, y: :f(1)(2) }
+      main: :m.y
+    }.main`,
+    either.makeRight('2'),
+  ],
+  [
+    `{
+      return: { value: (n: :Integer) => @if { :n > 0, then: :return(:n - 1), else: done } }.value
+      main: :return(3)
+    }.main`,
+    either.makeRight('done'),
+  ],
+  // Calls made while `m` is being elaborated use its finished parts.
+  [
+    `{
+      m: {
+        g: 1
+        f: (n: :Integer) => :m.g
+        x: :f(1)
+      }
+    }.m.x`,
+    either.makeRight('1'),
+  ],
+  [
+    `{
+      m: {
+        sub: {
+          g: 1
+          f: (n: :Integer) => :m.sub.g
+          x: :f(1)
+        }
+      }
+    }.m.sub.x`,
+    either.makeRight('1'),
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => @if { :n > 0, then: :m.f(:n - 1), else: done }
+        x: :f(3)
+      }
+    }.m.x`,
+    either.makeRight('done'),
+  ],
+])
+
 compileAndRun('unbounded recursion within a self-referential function', [
   [
     '{ f: (n: :Integer) => :f(1), main: :f(0) }.main',
+    output => {
+      assert(either.isLeft(output))
+      assert('kind' in output.value)
+      assert.deepEqual(output.value.kind, 'panic')
+      assert.match(output.value.message, /evaluation did not terminate/)
+    },
+  ],
+  [
+    `{
+      m: {
+        f: (n: :Integer) => :m.f(:n + 1)
+        x: :f(1)
+      }
+    }`,
     output => {
       assert(either.isLeft(output))
       assert('kind' in output.value)

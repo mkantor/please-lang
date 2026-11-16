@@ -1,4 +1,5 @@
 import either, { type Either } from '@matt.kantor/either'
+import option from '@matt.kantor/option'
 import assert from 'node:assert'
 import test, { suite } from 'node:test'
 import { compile } from './language/compiling.js'
@@ -110,6 +111,21 @@ export const toSyntaxTree = (input: JsonValue): SyntaxTree =>
       Object.entries(input).map(([key, value]) => [key, toSyntaxTree(value)]),
     )
 
+export const valueAtKeyPath = (
+  value: Atom | Molecule,
+  keyPath: readonly string[],
+): Atom | Molecule | undefined =>
+  keyPath.reduce<Atom | Molecule | undefined>(
+    (valueSoFar, key) =>
+      valueSoFar === undefined || typeof valueSoFar === 'string' ?
+        undefined
+      : option.match(orderedRecord.get(valueSoFar, key), {
+          none: _ => undefined,
+          some: propertyValue => propertyValue,
+        }),
+    value,
+  )
+
 export const compileWithoutSpans = (syntaxTree: SyntaxTree) =>
   compile(defaultConfiguration)(syntaxTree, emptyExpressionSpans)
 
@@ -119,6 +135,41 @@ export const parseAndCompileAndRun = (input: string): ProgramResult => {
   const runtimeOutput = either.flatMap(program, evaluate(defaultConfiguration))
   return runtimeOutput
 }
+
+export const compileAndRun = testCases(
+  parseAndCompileAndRun,
+  input => `running \`${input}\``,
+)
+
+const compileToInlinePlzExactly = testCases(
+  (input: string) =>
+    either.flatMap(either.flatMap(parse(input), compileWithoutSpans), output =>
+      unparse(output, inlinePlz),
+    ),
+  input => `compiling \`${input}\``,
+)
+
+/**
+ * Expected outputs may be laid out over several lines, since they're
+ * reformatted as inline plz before being compared.
+ */
+export const compileToInlinePlz = (
+  suiteName: string,
+  cases: Parameters<typeof compileToInlinePlzExactly>[1],
+) =>
+  compileToInlinePlzExactly(
+    suiteName,
+    cases.map(([input, check]) => [
+      input,
+      typeof check === 'function' ? check : (
+        either.flatMap(check, expected =>
+          either.flatMap(parse(expected), syntaxTree =>
+            unparse(syntaxTree, inlinePlz),
+          ),
+        )
+      ),
+    ]),
+  )
 
 const unparseAndRoundtripWithMultipleNotations = <Error, Value>(
   f: (input: string) => Either<Error, Value>,

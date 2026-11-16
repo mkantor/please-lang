@@ -11,6 +11,8 @@ import {
   isExpression,
   isFunctionNode,
   lookup,
+  makeRuntimeExpression,
+  programWithValueAtKeyPath,
   readApplyExpression,
   readCheckExpression,
   readFunctionExpression,
@@ -57,7 +59,11 @@ import {
 } from './inference-result.js'
 import { typeFromSemanticGraph } from './literal-type.js'
 import * as types from './prelude-types.js'
-import { effectiveExcessClauses, typesAreEquivalent } from './subtyping.js'
+import {
+  effectiveExcessClauses,
+  isPendingType,
+  typesAreEquivalent,
+} from './subtyping.js'
 import { makeApplicationType } from './type-formats/application-type.js'
 import { makeFunctionType } from './type-formats/function-type.js'
 import { makeIndexedAccessType } from './type-formats/indexed-access-type.js'
@@ -508,19 +514,28 @@ const inferTypeImplementation = (
                 ),
             ),
             keyPath =>
-              option.match(applyKeyPathToType(objectType, keyPath), {
-                none: _ =>
-                  either.makeLeft({
-                    kind: 'typeMismatch',
-                    message: `property \`${stringifyTypeKeyPathForEndUser(
-                      keyPath,
-                    )}\` does not exist on type \`${stringifyResolvedTypeForEndUser(
-                      objectType,
-                    )}\``,
-                  }),
-                some: indexedType =>
-                  either.makeRight(usingNoAssumptions(indexedType)),
-              }),
+              // In `{ a: { b: 1, c: :a.b } }`, the type of `a` is assumed to be
+              // `pending` while it's being inferred, then the bottom type.
+              // Until it's known, `:a.b` is given the assumed type too.
+              // TODO: Also handle `pending` within a union, or as a call's
+              // result (as in `:m.g(:n).a`).
+              isPendingType(objectType) ?
+                either.makeRight(usingNoAssumptions(types.pending))
+              : isBottomType(objectType) ?
+                either.makeRight(usingNoAssumptions(types.nothing))
+              : option.match(applyKeyPathToType(objectType, keyPath), {
+                  none: _ =>
+                    either.makeLeft({
+                      kind: 'typeMismatch',
+                      message: `property \`${stringifyTypeKeyPathForEndUser(
+                        keyPath,
+                      )}\` does not exist on type \`${stringifyResolvedTypeForEndUser(
+                        objectType,
+                      )}\``,
+                    }),
+                  some: indexedType =>
+                    either.makeRight(usingNoAssumptions(indexedType)),
+                }),
           ),
       ),
     )
@@ -546,7 +561,17 @@ const inferTypeImplementation = (
             ],
           ]),
           assumptions,
-          descendantContext(['1', 'function', '1', 'body']),
+          contextWithinExpression(
+            {
+              ...context,
+              program: programWithValueAtKeyPath(
+                context.program,
+                context.location,
+                makeRuntimeExpression(functionExpressionResult.value),
+              ),
+            },
+            ['1', 'function', '1', 'body'],
+          ),
         ),
       )
     } else {
@@ -1235,6 +1260,7 @@ const getFunctionParameterType = (
                     contextOfFunction.mutableInferenceCache,
                   mutableFunctionParameterCache:
                     contextOfFunction.mutableFunctionParameterCache,
+                  mutableBindingValues: contextOfFunction.mutableBindingValues,
                   isExternalToProgram: contextOfFunction.isExternalToProgram,
                   applicationChain: contextOfFunction.applicationChain,
                 }
@@ -1398,6 +1424,7 @@ const resolveEnclosingFunctionParameters = (
                       mutableInferenceCache: context.mutableInferenceCache,
                       mutableFunctionParameterCache:
                         context.mutableFunctionParameterCache,
+                      mutableBindingValues: context.mutableBindingValues,
                       applicationChain: context.applicationChain,
                     },
                     assumptions,
