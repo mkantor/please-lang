@@ -128,6 +128,7 @@ export const emptyContextForStdlibApplications: ExpressionContext = {
   program: objectNodeFromOrderedEntries([]),
   mutableInferenceCache: new Map(),
   mutableFunctionParameterCache: new Map(),
+  mutableBindingValues: new Map(),
   isExternalToProgram: true,
   applicationChain: [],
 }

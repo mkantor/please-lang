@@ -8,8 +8,10 @@ import type {
 } from '../../../errors.js'
 import type { Atom } from '../../../parsing.js'
 import {
+  applyKeyPathToSemanticGraph,
   argumentWithOwnTypeParametersInstantiated,
   asSemanticGraph,
+  containsAnyUnelaboratedNodes,
   elaborateOperands,
   elaborateWithContext,
   getParameterName,
@@ -17,10 +19,13 @@ import {
   getTypesForTypeParameters,
   ignoredKey,
   inferType,
+  lookup,
   makeFunctionNodeFromDefinition,
   makeObjectNode,
   objectNodeFromOrderedEntries,
+  programWithValueAtKeyPath,
   readFunctionExpression,
+  readLookupExpression,
   replaceAllTypeParametersWithTheirConstraints,
   rigidTypeParameterIdentitiesOrAllWithin,
   serialize,
@@ -34,6 +39,7 @@ import {
   type ExpressionWithElaboratedOperands,
   type FunctionExpression,
   type FunctionNode,
+  type KeyPath,
   type KeyPathStringifiedForInternalUse,
   type SemanticGraph,
   type Type,
@@ -54,7 +60,7 @@ export const functionKeywordHandler = (
   context: ExpressionContext,
 ): Either<ElaborationError, FunctionNode> =>
   either.flatMap(
-    elaborateOperands(expression, functionOperandContext(context)),
+    elaborateOperands(expression, functionOperandContext(expression, context)),
     ({ expression, context: operandContext }) =>
       makeFunctionFromElaboratedExpression(expression, {
         // The original `context` is used here; `panicsAreDeferred` applies only
@@ -69,9 +75,18 @@ export const functionKeywordHandler = (
  * the body is elaborated at the definition site ahead of application).
  */
 const functionOperandContext = (
+  expression: Expression,
   context: ExpressionContext,
 ): ExpressionContext => ({
   ...context,
+  // Lookups find parameters and recognize self-references through the
+  // `@function` expressions around them, but upon re-elaboration the program
+  // holds a `FunctionNode` here.
+  program: programWithValueAtKeyPath(
+    context.program,
+    context.location,
+    expression,
+  ),
   // `@panic`s inside functions shouldn't fire while elaborating the body, only
   // when the function is eventually called.
   panicsAreDeferred: true,
@@ -188,7 +203,10 @@ const apply = (
 
           // TODO: Make this foolproof.
           const returnKey =
-            parameterName === 'return' || ownKey === 'return' ?
+            (
+              parameterName === 'return' ||
+              functionDefinitionContext.location.includes('return')
+            ) ?
               'return with a different key to avoid collision with a stupidly-named parameter'
             : 'return'
 
@@ -271,74 +289,116 @@ const apply = (
               },
             })
 
-          const result = either.flatMap(serialize(body), serializedBody =>
-            either.flatMap(
-              updateValueAtKeyPathInSemanticGraph(
-                functionDefinitionContext.program,
-                functionDefinitionContext.location,
-                _ =>
-                  objectNodeFromOrderedEntries([
-                    // Include the function itself to allow recursion.
-                    [
-                      ownKey,
-                      makeFunctionNodeFromDefinition({
-                        signature,
-                        definition: {
-                          expression,
-                          context: functionDefinitionContext,
-                        },
-                        call: (argument, applySiteContextOfNestedApplication) =>
-                          apply(expression, signature, argument, {
-                            functionDefinitionContext,
-                            applySiteContext: withDynamicEvaluationState(
-                              applySiteContext,
-                              applySiteContextOfNestedApplication,
-                            ),
-                          }),
+          return either.flatMap(
+            either.mapLeft(serialize(body), asPanic),
+            serializedBody =>
+              either.flatMap(
+                enclosingBindingsReferredToWithin(
+                  asSemanticGraph(serializedBody),
+                  { ownKey, functionDefinitionContext },
+                ),
+                enclosingBindings => {
+                  const result = either.flatMap(
+                    updateValueAtKeyPathInSemanticGraph(
+                      functionDefinitionContext.program,
+                      functionDefinitionContext.location,
+                      _ =>
+                        objectNodeFromOrderedEntries([
+                          // Include the function itself to allow recursion.
+                          [
+                            ownKey,
+                            makeFunctionNodeFromDefinition({
+                              signature,
+                              definition: {
+                                expression,
+                                context: functionDefinitionContext,
+                              },
+                              call: (
+                                argument,
+                                applySiteContextOfNestedApplication,
+                              ) =>
+                                apply(expression, signature, argument, {
+                                  functionDefinitionContext,
+                                  applySiteContext: withDynamicEvaluationState(
+                                    applySiteContext,
+                                    applySiteContextOfNestedApplication,
+                                  ),
+                                }),
+                            }),
+                          ],
+                          // In the spliced program, these bindings' values
+                          // would contain this object instead.
+                          ...enclosingBindings,
+                          // Put the argument in scope.
+                          [parameterName, argument],
+                          // Put any `@hole`s from the parameter annotation in
+                          // scope so type parameters can be referenced.
+                          ...holeBindings,
+                          // Use the serialized form so the body in the program
+                          // matches what gets re-elaborated.
+                          [returnKey, asSemanticGraph(serializedBody)],
+                        ]),
+                    ),
+                    updatedProgram =>
+                      elaborateWithContext(serializedBody, {
+                        configuration: functionDefinitionContext.configuration,
+                        keywordHandlers:
+                          functionDefinitionContext.keywordHandlers,
+                        location: [
+                          ...functionDefinitionContext.location,
+                          returnKey,
+                        ],
+                        program: updatedProgram,
+                        // Every application of this function re-elaborates the
+                        // body at the same location but against a different
+                        // spliced program, so what other applications cached or
+                        // recorded there would be wrong here. Use fresh maps to
+                        // keep each application isolated.
+                        mutableInferenceCache: new Map(),
+                        mutableFunctionParameterCache: new Map(),
+                        mutableBindingValues: new Map(),
+                        // The body is demanded by this application, so the
+                        // speculative flag is deliberately not carried over and
+                        // `applicationChain` records the application.
+                        applicationChain: [
+                          ...applySiteContext.applicationChain,
+                          {
+                            locationKey: definitionLocationKey,
+                            expression,
+                            speculative: applicationIsSpeculative,
+                          },
+                        ],
                       }),
-                    ],
-                    // Put the argument in scope.
-                    [parameterName, argument],
-                    // Put any `@hole`s from the parameter annotation in scope
-                    // so type parameters can be referenced.
-                    ...holeBindings,
-                    // Use the serialized form so the body in the program
-                    // matches what gets re-elaborated.
-                    [returnKey, asSemanticGraph(serializedBody)],
-                  ]),
-              ),
-              updatedProgram =>
-                elaborateWithContext(serializedBody, {
-                  configuration: functionDefinitionContext.configuration,
-                  keywordHandlers: functionDefinitionContext.keywordHandlers,
-                  location: [...functionDefinitionContext.location, returnKey],
-                  program: updatedProgram,
-                  // Every application of this function re-elaborates the body
-                  // at the same location but against a different spliced
-                  // program, so cached inferences from other applications would
-                  // be wrong here. Use fresh caches to keep each application's
-                  // type information isolated.
-                  mutableInferenceCache: new Map(),
-                  mutableFunctionParameterCache: new Map(),
-                  // The body is demanded by this application, so the
-                  // speculative flag is deliberately not carried over and
-                  // `applicationChain` records the application.
-                  applicationChain: [
-                    ...applySiteContext.applicationChain,
-                    {
-                      locationKey: definitionLocationKey,
-                      expression,
-                      speculative: applicationIsSpeculative,
-                    },
-                  ],
-                }),
-            ),
-          )
+                  )
 
-          return either.mapLeft(result, error => ({
-            kind: 'panic',
-            message: error.message,
-          }))
+                  // A result referring to an unfinished enclosing binding may
+                  // contain calls back into this function, so the call waits
+                  // for the binding.
+                  return either.flatMap(
+                    either.mapLeft(result, asPanic),
+                    resultValue =>
+                      either.flatMap(
+                        enclosingBindingsReferredToWithin(resultValue, {
+                          ownKey,
+                          functionDefinitionContext,
+                        }),
+                        bindingsReferredToByResult => {
+                          const unfinishedBindingReferredTo =
+                            bindingsReferredToByResult.find(([_key, value]) =>
+                              containsAnyUnelaboratedNodes(value),
+                            )
+                          return unfinishedBindingReferredTo === undefined ?
+                              either.makeRight(resultValue)
+                            : either.makeLeft({
+                                kind: 'dependencyUnavailable',
+                                message: `application of \`${ownKey}\` was deferred because its result refers to \`${unfinishedBindingReferredTo[0]}\`, which encloses it and is not fully elaborated`,
+                              })
+                        },
+                      ),
+                  )
+                },
+              ),
+          )
         },
       },
     )
@@ -403,3 +463,127 @@ const applicationLimitError = ({
     return option.none
   }
 }
+
+/**
+ * The bindings enclosing a function's definition which `node` refers to. For
+ * example:
+ * ```plz
+ * { a: { f: (n: :Integer) => :a }
+ * }
+ * ```
+ * For `f`'s body, that's `a`.
+ */
+const enclosingBindingsReferredToWithin = (
+  node: SemanticGraph,
+  {
+    ownKey,
+    functionDefinitionContext,
+  }: {
+    readonly ownKey: Atom
+    readonly functionDefinitionContext: ExpressionContext
+  },
+): Either<
+  DependencyUnavailable,
+  readonly (readonly [key: Atom, value: SemanticGraph])[]
+> => {
+  const definitionLocation = functionDefinitionContext.location
+
+  const ancestors = definitionLocation.slice(0, -1).map((key, index) => ({
+    key,
+    location: definitionLocation.slice(0, index + 1),
+  }))
+
+  const bodyLocation = [...definitionLocation, '1', 'body']
+
+  // Nested functions in the body are `FunctionNode`s in the program, but
+  // lookups find parameters through `@function` expressions.
+  const programWithNode = programWithValueAtKeyPath(
+    functionDefinitionContext.program,
+    bodyLocation,
+    node,
+  )
+
+  const isFunctionExpressionAt = (location: KeyPath) =>
+    option.match(
+      applyKeyPathToSemanticGraph(functionDefinitionContext.program, location),
+      {
+        none: _ => false,
+        some: valueAtLocation =>
+          either.isRight(readFunctionExpression(valueAtLocation)),
+      },
+    )
+
+  return either.sequence(
+    ancestors
+      .filter(
+        ({ location }, index) =>
+          refersToBindingAt(location, node, bodyLocation, {
+            ...functionDefinitionContext,
+            program: programWithNode,
+          }) &&
+          !ancestors
+            .slice(index)
+            .some(ancestor => isFunctionExpressionAt(ancestor.location)),
+      )
+      .map(({ key, location }) => {
+        const value = functionDefinitionContext.mutableBindingValues.get(
+          stringifyKeyPathForInternalUse(location),
+        )
+        return value === undefined ?
+            either.makeLeft({
+              kind: 'dependencyUnavailable',
+              message: `application of \`${ownKey}\` was deferred because \`${key}\`, which encloses it, has no value yet`,
+            })
+          : either.makeRight([key, value] as const)
+      }),
+  )
+}
+
+/**
+ * Whether a `@lookup` within `node` finds the binding at `bindingLocation`.
+ * `context.program` must hold `node` at `nodeLocation`.
+ */
+const refersToBindingAt = (
+  bindingLocation: KeyPath,
+  node: SemanticGraph,
+  nodeLocation: KeyPath,
+  context: ExpressionContext,
+): boolean =>
+  either.match(readLookupExpression(node), {
+    left: _ =>
+      typeof node === 'object' &&
+      Object.entries(node).some(([childKey, child]) =>
+        refersToBindingAt(
+          bindingLocation,
+          child,
+          [...nodeLocation, childKey],
+          context,
+        ),
+      ),
+    // Each lookup is resolved from where it sits, since a parameter or property
+    // around it may shadow the binding.
+    right: lookupExpression =>
+      lookupExpression[1].key === bindingLocation[bindingLocation.length - 1] &&
+      either.match(
+        lookup({
+          key: lookupExpression[1].key,
+          context: { ...context, location: nodeLocation },
+        }),
+        {
+          left: _ => false,
+          right: lookupResult =>
+            option.match(lookupResult, {
+              none: _ => false,
+              some: ({ foundLocation }) =>
+                foundLocation !== 'prelude' &&
+                stringifyKeyPathForInternalUse(foundLocation) ===
+                  stringifyKeyPathForInternalUse(bindingLocation),
+            }),
+        },
+      ),
+  })
+
+const asPanic = (error: { readonly message: string }): Panic => ({
+  kind: 'panic',
+  message: error.message,
+})

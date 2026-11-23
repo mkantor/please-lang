@@ -4,6 +4,7 @@ export {
   elaborateOperands,
   elaborateWithContext,
   makeInitialElaborationContext,
+  programWithValueAtKeyPath,
   withDynamicEvaluationState,
   type ApplicationChainEntry,
   type ElaboratedSemanticGraph,

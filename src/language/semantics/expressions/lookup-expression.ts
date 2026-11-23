@@ -245,8 +245,9 @@ export const lookup = ({
                   })
                 return foundIsSelfReference && inlineSelfReferences !== true ?
                     // The looked-up value is self-referential, so keep it
-                    // unelaborated. This won't trip during application because
-                    // `apply` splices in a separate binding for the function.
+                    // unelaborated. `apply` binds the name in each call's scope
+                    // (to the function itself, or to the enclosing binding's
+                    // value), so it resolves when the function is applied.
                     {
                       kind: 'found',
                       foundValue: makeLookupExpression(key),
@@ -292,6 +293,7 @@ export const lookup = ({
           program: context.program,
           mutableInferenceCache: context.mutableInferenceCache,
           mutableFunctionParameterCache: context.mutableFunctionParameterCache,
+          mutableBindingValues: context.mutableBindingValues,
           applicationChain: context.applicationChain,
         },
         inlineSelfReferences,

@@ -25,6 +25,7 @@ import {
   type ObjectNode,
 } from './object-node.js'
 import {
+  applyKeyPathToSemanticGraph,
   containsAnyUnelaboratedNodes,
   extractStringValueIfPossible,
   serialize,
@@ -67,6 +68,16 @@ export type ExpressionContext = {
   readonly mutableFunctionParameterCache: Map<
     TypeKeyPathStringifiedForInternalUse,
     FunctionParameterTypeInfo
+  >
+  /**
+   * The latest elaborated value of each binding (a plain object's property,
+   * which `@lookup`s can find). Properties which didn't need elaborating aren't
+   * recorded. While an object's properties are being elaborated, its own entry
+   * holds its partial value.
+   */
+  readonly mutableBindingValues: Map<
+    KeyPathStringifiedForInternalUse,
+    SemanticGraph
   >
   /**
    * Source spans for the program being elaborated, keyed by stringified key
@@ -181,6 +192,7 @@ export const makeInitialElaborationContext = (
   location: [],
   mutableInferenceCache: new Map(),
   mutableFunctionParameterCache: new Map(),
+  mutableBindingValues: new Map(),
   program:
     typeof program === 'string' ? program : objectNodeFromMolecule(program),
   sourceSpans: spans,
@@ -250,7 +262,7 @@ export const elaborateOperands = (
       elaborateProperties(orderedEntriesOfObjectNode(operands), context, {
         keyPathPrefix: ['1'],
         skipReelaboration: true,
-        propertyZeroMayBeAKeyword: false,
+        arePlainObjectProperties: false,
       }),
       ({ properties: elaboratedOperands, program }) => ({
         expression: withPhantomData<OperandsElaborated>()(
@@ -298,7 +310,7 @@ const elaborateWithinMolecule = (
       {
         keyPathPrefix: [],
         skipReelaboration: context.skipReelaboration,
-        propertyZeroMayBeAKeyword: true,
+        arePlainObjectProperties: true,
       },
     )
     if (either.isLeft(propertiesResult)) {
@@ -334,6 +346,7 @@ const elaborateWithinMolecule = (
         while (madeProgress && keysNeedingReelaboration.size > 0) {
           madeProgress = false
           for (const key of keysNeedingReelaboration) {
+            const location = [...context.location, key]
             const value = possibleExpressionAsObjectNode[key]
             if (value === undefined) {
               keysNeedingReelaboration.delete(key)
@@ -345,7 +358,7 @@ const elaborateWithinMolecule = (
             }
             const reelaborationResult = elaborateWithContext(serialized.value, {
               ...context,
-              location: [...context.location, key],
+              location,
               program: updatedProgram,
               skipReelaboration: true,
             })
@@ -358,9 +371,14 @@ const elaborateWithinMolecule = (
             possibleExpressionAsObjectNode[key] = reelaborationResult.value
             updatedProgram = programWithValueAtKeyPath(
               updatedProgram,
-              [...context.location, key],
+              location,
               reelaborationResult.value,
             )
+            context.mutableBindingValues.set(
+              stringifyKeyPathForInternalUse(location),
+              reelaborationResult.value,
+            )
+            recordPartialValue(context, updatedProgram)
             keysNeedingReelaboration.delete(key)
             madeProgress = true
           }
@@ -435,10 +453,11 @@ const elaborateProperties = (
     readonly keyPathPrefix: KeyPath
     readonly skipReelaboration: true | undefined
     /**
-     * When `true`, property `0` is left escaped (it may be a keyword, in which
-     * case `handleObjectNodeWhichMayBeAExpression` unescapes it instead).
+     * Whether the properties are a plain object's rather than a keyword
+     * expression's operands. A plain object's properties are bindings, so their
+     * elaborated values are recorded in `mutableBindingValues`.
      */
-    readonly propertyZeroMayBeAKeyword: boolean
+    readonly arePlainObjectProperties: boolean
   },
 ): Either<
   ElaborationError,
@@ -455,6 +474,17 @@ const elaborateProperties = (
 
   let updatedProgram = context.program
   const keysNeedingReelaboration = new Set<Atom>()
+  // When a function's body is re-elaborated, the program holds this object
+  // serialized, so the entry keeps the previous value (whose functions are
+  // elaborated).
+  if (
+    options.arePlainObjectProperties &&
+    !context.mutableBindingValues.has(
+      stringifyKeyPathForInternalUse(context.location),
+    )
+  ) {
+    recordPartialValue(context, updatedProgram)
+  }
 
   for (const [key, value] of propertiesToElaborate) {
     const keyUpdateResult = handleAtomWhichMayNotBeAKeyword(key)
@@ -490,6 +520,13 @@ const elaborateProperties = (
             location,
             elaborationResult.value,
           )
+          if (options.arePlainObjectProperties) {
+            context.mutableBindingValues.set(
+              stringifyKeyPathForInternalUse(location),
+              elaborationResult.value,
+            )
+            recordPartialValue(context, updatedProgram)
+          }
           if (!(updatedKey in properties)) {
             orderedKeysAccumulator.push(updatedKey)
           }
@@ -510,7 +547,7 @@ const elaborateProperties = (
   // At this point `properties` may still have raw escape sequences.
   for (const [key, value] of Object.entries(properties)) {
     const valueUpdateResult =
-      options.propertyZeroMayBeAKeyword && key === '0' ?
+      options.arePlainObjectProperties && key === '0' ?
         either.makeRight(value)
       : unescapeIfAtom(value)
     if (either.isLeft(valueUpdateResult)) {
@@ -568,7 +605,7 @@ const spanForLocation = (
  * the path doesn't resolve (elaboration also runs on expressions which aren't
  * located in `program`, e.g. user functions called from the standard library).
  */
-const programWithValueAtKeyPath = (
+export const programWithValueAtKeyPath = (
   program: SemanticGraph,
   keyPath: KeyPath,
   value: SemanticGraph,
@@ -577,6 +614,24 @@ const programWithValueAtKeyPath = (
     updateValueAtKeyPathInSemanticGraph(program, keyPath, _ => value),
     _ => program,
   )
+
+/**
+ * Record a partial value of the object being elaborated at `context.location`,
+ * so calls made meanwhile can use its finished parts.
+ */
+const recordPartialValue = (
+  context: ExpressionContext,
+  program: SemanticGraph,
+): void =>
+  option.match(applyKeyPathToSemanticGraph(program, context.location), {
+    none: _ => undefined,
+    some: partialValue => {
+      context.mutableBindingValues.set(
+        stringifyKeyPathForInternalUse(context.location),
+        partialValue,
+      )
+    },
+  })
 
 const unescapeIfAtom = (
   value: SemanticGraph,
